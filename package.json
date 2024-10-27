@@ -1,0 +1,28 @@
+{
+  "name": "multi",
+  "version": "1.0.0",
+  "description": "Welcome to your new `multi` project and to the Internet Computer development community. By default, creating a new project adds this README and some template files to your project directory. You can edit these template files to customize your project and to include your own code to speed up the development cycle.",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest",
+    "format": "prettier --write --plugin=prettier-plugin-motoko \"**/*.{mo,ts,js,json,css,md}\"",
+    "format:check": "prettier --check --plugin=prettier-plugin-motoko \"**/*.{mo,ts,js,json,css,md}\"",
+    "format:mo": "prettier --write --plugin=prettier-plugin-motoko \"**/*.mo\"",
+    "format:mo:check": "prettier --check --plugin=prettier-plugin-motoko \"**/*.mo\"",
+    "test:full": "./run_tests.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@dfinity/agent": "^2.1.3",
+    "@dfinity/candid": "^2.1.3",
+    "@dfinity/identity": "^2.1.3",
+    "@dfinity/principal": "^2.1.3",
+    "ic-mops": "^1.1.1",
+    "isomorphic-fetch": "^3.0.0",
+    "prettier": "^3.3.3",
+    "prettier-plugin-motoko": "^0.9.4",
+    "vitest": "^2.1.3"
+  }
+}
