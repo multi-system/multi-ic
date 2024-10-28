@@ -3,12 +3,7 @@ import { Actor, CanisterStatus, HttpAgent } from "@dfinity/agent";
 import { Principal } from "@dfinity/principal";
 import { multiBackendCanister, multi_backend } from "./actor";
 
-test("should handle a basic greeting", async () => {
-  const result1 = await multi_backend.greet("test");
-  expect(result1).toBe("Hello, test!");
-});
-
-test("Should contain a candid interface", async () => {
+test("Should contain the correct ICRC candid interface", async () => {
   const agent = Actor.agentOf(multi_backend) as HttpAgent;
   const id = Principal.from(multiBackendCanister);
 
@@ -20,10 +15,13 @@ test("Should contain a candid interface", async () => {
 
   expect(canisterStatus.get("time")).toBeTruthy();
   expect(Array.isArray(canisterStatus.get("controllers"))).toBeTruthy();
-  expect(canisterStatus.get("candid")).toMatchInlineSnapshot(`
-    "service : {
-      greet: (text) -> (text) query;
-    }
-    "
-  `);
+
+  // Update the snapshot with the new candid interface
+  const candid = canisterStatus.get("candid") as string;
+  expect(candid).toContain("icrc1_name");
+  expect(candid).toContain("icrc1_symbol");
+  expect(candid).toContain("icrc1_decimals");
+  expect(candid).toContain("icrc1_fee");
+  expect(candid).toContain("icrc2_approve");
+  expect(candid).toContain("icrc2_allowance");
 });

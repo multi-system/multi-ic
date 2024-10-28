@@ -1,3 +1,4 @@
 [dependencies]
-base = "0.11.2"
-motoko-matchers = "https://github.com/kritzcreek/motoko-matchers#master@3dac8a071b69e4e651b25a7d9683fe831eb7cffd"
+base = "0.13.2"
+icrc2-types = "1.0.1"
+test = "2.0.0"

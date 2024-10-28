@@ -3,10 +3,6 @@
     "multi_backend": {
       "main": "src/multi_backend/main.mo",
       "type": "motoko"
-    },
-    "multi_test": {
-      "main": "src/tests/unit/test.mo",
-      "type": "motoko"
     }
   },
   "defaults": {

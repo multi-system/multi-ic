@@ -1,17 +1,36 @@
 {
   "name": "multi",
   "version": "1.0.0",
-  "description": "Welcome to your new `multi` project and to the Internet Computer development community. By default, creating a new project adds this README and some template files to your project directory. You can edit these template files to customize your project and to include your own code to speed up the development cycle.",
+  "description": "Multi is a decentralized currency backed by a diversified reserve of tokens, designed to set a new standard for value and stability in the Web3 ecosystem.",
   "main": "index.js",
   "scripts": {
     "test": "vitest",
+    "test:unit": "mops test",
+    "test:e2e": "vitest --run",
+    "test:full": "./run_tests.sh",
+    "test:watch": "vitest --watch",
     "format": "prettier --write --plugin=prettier-plugin-motoko \"**/*.{mo,ts,js,json,css,md}\"",
     "format:check": "prettier --check --plugin=prettier-plugin-motoko \"**/*.{mo,ts,js,json,css,md}\"",
     "format:mo": "prettier --write --plugin=prettier-plugin-motoko \"**/*.mo\"",
     "format:mo:check": "prettier --check --plugin=prettier-plugin-motoko \"**/*.mo\"",
-    "test:full": "./run_tests.sh"
+    "prebuild": "npm run format:check",
+    "pretest:full": "npm run format:check"
   },
-  "keywords": [],
+  "keywords": [
+    "internet-computer",
+    "icp",
+    "dfinity",
+    "motoko",
+    "defi",
+    "token",
+    "decentralized-currency",
+    "reserve-currency",
+    "web3"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/multi-system/multi-ic"
+  },
   "author": "",
   "license": "ISC",
   "devDependencies": {
@@ -19,10 +38,16 @@
     "@dfinity/candid": "^2.1.3",
     "@dfinity/identity": "^2.1.3",
     "@dfinity/principal": "^2.1.3",
+    "@types/node": "^20.11.0",
     "ic-mops": "^1.1.1",
     "isomorphic-fetch": "^3.0.0",
     "prettier": "^3.3.3",
     "prettier-plugin-motoko": "^0.9.4",
+    "typescript": "^5.3.3",
     "vitest": "^2.1.3"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
   }
 }

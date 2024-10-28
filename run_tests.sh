@@ -34,7 +34,6 @@ check_success() {
 }
 
 # Function to check if time sync is needed
-# Returns 0 if sync is needed, 1 if not
 need_time_sync() {
     dfx deploy --check 2>&1 | grep -q "Certificate is stale"
     return $?
@@ -58,7 +57,7 @@ check_formatting() {
     fi
     success_msg "Motoko files are properly formatted"
 
-    # Optionally check other files (JS, TS, etc.)
+    # Optionally check other files
     info_msg "Checking other source files..."
     if ! yarn format:check; then
         echo -e "${RED}❌ Some files are not properly formatted${NC}"
@@ -68,11 +67,23 @@ check_formatting() {
     success_msg "All files are properly formatted"
 }
 
+# Function to run unit tests
+run_unit_tests() {
+    info_msg "Running Motoko unit tests..."
+    if ! mops test; then
+        handle_error "Motoko unit tests failed"
+    fi
+    success_msg "Motoko unit tests passed"
+}
+
 main() {
     info_msg "Starting IC test workflow..."
 
     # Check formatting first
     check_formatting
+
+    # Run Motoko unit tests
+    run_unit_tests
 
     # Stop any running dfx instances
     info_msg "Stopping any existing dfx processes..."
@@ -106,22 +117,22 @@ main() {
         fi
     fi
 
-    # Run npm tests in non-watch mode
-    info_msg "Running npm tests..."
-    npm test -- --run
-    check_success "npm tests failed"
+    # Generate declarations after successful deployment
+    info_msg "Generating declarations..."
+    dfx generate multi_backend
+    check_success "Failed to generate declarations"
 
-    # Run canister tests
-    info_msg "Running canister tests..."
-    dfx canister call multi_test run
-    check_success "Canister tests failed"
+    # Run e2e tests
+    info_msg "Running e2e tests..."
+    npm test -- --run
+    check_success "e2e tests failed"
 
     # Stop dfx
     info_msg "Stopping dfx..."
     dfx stop
     check_success "Failed to stop dfx"
 
-    success_msg "Test workflow completed successfully! 🎉"
+    success_msg "All tests completed successfully! 🎉"
 }
 
 # Trap ctrl-c and call cleanup
