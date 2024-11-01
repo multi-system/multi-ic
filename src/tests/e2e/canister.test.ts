@@ -16,7 +16,6 @@ test("Should contain the correct ICRC candid interface", async () => {
   expect(canisterStatus.get("time")).toBeTruthy();
   expect(Array.isArray(canisterStatus.get("controllers"))).toBeTruthy();
 
-  // Update the snapshot with the new candid interface
   const candid = canisterStatus.get("candid") as string;
   expect(candid).toContain("icrc1_name");
   expect(candid).toContain("icrc1_symbol");
