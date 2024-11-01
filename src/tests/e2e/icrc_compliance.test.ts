@@ -2,7 +2,7 @@ import { expect, test, describe } from "vitest";
 import { Principal } from "@dfinity/principal";
 import { multi_backend, testPrincipal } from "./actor";
 
-describe("ICRC Token", () => {
+describe("ICRC Standard Compliance", () => {
   test("should return correct token metadata", async () => {
     const name = await multi_backend.icrc1_name();
     expect(name).toBe("Multi Token");
@@ -25,19 +25,49 @@ describe("ICRC Token", () => {
 
     const balance = await multi_backend.icrc1_balance_of(testAccount);
     expect(typeof balance).toBe("bigint");
+    expect(balance).toBe(0n);
+  });
+
+  test("should prevent direct minting", async () => {
+    const mintingAccount = await multi_backend.icrc1_minting_account();
+    // First verify the minting account exists
+    expect(mintingAccount).toBeDefined();
+
+    // Then safely check its properties
+    if (mintingAccount && mintingAccount.owner) {
+      expect(Principal.from(mintingAccount.owner).toText()).toBe(
+        multi_backend.principal.toText(),
+      );
+
+      // Try to transfer from minting account (should fail)
+      const transferResult = await multi_backend.icrc1_transfer({
+        from: {
+          owner: mintingAccount.owner,
+          subaccount: null,
+        },
+        to: {
+          owner: testPrincipal,
+          subaccount: [],
+        },
+        amount: 1000n,
+        fee: [],
+        memo: [],
+        created_at_time: [],
+      });
+
+      expect("Err" in transferResult).toBe(true);
+    }
   });
 
   test("should handle allowance operations", async () => {
     const spenderPrincipal = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
 
-    // Check initial allowance
     const initialAllowance = await multi_backend.icrc2_allowance({
       account: { owner: testPrincipal, subaccount: [] },
       spender: { owner: spenderPrincipal, subaccount: [] },
     });
     expect(initialAllowance.allowance).toBe(0n);
 
-    // Attempt approval (will fail until tokens are issued)
     const approveResult = await multi_backend.icrc2_approve({
       spender: { owner: spenderPrincipal, subaccount: [] },
       amount: 1000n,
@@ -49,7 +79,6 @@ describe("ICRC Token", () => {
       expected_allowance: [],
     });
 
-    // Expect insufficient funds until proper issuance is implemented
     expect(approveResult).toEqual({
       Err: {
         InsufficientFunds: { balance: 0n },

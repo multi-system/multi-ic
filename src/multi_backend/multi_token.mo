@@ -18,6 +18,7 @@ shared ({ caller = deployer }) actor class MultiToken(
   private var initialized : Bool = false;
   private var backingTokens : [TokenBacking.BackingPair] = [];
   stable var owner : Principal = deployer;
+  private var canister_principal : ?Principal = null;
 
   // Initialize backing tokens if provided in constructor
   do {
@@ -118,6 +119,7 @@ shared ({ caller = deployer }) actor class MultiToken(
       case (null) {
         let initclass = ICRC1.ICRC1(?icrc1_migration_state, Principal.fromActor(this), get_icrc1_environment());
         _icrc1 := ?initclass;
+        canister_principal := ?Principal.fromActor(this);
         initclass;
       };
       case (?val) val;
@@ -230,6 +232,50 @@ shared ({ caller = deployer }) actor class MultiToken(
       };
     } catch (e) {
       #Err(#GenericError({ message = Error.message(e); error_code = 2 }));
+    };
+  };
+
+  private func internalMint(to : ICRC1.Account, amount : Nat) : async* ICRC1.TransferResult {
+    if (not initialized) {
+      return #Err(#GenericError({ message = "Not initialized"; error_code = 1 }));
+    };
+
+    // Get supply unit from backing config
+    let supplyUnit = switch (init_config) {
+      case (null) {
+        return #Err(#GenericError({ message = "No backing config"; error_code = 2 }));
+      };
+      case (?config) { config.supply_unit };
+    };
+
+    // Verify amount is multiple of supply unit
+    if (amount % supplyUnit != 0) {
+      return #Err(#GenericError({ message = "Amount must be multiple of supply unit"; error_code = 3 }));
+    };
+
+    switch (canister_principal) {
+      case (null) {
+        return #Err(#GenericError({ message = "Canister not initialized"; error_code = 4 }));
+      };
+      case (?principal) {
+        // Perform mint using same pattern as other functions
+        switch (
+          await* icrc1().mint_tokens(
+            principal,
+            {
+              to = to;
+              amount = amount;
+              memo = null;
+              created_at_time = null;
+            },
+          )
+        ) {
+          case (#trappable(val)) val;
+          case (#awaited(val)) val;
+          case (#err(#trappable(err))) #Err(#GenericError({ message = err; error_code = 5 }));
+          case (#err(#awaited(err))) #Err(#GenericError({ message = err; error_code = 5 }));
+        };
+      };
     };
   };
 
