@@ -26,8 +26,8 @@ describe("Multi Token Backing System", () => {
             canister_id: icpPrincipal,
             token: icpPrincipal,
           },
-          units: BigInt(100),
-          reserve: BigInt(0),
+          backing_unit: BigInt(100),
+          reserve_quantity: BigInt(0),
         },
       ],
     };
@@ -44,8 +44,8 @@ describe("Multi Token Backing System", () => {
             canister_id: icpPrincipal,
             token: icpPrincipal,
           },
-          units: BigInt(0),
-          reserve: BigInt(0),
+          backing_unit: BigInt(0),
+          reserve_quantity: BigInt(0),
         },
       ],
     };
@@ -82,24 +82,24 @@ describe("Multi Token Backing System", () => {
               canister_id: icpPrincipal,
               token: icpPrincipal,
             },
-            units: BigInt(100),
-            reserve: BigInt(0),
+            backing_unit: BigInt(100),
+            reserve_quantity: BigInt(0),
           },
           {
             token_info: {
               canister_id: ethPrincipal,
               token: ethPrincipal,
             },
-            units: BigInt(50),
-            reserve: BigInt(0),
+            backing_unit: BigInt(50),
+            reserve_quantity: BigInt(0),
           },
           {
             token_info: {
               canister_id: usdPrincipal,
               token: usdPrincipal,
             },
-            units: BigInt(200),
-            reserve: BigInt(0),
+            backing_unit: BigInt(200),
+            reserve_quantity: BigInt(0),
           },
         ],
       };
@@ -121,8 +121,10 @@ describe("Multi Token Backing System", () => {
         expect(token.token_info).toEqual(
           config.backing_pairs[index].token_info,
         );
-        expect(token.units).toEqual(config.backing_pairs[index].units);
-        expect(token.reserve).toEqual(BigInt(0));
+        expect(token.backing_unit).toEqual(
+          config.backing_pairs[index].backing_unit,
+        );
+        expect(token.reserve_quantity).toEqual(BigInt(0));
       });
     },
   );
@@ -137,8 +139,8 @@ describe("Multi Token Backing System", () => {
             canister_id: icpPrincipal,
             token: icpPrincipal,
           },
-          units: BigInt(100),
-          reserve: BigInt(0),
+          backing_unit: BigInt(100),
+          reserve_quantity: BigInt(0),
         },
       ],
     });
@@ -153,7 +155,7 @@ describe("Multi Token Backing System", () => {
     }
 
     expect(tokens[0].token_info.token.toText()).toBe(icpPrincipal.toText());
-    expect(tokens[0].units).toBe(BigInt(100));
-    expect(tokens[0].reserve).toBe(BigInt(0));
+    expect(tokens[0].backing_unit).toBe(BigInt(100));
+    expect(tokens[0].reserve_quantity).toBe(BigInt(0));
   });
 });

@@ -9,8 +9,8 @@ module {
 
   public type BackingPair = {
     token_info : TokenInfo;
-    units : Nat;
-    reserve : Nat;
+    backing_unit : Nat;
+    reserve_quantity : Nat;
   };
 
   public type BackingConfig = {

@@ -15,8 +15,8 @@ module {
     #ok(totalSupply / supplyUnit);
   };
 
-  public func calculateBackingUnits(reserve : Nat, eta : Nat) : Nat {
-    return reserve / eta;
+  public func calculateBackingUnits(reserve_quantity : Nat, eta : Nat) : Nat {
+    return reserve_quantity / eta;
   };
 
   public func validateBackingRatios(config : Types.BackingConfig) : Result.Result<(), Text> {
@@ -25,13 +25,25 @@ module {
       case (#ok(eta)) {
         // Check if each backing pair's units match the required ratio
         for (pair in config.backing_pairs.vals()) {
-          let required_units = calculateBackingUnits(pair.reserve, eta);
-          if (required_units != pair.units) {
+          let required_units = calculateBackingUnits(pair.reserve_quantity, eta);
+          if (required_units != pair.backing_unit) {
             return #err("Invalid backing ratio");
           };
         };
       };
     };
     #ok(());
+  };
+
+  public func calculateRequiredBacking(amount : Nat, supplyUnit : Nat, pair : Types.BackingPair) : Result.Result<Nat, Text> {
+    // First calculate phi (how many supply units)
+    if (amount % supplyUnit != 0) {
+      return #err("Amount must be multiple of supply unit");
+    };
+
+    let phi = amount / supplyUnit;
+
+    // Required amount is phi * backing_unit
+    #ok(phi * pair.backing_unit);
   };
 };

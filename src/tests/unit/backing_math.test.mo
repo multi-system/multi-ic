@@ -28,12 +28,12 @@ suite(
       "validates correct backing ratios",
       func() {
         let config : Types.BackingConfig = {
-          supply_unit = 100;
+          supply_unit = 100; // minimum issuable amount
           total_supply = 1000; // eta will be 10
           backing_pairs = [{
             token_info = token1_info;
-            units = 100; // correct since 1000/10 = 100
-            reserve = 1000;
+            backing_unit = 100; // backing token requirement for one supply unit
+            reserve_quantity = 1000;
           }];
         };
 
@@ -55,14 +55,93 @@ suite(
           total_supply = 1000; // eta will be 10
           backing_pairs = [{
             token_info = token1_info;
-            units = 150; // incorrect since 1000/10 = 100
-            reserve = 1000;
+            backing_unit = 150; // incorrect since reserve_quantity/eta should equal backing_unit
+            reserve_quantity = 1000;
           }];
         };
 
         switch (Math.validateBackingRatios(config)) {
           case (#err(msg)) { assert msg == "Invalid backing ratio" };
           case (#ok()) { assert false };
+        };
+      },
+    );
+
+    test(
+      "calculates required backing for single supply unit (phi = 1)",
+      func() {
+        let pair : Types.BackingPair = {
+          token_info = token1_info;
+          backing_unit = 100;
+          reserve_quantity = 1000;
+        };
+
+        switch (Math.calculateRequiredBacking(1000, 1000, pair)) {
+          // amount = one supply unit
+          case (#ok(required)) {
+            // phi = 1, so required = phi * backing_unit = 1 * 100 = 100
+            assert required == 100;
+          };
+          case (#err(_)) assert false;
+        };
+      },
+    );
+
+    test(
+      "calculates required backing for multiple supply units (phi > 1)",
+      func() {
+        let pair : Types.BackingPair = {
+          token_info = token1_info;
+          backing_unit = 100;
+          reserve_quantity = 1000;
+        };
+
+        switch (Math.calculateRequiredBacking(3000, 1000, pair)) {
+          // amount = 3 supply units
+          case (#ok(required)) {
+            // phi = 3, so required = phi * backing_unit = 3 * 100 = 300
+            assert required == 300;
+          };
+          case (#err(_)) assert false;
+        };
+      },
+    );
+
+    test(
+      "rejects backing calculation when amount not multiple of supply unit",
+      func() {
+        let pair : Types.BackingPair = {
+          token_info = token1_info;
+          backing_unit = 100;
+          reserve_quantity = 1000;
+        };
+
+        switch (Math.calculateRequiredBacking(1500, 1000, pair)) {
+          // 1500 is not multiple of supply_unit=1000
+          case (#ok(_)) assert false;
+          case (#err(msg)) {
+            assert msg == "Amount must be multiple of supply unit";
+          };
+        };
+      },
+    );
+
+    test(
+      "calculates required backing with different backing unit sizes",
+      func() {
+        let pair : Types.BackingPair = {
+          token_info = token1_info;
+          backing_unit = 250;
+          reserve_quantity = 1000;
+        };
+
+        switch (Math.calculateRequiredBacking(2000, 1000, pair)) {
+          // amount = 2 supply units
+          case (#ok(required)) {
+            // phi = 2, so required = phi * backing_unit = 2 * 250 = 500
+            assert required == 500;
+          };
+          case (#err(_)) assert false;
         };
       },
     );

@@ -11,11 +11,11 @@ module {
 
     let seen = Buffer.Buffer<Principal>(backing.size());
     for (pair in backing.vals()) {
-      if (pair.units == 0) {
+      if (pair.backing_unit == 0) {
         return #err("Backing units must be greater than 0");
       };
 
-      if (pair.reserve == 0) {
+      if (pair.reserve_quantity == 0) {
         return #err("Reserve must be greater than 0");
       };
 
@@ -43,7 +43,7 @@ module {
 
     let seen = Buffer.Buffer<Principal>(backing.size());
     for (pair in backing.vals()) {
-      if (pair.units == 0) {
+      if (pair.backing_unit == 0) {
         return #err("Backing units must be greater than 0");
       };
 

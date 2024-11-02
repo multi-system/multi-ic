@@ -35,12 +35,12 @@ suite(
     );
 
     test(
-      "rejects zero units",
+      "rejects zero backing units",
       func() {
         let backing : [Types.BackingPair] = [{
           token_info = token1_info;
-          units = 0;
-          reserve = 1000;
+          backing_unit = 0;
+          reserve_quantity = 1000;
         }];
 
         switch (Validation.validateBacking(backing)) {
@@ -57,8 +57,8 @@ suite(
       func() {
         let backing : [Types.BackingPair] = [{
           token_info = token1_info;
-          units = 100;
-          reserve = 0;
+          backing_unit = 100;
+          reserve_quantity = 0;
         }];
 
         switch (Validation.validateBacking(backing)) {
@@ -76,13 +76,13 @@ suite(
         let backing : [Types.BackingPair] = [
           {
             token_info = token1_info;
-            units = 100;
-            reserve = 1000;
+            backing_unit = 100;
+            reserve_quantity = 1000;
           },
           {
             token_info = token1_info; // Same token
-            units = 200;
-            reserve = 2000;
+            backing_unit = 200;
+            reserve_quantity = 2000;
           },
         ];
 
