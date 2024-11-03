@@ -1,9 +1,10 @@
 import Result "mo:base/Result";
 import Buffer "mo:base/Buffer";
 import Principal "mo:base/Principal";
-import Types "./backing_types";
+import Types "./BackingTypes";
 
 module {
+  /// Validates backing token configuration including reserve quantities
   public func validateBacking(backing : [Types.BackingPair]) : Result.Result<(), Text> {
     if (backing.size() == 0) {
       return #err("Backing tokens cannot be empty");
@@ -11,31 +12,31 @@ module {
 
     let seen = Buffer.Buffer<Principal>(backing.size());
     for (pair in backing.vals()) {
-      if (pair.backing_unit == 0) {
+      if (pair.backingUnit == 0) {
         return #err("Backing units must be greater than 0");
       };
 
-      if (pair.reserve_quantity == 0) {
+      if (pair.reserveQuantity == 0) {
         return #err("Reserve must be greater than 0");
       };
 
-      let token_principal = Principal.fromActor(pair.token_info.token);
-      var isDuplicate = false;
-      for (existingPrincipal in seen.vals()) {
-        if (existingPrincipal == token_principal) {
-          isDuplicate := true;
+      let tokenPrincipal = Principal.fromActor(pair.tokenInfo.token);
+      var isPresent = false;
+      for (seenPrincipal in seen.vals()) {
+        if (seenPrincipal == tokenPrincipal) {
+          isPresent := true;
         };
       };
-      if (isDuplicate) {
+      if (isPresent) {
         return #err("Duplicate token in backing");
       };
-      seen.add(token_principal);
+      seen.add(tokenPrincipal);
     };
 
     #ok(());
   };
 
-  // Initial structure validation without checking reserves
+  /// Validates structure without checking reserves
   public func validateStructure(backing : [Types.BackingPair]) : Result.Result<(), Text> {
     if (backing.size() == 0) {
       return #err("Backing tokens cannot be empty");
@@ -43,36 +44,36 @@ module {
 
     let seen = Buffer.Buffer<Principal>(backing.size());
     for (pair in backing.vals()) {
-      if (pair.backing_unit == 0) {
+      if (pair.backingUnit == 0) {
         return #err("Backing units must be greater than 0");
       };
 
-      let token_principal = Principal.fromActor(pair.token_info.token);
-      var isDuplicate = false;
-      for (existingPrincipal in seen.vals()) {
-        if (existingPrincipal == token_principal) {
-          isDuplicate := true;
+      let tokenPrincipal = Principal.fromActor(pair.tokenInfo.token);
+      var isPresent = false;
+      for (seenPrincipal in seen.vals()) {
+        if (seenPrincipal == tokenPrincipal) {
+          isPresent := true;
         };
       };
-      if (isDuplicate) {
+      if (isPresent) {
         return #err("Duplicate token in backing");
       };
-      seen.add(token_principal);
+      seen.add(tokenPrincipal);
     };
 
     #ok(());
   };
 
+  /// Validates complete backing configuration
   public func validateBackingConfig(config : Types.BackingConfig) : Result.Result<(), Text> {
-    // Validate supply unit first
-    if (config.supply_unit == 0) {
+    if (config.supplyUnit == 0) {
       return #err("Supply unit cannot be zero");
     };
 
-    if (config.total_supply % config.supply_unit != 0) {
+    if (config.totalSupply % config.supplyUnit != 0) {
       return #err("Total supply must be divisible by supply unit");
     };
 
-    validateStructure(config.backing_pairs);
+    validateStructure(config.backingPairs);
   };
 };

@@ -1,7 +1,7 @@
 {
   "canisters": {
     "multi_backend": {
-      "main": "src/multi_backend/multi_token.mo",
+      "main": "src/multi_backend/MultiToken.mo",
       "type": "motoko"
     }
   },

@@ -4,31 +4,32 @@ import ICRC1 "mo:icrc1-mo/ICRC1";
 import ICRC2 "mo:icrc2-mo/ICRC2";
 import Result "mo:base/Result";
 import Error "mo:base/Error";
-import TokenBacking "./token_backing";
+import Backing "./Backing";
 
+/// Multi-token implementing ICRC1 and ICRC2 standards with configurable backing
 shared ({ caller = deployer }) actor class MultiToken(
-  init_config : ?TokenBacking.BackingConfig,
+  initConfig : ?Backing.BackingConfig,
   args : ?{
     icrc1 : ?ICRC1.InitArgs;
     icrc2 : ?ICRC2.InitArgs;
   },
 ) = this {
 
-  // Backing token state
-  private var initialized : Bool = false;
-  private var backingTokens : [TokenBacking.BackingPair] = [];
+  // -- State Variables --
+  private var hasInitialized : Bool = false;
+  private var backingTokens : [Backing.BackingPair] = [];
   stable var owner : Principal = deployer;
-  private var canister_principal : ?Principal = null;
+  private var canisterPrincipal_ : ?Principal = null;
 
-  // Initialize backing tokens if provided in constructor
+  // -- Initialization --
   do {
-    switch (init_config) {
+    switch (initConfig) {
       case (null) {};
       case (?config) {
-        switch (TokenBacking.validateBackingConfig(config)) {
+        switch (Backing.validateBackingConfig(config)) {
           case (#ok) {
-            backingTokens := config.backing_pairs;
-            initialized := true;
+            backingTokens := config.backingPairs;
+            hasInitialized := true;
           };
           case (#err(e)) {
             Debug.print("Initial backing token configuration failed: " # e);
@@ -38,7 +39,7 @@ shared ({ caller = deployer }) actor class MultiToken(
     };
   };
 
-  let default_icrc1_args : ICRC1.InitArgs = {
+  let defaultIcrc1Args : ICRC1.InitArgs = {
     name = ?"Multi Token";
     symbol = ?"MULTI";
     logo = ?"data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InJlZCIvPjwvc3ZnPg==";
@@ -60,7 +61,7 @@ shared ({ caller = deployer }) actor class MultiToken(
     settle_to_accounts = ?99999000;
   };
 
-  let default_icrc2_args : ICRC2.InitArgs = {
+  let defaultIcrc2Args : ICRC2.InitArgs = {
     max_approvals_per_account = ?10000;
     max_allowance = ? #TotalSupply;
     fee = ? #ICRC1;
@@ -69,11 +70,11 @@ shared ({ caller = deployer }) actor class MultiToken(
     settle_to_approvals = ?9990000;
   };
 
-  let icrc1_args : ICRC1.InitArgs = switch (args) {
-    case (null) default_icrc1_args;
+  let icrc1Args : ICRC1.InitArgs = switch (args) {
+    case (null) defaultIcrc1Args;
     case (?args) {
       switch (args.icrc1) {
-        case (null) default_icrc1_args;
+        case (null) defaultIcrc1Args;
         case (?val) {
           {
             val with minting_account = switch (val.minting_account) {
@@ -89,23 +90,24 @@ shared ({ caller = deployer }) actor class MultiToken(
     };
   };
 
-  let icrc2_args : ICRC2.InitArgs = switch (args) {
-    case (null) default_icrc2_args;
+  let icrc2Args : ICRC2.InitArgs = switch (args) {
+    case (null) defaultIcrc2Args;
     case (?args) {
       switch (args.icrc2) {
-        case (null) default_icrc2_args;
+        case (null) defaultIcrc2Args;
         case (?val) val;
       };
     };
   };
 
-  stable let icrc1_migration_state = ICRC1.init(ICRC1.initialState(), #v0_1_0(#id), ?icrc1_args, deployer);
-  stable let icrc2_migration_state = ICRC2.init(ICRC2.initialState(), #v0_1_0(#id), ?icrc2_args, deployer);
+  stable let icrc1State = ICRC1.init(ICRC1.initialState(), #v0_1_0(#id), ?icrc1Args, deployer);
+  stable let icrc2State = ICRC2.init(ICRC2.initialState(), #v0_1_0(#id), ?icrc2Args, deployer);
 
-  let #v0_1_0(#data(_)) = icrc1_migration_state;
-  private var _icrc1 : ?ICRC1.ICRC1 = null;
+  // -- ICRC1 Setup --
+  let #v0_1_0(#data(_)) = icrc1State;
+  private var icrc1Instance_ : ?ICRC1.ICRC1 = null;
 
-  private func get_icrc1_environment() : ICRC1.Environment {
+  private func getIcrc1Environment() : ICRC1.Environment {
     {
       get_time = null;
       get_fee = null;
@@ -114,93 +116,96 @@ shared ({ caller = deployer }) actor class MultiToken(
     };
   };
 
-  func icrc1() : ICRC1.ICRC1 {
-    switch (_icrc1) {
+  /// Returns or initializes ICRC1 instance
+  private func getIcrc1() : ICRC1.ICRC1 {
+    switch (icrc1Instance_) {
       case (null) {
-        let initclass = ICRC1.ICRC1(?icrc1_migration_state, Principal.fromActor(this), get_icrc1_environment());
-        _icrc1 := ?initclass;
-        canister_principal := ?Principal.fromActor(this);
-        initclass;
+        let instance = ICRC1.ICRC1(?icrc1State, Principal.fromActor(this), getIcrc1Environment());
+        icrc1Instance_ := ?instance;
+        canisterPrincipal_ := ?Principal.fromActor(this);
+        instance;
       };
       case (?val) val;
     };
   };
 
-  let #v0_1_0(#data(_)) = icrc2_migration_state;
-  private var _icrc2 : ?ICRC2.ICRC2 = null;
+  // -- ICRC2 Setup --
+  let #v0_1_0(#data(_)) = icrc2State;
+  private var icrc2Instance_ : ?ICRC2.ICRC2 = null;
 
-  private func get_icrc2_environment() : ICRC2.Environment {
+  private func getIcrc2Environment() : ICRC2.Environment {
     {
-      icrc1 = icrc1();
+      icrc1 = getIcrc1();
       get_fee = null;
       can_approve = null;
       can_transfer_from = null;
     };
   };
 
-  func icrc2() : ICRC2.ICRC2 {
-    switch (_icrc2) {
+  /// Returns or initializes ICRC2 instance
+  private func getIcrc2() : ICRC2.ICRC2 {
+    switch (icrc2Instance_) {
       case (null) {
-        let initclass = ICRC2.ICRC2(?icrc2_migration_state, Principal.fromActor(this), get_icrc2_environment());
-        _icrc2 := ?initclass;
-        initclass;
+        let instance = ICRC2.ICRC2(?icrc2State, Principal.fromActor(this), getIcrc2Environment());
+        icrc2Instance_ := ?instance;
+        instance;
       };
       case (?val) val;
     };
   };
 
-  public shared ({ caller }) func initialize(config : TokenBacking.BackingConfig) : async Result.Result<(), Text> {
-    // Check initialization state first
-    if (initialized) {
+  /// Initialize token with backing configuration
+  public shared ({ caller }) func initialize(config : Backing.BackingConfig) : async Result.Result<(), Text> {
+    if (hasInitialized) {
       return #err("Already initialized");
     };
 
-    // Then validate config without checking reserves
-    switch (TokenBacking.validateBackingConfig(config)) {
-      case (#err(e)) { return #err(e) };
+    switch (Backing.validateBackingConfig(config)) {
+      case (#err(e)) { #err(e) };
       case (#ok()) {
-        backingTokens := config.backing_pairs;
-        initialized := true;
+        backingTokens := config.backingPairs;
+        hasInitialized := true;
         #ok(());
       };
     };
   };
 
-  // ICRC1 Interface
+  // -- ICRC1 Interface --
+
   public shared query func icrc1_name() : async Text {
-    icrc1().name();
+    getIcrc1().name();
   };
 
   public shared query func icrc1_symbol() : async Text {
-    icrc1().symbol();
+    getIcrc1().symbol();
   };
 
   public shared query func icrc1_decimals() : async Nat8 {
-    icrc1().decimals();
+    getIcrc1().decimals();
   };
 
   public shared query func icrc1_fee() : async ICRC1.Balance {
-    icrc1().fee();
+    getIcrc1().fee();
   };
 
   public shared query func icrc1_metadata() : async [ICRC1.MetaDatum] {
-    icrc1().metadata();
+    getIcrc1().metadata();
   };
 
   public shared query func icrc1_total_supply() : async ICRC1.Balance {
-    icrc1().total_supply();
+    getIcrc1().total_supply();
   };
 
   public shared query func icrc1_minting_account() : async ?ICRC1.Account {
-    ?icrc1().minting_account();
+    ?getIcrc1().minting_account();
   };
 
   public shared query func icrc1_balance_of(args : ICRC1.Account) : async ICRC1.Balance {
-    icrc1().balance_of(args);
+    getIcrc1().balance_of(args);
   };
 
   public shared ({ caller }) func icrc1_transfer(args : ICRC1.TransferArgs) : async ICRC1.TransferResult {
-    switch (await* icrc1().transfer_tokens(caller, args, false, null)) {
+    switch (await* getIcrc1().transfer_tokens(caller, args, false, null)) {
       case (#trappable(val)) val;
       case (#awaited(val)) val;
       case (#err(#trappable(err))) #Err(#GenericError({ message = err; error_code = 1 }));
@@ -208,13 +213,14 @@ shared ({ caller = deployer }) actor class MultiToken(
     };
   };
 
-  // ICRC2 Interface
+  // -- ICRC2 Interface --
+
   public query func icrc2_allowance(args : ICRC2.AllowanceArgs) : async ICRC2.Allowance {
-    icrc2().allowance(args.spender, args.account, false);
+    getIcrc2().allowance(args.spender, args.account, false);
   };
 
   public shared ({ caller }) func icrc2_approve(args : ICRC2.ApproveArgs) : async ICRC2.ApproveResponse {
-    switch (await* icrc2().approve_transfers(caller, args, false, null)) {
+    switch (await* getIcrc2().approve_transfers(caller, args, false, null)) {
       case (#trappable(val)) val;
       case (#awaited(val)) val;
       case (#err(#trappable(err))) Debug.trap(err);
@@ -224,7 +230,7 @@ shared ({ caller = deployer }) actor class MultiToken(
 
   public shared ({ caller }) func icrc2_transfer_from(args : ICRC2.TransferFromArgs) : async ICRC2.TransferFromResponse {
     try {
-      switch (await* icrc2().transfer_tokens_from(caller, args, null)) {
+      switch (await* getIcrc2().transfer_tokens_from(caller, args, null)) {
         case (#trappable(val)) val;
         case (#awaited(val)) val;
         case (#err(#trappable(err))) #Err(#GenericError({ message = err; error_code = 1 }));
@@ -235,32 +241,32 @@ shared ({ caller = deployer }) actor class MultiToken(
     };
   };
 
-  private func internalMint(to : ICRC1.Account, amount : Nat) : async* ICRC1.TransferResult {
-    if (not initialized) {
+  // -- Private Helper Functions --
+
+  /// Mint new tokens to specified account
+  private func mintTokens(to : ICRC1.Account, amount : Nat) : async* ICRC1.TransferResult {
+    if (not hasInitialized) {
       return #Err(#GenericError({ message = "Not initialized"; error_code = 1 }));
     };
 
-    // Get supply unit from backing config
-    let supplyUnit = switch (init_config) {
+    let supplyUnit = switch (initConfig) {
       case (null) {
         return #Err(#GenericError({ message = "No backing config"; error_code = 2 }));
       };
-      case (?config) { config.supply_unit };
+      case (?config) { config.supplyUnit };
     };
 
-    // Verify amount is multiple of supply unit
     if (amount % supplyUnit != 0) {
       return #Err(#GenericError({ message = "Amount must be multiple of supply unit"; error_code = 3 }));
     };
 
-    switch (canister_principal) {
+    switch (canisterPrincipal_) {
       case (null) {
         return #Err(#GenericError({ message = "Canister not initialized"; error_code = 4 }));
       };
       case (?principal) {
-        // Perform mint using same pattern as other functions
         switch (
-          await* icrc1().mint_tokens(
+          await* getIcrc1().mint_tokens(
             principal,
             {
               to = to;
@@ -279,19 +285,24 @@ shared ({ caller = deployer }) actor class MultiToken(
     };
   };
 
-  // Query methods
-  public query func is_initialized() : async Bool {
-    initialized;
+  // -- Query Methods --
+
+  /// Returns whether token is initialized
+  public query func isInitialized() : async Bool {
+    hasInitialized;
   };
 
-  public query func get_backing_tokens() : async [TokenBacking.BackingPair] {
+  /// Returns list of backing tokens
+  public query func getBackingTokens() : async [Backing.BackingPair] {
     backingTokens;
   };
 
-  // Admin functions
-  public shared ({ caller }) func admin_update_owner(new_owner : Principal) : async Bool {
+  // -- Admin Functions --
+
+  /// Update owner to new principal
+  public shared ({ caller }) func updateOwner(newOwner : Principal) : async Bool {
     if (caller != owner) Debug.trap("Unauthorized");
-    owner := new_owner;
+    owner := newOwner;
     true;
   };
 };

@@ -1,10 +1,10 @@
 import { expect, test } from "vitest";
 import { Actor, CanisterStatus, HttpAgent } from "@dfinity/agent";
 import { Principal } from "@dfinity/principal";
-import { multiBackendCanister, multi_backend } from "./actor";
+import { multiBackendCanister, multiBackend } from "./actor";
 
 test("Should contain the correct ICRC candid interface", async () => {
-  const agent = Actor.agentOf(multi_backend) as HttpAgent;
+  const agent = Actor.agentOf(multiBackend) as HttpAgent;
   const id = Principal.from(multiBackendCanister);
 
   const canisterStatus = await CanisterStatus.request({

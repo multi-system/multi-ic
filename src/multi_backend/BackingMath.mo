@@ -1,8 +1,9 @@
 import Result "mo:base/Result";
-import Types "./backing_types";
+import Types "./BackingTypes";
 import Int "mo:base/Int";
 
 module {
+  /// Calculates eta value from total supply and supply unit
   public func calculateEta(totalSupply : Nat, supplyUnit : Nat) : Result.Result<Nat, Text> {
     if (supplyUnit == 0) {
       return #err("Supply unit cannot be zero");
@@ -15,18 +16,19 @@ module {
     #ok(totalSupply / supplyUnit);
   };
 
-  public func calculateBackingUnits(reserve_quantity : Nat, eta : Nat) : Nat {
-    return reserve_quantity / eta;
+  /// Calculates backing units from reserve quantity and eta
+  public func calculateBackingUnits(reserveQuantity : Nat, eta : Nat) : Nat {
+    reserveQuantity / eta;
   };
 
+  /// Validates backing ratios in configuration
   public func validateBackingRatios(config : Types.BackingConfig) : Result.Result<(), Text> {
-    switch (calculateEta(config.total_supply, config.supply_unit)) {
+    switch (calculateEta(config.totalSupply, config.supplyUnit)) {
       case (#err(e)) return #err(e);
       case (#ok(eta)) {
-        // Check if each backing pair's units match the required ratio
-        for (pair in config.backing_pairs.vals()) {
-          let required_units = calculateBackingUnits(pair.reserve_quantity, eta);
-          if (required_units != pair.backing_unit) {
+        for (pair in config.backingPairs.vals()) {
+          let requiredUnits = calculateBackingUnits(pair.reserveQuantity, eta);
+          if (requiredUnits != pair.backingUnit) {
             return #err("Invalid backing ratio");
           };
         };
@@ -35,15 +37,13 @@ module {
     #ok(());
   };
 
+  /// Calculates required backing amount for a given transfer
   public func calculateRequiredBacking(amount : Nat, supplyUnit : Nat, pair : Types.BackingPair) : Result.Result<Nat, Text> {
-    // First calculate phi (how many supply units)
     if (amount % supplyUnit != 0) {
       return #err("Amount must be multiple of supply unit");
     };
 
-    let phi = amount / supplyUnit;
-
-    // Required amount is phi * backing_unit
-    #ok(phi * pair.backing_unit);
+    let supplyUnits = amount / supplyUnit;
+    #ok(supplyUnits * pair.backingUnit);
   };
 };

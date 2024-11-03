@@ -32,7 +32,7 @@ export const createActor = async (
 };
 
 export const multiBackendCanister = canisterIds.multi_backend.local;
-export const multi_backend = await createActor(multiBackendCanister, {
+export const multiBackend = await createActor(multiBackendCanister, {
   agentOptions: { host: "http://127.0.0.1:4943", fetch },
 });
 
