@@ -17,4 +17,5 @@ module {
   public let calculateEta = BackingMath.calculateEta;
   public let calculateBackingUnits = BackingMath.calculateBackingUnits;
   public let validateBackingRatios = BackingMath.validateBackingRatios;
+  public let calculateRequiredBacking = BackingMath.calculateRequiredBacking;
 };
