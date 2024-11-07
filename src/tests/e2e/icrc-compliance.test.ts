@@ -20,7 +20,7 @@ describe("ICRC Standard Compliance", () => {
   test("should handle balance queries", async () => {
     const testAccount = {
       owner: testPrincipal,
-      subaccount: [],
+      subaccount: [] as number[],
     };
 
     const balance = await multiBackend.icrc1_balance_of(testAccount);
@@ -44,12 +44,12 @@ describe("ICRC Standard Compliance", () => {
         },
         to: {
           owner: testPrincipal,
-          subaccount: [],
+          subaccount: [] as number[],
         },
         amount: 1000n,
-        fee: [],
-        memo: [],
-        created_at_time: [],
+        fee: [] as number[],
+        memo: [] as number[],
+        created_at_time: [] as bigint[],
       });
 
       expect("Err" in transferResult).toBe(true);
@@ -60,20 +60,20 @@ describe("ICRC Standard Compliance", () => {
     const spenderPrincipal = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
 
     const initialAllowance = await multiBackend.icrc2_allowance({
-      account: { owner: testPrincipal, subaccount: [] },
-      spender: { owner: spenderPrincipal, subaccount: [] },
+      account: { owner: testPrincipal, subaccount: [] as number[] },
+      spender: { owner: spenderPrincipal, subaccount: [] as number[] },
     });
     expect(initialAllowance.allowance).toBe(0n);
 
     const approveResult = await multiBackend.icrc2_approve({
-      spender: { owner: spenderPrincipal, subaccount: [] },
+      spender: { owner: spenderPrincipal, subaccount: [] as number[] },
       amount: 1000n,
       fee: [10_000n],
-      memo: [],
-      from_subaccount: [],
-      expires_at: [],
-      created_at_time: [],
-      expected_allowance: [],
+      memo: [] as number[],
+      from_subaccount: [] as number[],
+      expires_at: [] as bigint[],
+      created_at_time: [] as bigint[],
+      expected_allowance: [] as bigint[],
     });
 
     expect(approveResult).toEqual({

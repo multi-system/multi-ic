@@ -1,43 +1,28 @@
 import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
+import Array "mo:base/Array";
 import ICRC1 "mo:icrc1-mo/ICRC1";
 import ICRC2 "mo:icrc2-mo/ICRC2";
 import Result "mo:base/Result";
 import Error "mo:base/Error";
 import Backing "./Backing";
+import Messages "./Messages";
+import ICRC2_Types "mo:icrc2-types";
 
 /// Multi-token implementing ICRC1 and ICRC2 standards with configurable backing
 shared ({ caller = deployer }) actor class MultiToken(
-  initConfig : ?Backing.BackingConfig,
   args : ?{
     icrc1 : ?ICRC1.InitArgs;
     icrc2 : ?ICRC2.InitArgs;
-  },
+  }
 ) = this {
 
   // -- State Variables --
   private var hasInitialized : Bool = false;
   private var backingTokens : [Backing.BackingPair] = [];
+  private var supplyUnit : Nat = 0;
   stable var owner : Principal = deployer;
   private var canisterPrincipal_ : ?Principal = null;
-
-  // -- Initialization --
-  do {
-    switch (initConfig) {
-      case (null) {};
-      case (?config) {
-        switch (Backing.validateBackingConfig(config)) {
-          case (#ok) {
-            backingTokens := config.backingPairs;
-            hasInitialized := true;
-          };
-          case (#err(e)) {
-            Debug.print("Initial backing token configuration failed: " # e);
-          };
-        };
-      };
-    };
-  };
 
   let defaultIcrc1Args : ICRC1.InitArgs = {
     name = ?"Multi Token";
@@ -155,15 +140,35 @@ shared ({ caller = deployer }) actor class MultiToken(
   };
 
   /// Initialize token with backing configuration
-  public shared ({ caller }) func initialize(config : Backing.BackingConfig) : async Result.Result<(), Text> {
+  public shared ({ caller }) func initialize(msg : Messages.InitializeMsg) : async Result.Result<(), Text> {
     if (hasInitialized) {
       return #err("Already initialized");
     };
 
-    switch (Backing.validateBackingConfig(config)) {
-      case (#err(e)) { #err(e) };
+    // Convert message format to internal config
+    let internalConfig : Backing.BackingConfig = {
+      supplyUnit = msg.supplyUnit;
+      totalSupply = 0;
+      backingPairs = Array.map<Messages.TokenConfig, Backing.BackingPair>(
+        msg.backingTokens,
+        func(tc : Messages.TokenConfig) : Backing.BackingPair {
+          {
+            tokenInfo = {
+              canisterId = tc.canisterId;
+              token = actor (Principal.toText(tc.canisterId)) : ICRC2_Types.Service;
+            };
+            backingUnit = tc.backingUnit;
+            reserveQuantity = 0;
+          };
+        },
+      );
+    };
+
+    switch (await* Backing.validateBackingFull(internalConfig)) {
+      case (#err(e)) { return #err(e) };
       case (#ok()) {
-        backingTokens := config.backingPairs;
+        backingTokens := internalConfig.backingPairs;
+        supplyUnit := internalConfig.supplyUnit;
         hasInitialized := true;
         #ok(());
       };
@@ -247,13 +252,6 @@ shared ({ caller = deployer }) actor class MultiToken(
   private func mintTokens(to : ICRC1.Account, amount : Nat) : async* ICRC1.TransferResult {
     if (not hasInitialized) {
       return #Err(#GenericError({ message = "Not initialized"; error_code = 1 }));
-    };
-
-    let supplyUnit = switch (initConfig) {
-      case (null) {
-        return #Err(#GenericError({ message = "No backing config"; error_code = 2 }));
-      };
-      case (?config) { config.supplyUnit };
     };
 
     if (amount % supplyUnit != 0) {

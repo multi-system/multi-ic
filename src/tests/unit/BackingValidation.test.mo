@@ -94,5 +94,23 @@ suite(
         };
       },
     );
+
+    test(
+      "validates backing config",
+      func() {
+        let config : Types.BackingConfig = {
+          supplyUnit = 0;
+          totalSupply = 1000;
+          backingPairs = [];
+        };
+
+        switch (Validation.validateBackingConfig(config)) {
+          case (#err(msg)) {
+            assert msg == "Supply unit cannot be zero";
+          };
+          case (#ok()) { assert false };
+        };
+      },
+    );
   },
 );

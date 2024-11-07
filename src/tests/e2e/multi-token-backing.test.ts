@@ -1,66 +1,124 @@
 import { describe, expect, test } from "vitest";
 import { Principal } from "@dfinity/principal";
 import { multiBackend } from "./actor";
+import { execSync } from "child_process";
 
 describe("Multi Token Backing System", () => {
-  const ICP_PRINCIPAL = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
-  const ETH_PRINCIPAL = Principal.fromText("mxzaz-hqaaa-aaaar-qaada-cai");
-  const USD_PRINCIPAL = Principal.fromText("ss2fx-dyaaa-aaaar-qacoq-cai");
+  // Get actual deployed token principals
+  const TOKEN_A = Principal.fromText(
+    execSync(`dfx canister id token_a`, { encoding: "utf-8" }).trim(),
+  );
+  const TOKEN_B = Principal.fromText(
+    execSync(`dfx canister id token_b`, { encoding: "utf-8" }).trim(),
+  );
+  const TOKEN_C = Principal.fromText(
+    execSync(`dfx canister id token_c`, { encoding: "utf-8" }).trim(),
+  );
 
-  test.sequential("1. should validate backing configuration", async () => {
-    const initialState = await multiBackend.isInitialized();
-    if (initialState) {
-      console.log("Warning: Canister already initialized");
-      return;
-    }
+  test.sequential(
+    "1. should validate backing configuration",
+    { timeout: 15000 },
+    async () => {
+      const initialState = await multiBackend.isInitialized();
+      if (initialState) {
+        console.log("Warning: Canister already initialized");
+        return;
+      }
 
-    const zeroSupplyConfig = {
-      supplyUnit: BigInt(0),
-      totalSupply: BigInt(1000),
-      backingPairs: [
-        {
-          tokenInfo: {
-            canisterId: ICP_PRINCIPAL,
-            token: ICP_PRINCIPAL,
+      // Test with ICP principal (non-ICRC2 token)
+      const invalidTokenResult = await multiBackend.initialize({
+        supplyUnit: BigInt(100),
+        backingTokens: [
+          {
+            canisterId: Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai"),
+            backingUnit: BigInt(100),
           },
-          backingUnit: BigInt(100),
-          reserveQuantity: BigInt(0),
-        },
-      ],
-    };
-    const zeroSupplyResult = await multiBackend.initialize(zeroSupplyConfig);
-    expect(zeroSupplyResult).toEqual({ err: "Supply unit cannot be zero" });
+        ],
+      });
+      expect(invalidTokenResult).toEqual({
+        err: "Not a valid ICRC2 token",
+      });
 
-    const zeroUnitsConfig = {
-      supplyUnit: BigInt(100),
-      totalSupply: BigInt(1000),
-      backingPairs: [
-        {
-          tokenInfo: {
-            canisterId: ICP_PRINCIPAL,
-            token: ICP_PRINCIPAL,
+      // Test with malformed principal
+      const malformedConfig = {
+        supplyUnit: BigInt(100),
+        backingTokens: [
+          {
+            canisterId: Principal.fromText("aaaaa-aa"), // Invalid canister ID
+            backingUnit: BigInt(100),
           },
-          backingUnit: BigInt(0),
-          reserveQuantity: BigInt(0),
-        },
-      ],
-    };
-    const zeroUnitsResult = await multiBackend.initialize(zeroUnitsConfig);
-    expect(zeroUnitsResult).toEqual({
-      err: "Backing units must be greater than 0",
-    });
+        ],
+      };
+      const malformedResult = await multiBackend.initialize(malformedConfig);
+      expect(malformedResult).toEqual({
+        err: "Not a valid ICRC2 token",
+      });
 
-    const emptyPairsConfig = {
-      supplyUnit: BigInt(100),
-      totalSupply: BigInt(1000),
-      backingPairs: [],
-    };
-    const emptyPairsResult = await multiBackend.initialize(emptyPairsConfig);
-    expect(emptyPairsResult).toEqual({ err: "Backing tokens cannot be empty" });
-  });
+      // Test zero supply unit
+      const zeroSupplyConfig = {
+        supplyUnit: BigInt(0),
+        backingTokens: [
+          {
+            canisterId: TOKEN_A,
+            backingUnit: BigInt(100),
+          },
+        ],
+      };
+      const zeroSupplyResult = await multiBackend.initialize(zeroSupplyConfig);
+      expect(zeroSupplyResult).toEqual({
+        err: "Supply unit cannot be zero",
+      });
+
+      // Test zero backing units
+      const zeroUnitsConfig = {
+        supplyUnit: BigInt(100),
+        backingTokens: [
+          {
+            canisterId: TOKEN_A,
+            backingUnit: BigInt(0),
+          },
+        ],
+      };
+      const zeroUnitsResult = await multiBackend.initialize(zeroUnitsConfig);
+      expect(zeroUnitsResult).toEqual({
+        err: "Backing units must be greater than 0",
+      });
+
+      // Test empty backing tokens
+      const emptyTokensConfig = {
+        supplyUnit: BigInt(100),
+        backingTokens: [],
+      };
+      const emptyTokensResult =
+        await multiBackend.initialize(emptyTokensConfig);
+      expect(emptyTokensResult).toEqual({
+        err: "Backing tokens cannot be empty",
+      });
+
+      // Test duplicate tokens
+      const duplicateConfig = {
+        supplyUnit: BigInt(100),
+        backingTokens: [
+          {
+            canisterId: TOKEN_A,
+            backingUnit: BigInt(100),
+          },
+          {
+            canisterId: TOKEN_A,
+            backingUnit: BigInt(200),
+          },
+        ],
+      };
+      const duplicateResult = await multiBackend.initialize(duplicateConfig);
+      expect(duplicateResult).toEqual({
+        err: "Duplicate token in backing",
+      });
+    },
+  );
 
   test.sequential(
     "2. should initialize with three backing tokens",
+    { timeout: 15000 },
     async () => {
       const initialState = await multiBackend.isInitialized();
       if (initialState) {
@@ -70,31 +128,18 @@ describe("Multi Token Backing System", () => {
 
       const config = {
         supplyUnit: BigInt(100),
-        totalSupply: BigInt(1000),
-        backingPairs: [
+        backingTokens: [
           {
-            tokenInfo: {
-              canisterId: ICP_PRINCIPAL,
-              token: ICP_PRINCIPAL,
-            },
+            canisterId: TOKEN_A,
             backingUnit: BigInt(100),
-            reserveQuantity: BigInt(0),
           },
           {
-            tokenInfo: {
-              canisterId: ETH_PRINCIPAL,
-              token: ETH_PRINCIPAL,
-            },
+            canisterId: TOKEN_B,
             backingUnit: BigInt(50),
-            reserveQuantity: BigInt(0),
           },
           {
-            tokenInfo: {
-              canisterId: USD_PRINCIPAL,
-              token: USD_PRINCIPAL,
-            },
+            canisterId: TOKEN_C,
             backingUnit: BigInt(200),
-            reserveQuantity: BigInt(0),
           },
         ],
       };
@@ -109,42 +154,55 @@ describe("Multi Token Backing System", () => {
       expect(storedTokens.length).toBe(3);
 
       storedTokens.forEach((token, index) => {
-        expect(token.tokenInfo).toEqual(config.backingPairs[index].tokenInfo);
+        expect(token.tokenInfo.canisterId.toText()).toEqual(
+          config.backingTokens[index].canisterId.toText(),
+        );
         expect(token.backingUnit).toEqual(
-          config.backingPairs[index].backingUnit,
+          config.backingTokens[index].backingUnit,
         );
         expect(token.reserveQuantity).toEqual(BigInt(0));
       });
     },
   );
 
-  test.sequential("3. should prevent double initialization", async () => {
-    const result = await multiBackend.initialize({
-      supplyUnit: BigInt(100),
-      totalSupply: BigInt(1000),
-      backingPairs: [
-        {
-          tokenInfo: {
-            canisterId: ICP_PRINCIPAL,
-            token: ICP_PRINCIPAL,
+  test.sequential(
+    "3. should prevent double initialization",
+    { timeout: 15000 },
+    async () => {
+      const result = await multiBackend.initialize({
+        supplyUnit: BigInt(100),
+        backingTokens: [
+          {
+            canisterId: TOKEN_A,
+            backingUnit: BigInt(100),
           },
-          backingUnit: BigInt(100),
-          reserveQuantity: BigInt(0),
-        },
-      ],
-    });
-    expect(result).toEqual({ err: "Already initialized" });
-  });
+        ],
+      });
+      expect(result).toEqual({ err: "Already initialized" });
+    },
+  );
 
-  test.sequential("4. should handle backing token operations", async () => {
-    const tokens = await multiBackend.getBackingTokens();
-    if (tokens.length === 0) {
-      console.log("Warning: No backing tokens found");
-      return;
-    }
+  test.sequential(
+    "4. should handle backing token operations",
+    { timeout: 15000 },
+    async () => {
+      const tokens = await multiBackend.getBackingTokens();
+      if (tokens.length === 0) {
+        console.log("Warning: No backing tokens found");
+        return;
+      }
 
-    expect(tokens[0].tokenInfo.token.toText()).toBe(ICP_PRINCIPAL.toText());
-    expect(tokens[0].backingUnit).toBe(BigInt(100));
-    expect(tokens[0].reserveQuantity).toBe(BigInt(0));
-  });
+      expect(tokens[0].tokenInfo.canisterId.toText()).toBe(TOKEN_A.toText());
+      expect(tokens[0].backingUnit).toBe(BigInt(100));
+      expect(tokens[0].reserveQuantity).toBe(BigInt(0));
+
+      expect(tokens[1].tokenInfo.canisterId.toText()).toBe(TOKEN_B.toText());
+      expect(tokens[1].backingUnit).toBe(BigInt(50));
+      expect(tokens[1].reserveQuantity).toBe(BigInt(0));
+
+      expect(tokens[2].tokenInfo.canisterId.toText()).toBe(TOKEN_C.toText());
+      expect(tokens[2].backingUnit).toBe(BigInt(200));
+      expect(tokens[2].reserveQuantity).toBe(BigInt(0));
+    },
+  );
 });

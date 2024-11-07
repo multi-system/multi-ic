@@ -1,40 +1,66 @@
-import { Actor, HttpAgent } from "@dfinity/agent";
-import { Ed25519KeyIdentity } from "@dfinity/identity";
+import { Actor, HttpAgent, Identity } from "@dfinity/agent";
+import { Principal } from "@dfinity/principal";
+import { execSync } from "child_process";
 import fetch from "isomorphic-fetch";
-import canisterIds from "../../../.dfx/local/canister_ids.json";
+import { defaultIdentity, newIdentity } from "./identity";
 import { idlFactory } from "../../declarations/multi_backend/multi_backend.did.js";
 
-// Create a test identity
-const testIdentity = Ed25519KeyIdentity.generate();
+// Get dfx port for local development
+const dfxPort = execSync("dfx info replica-port", { encoding: "utf-8" }).trim();
 
-export const createActor = async (
-  canisterId: string,
-  options?: {
-    agentOptions?: {
-      host?: string;
-      identity?: Ed25519KeyIdentity;
-    };
-    actorOptions?: { agent?: HttpAgent };
-  },
-) => {
+// Create base agent
+export function createAgent(identity?: Identity) {
   const agent = new HttpAgent({
-    ...options?.agentOptions,
-    identity: testIdentity,
+    identity: identity || defaultIdentity,
+    host: `http://127.0.0.1:${dfxPort}`,
+    fetch,
   });
 
-  await agent.fetchRootKey();
+  if (process.env.DFX_NETWORK !== "ic") {
+    agent.fetchRootKey().catch((err) => {
+      console.warn("Unable to fetch root key. Is local replica running?");
+      console.error(err);
+    });
+  }
 
-  return Actor.createActor(idlFactory, {
-    agent,
-    canisterId,
-    ...options?.actorOptions,
+  return agent;
+}
+
+// Helper for funding test accounts
+export async function fundTestAccount(
+  token: any,
+  to: Identity,
+  amount: bigint,
+) {
+  const result = await token.icrc1_transfer({
+    to: { owner: to.getPrincipal(), subaccount: [] },
+    fee: [],
+    memo: [],
+    from_subaccount: [],
+    created_at_time: [],
+    amount,
   });
-};
+  if (!("Ok" in result)) {
+    throw new Error(`Failed to fund test account: ${JSON.stringify(result)}`);
+  }
+}
 
-export const multiBackendCanister = canisterIds.multi_backend.local;
-export const multiBackend = await createActor(multiBackendCanister, {
-  agentOptions: { host: "http://127.0.0.1:4943", fetch },
+// Get canister ID
+export const multiBackendCanister = Principal.fromText(
+  execSync(`dfx canister id multi_backend`, { encoding: "utf-8" }).trim(),
+);
+
+// Create agent with default identity
+const agent = createAgent(defaultIdentity);
+
+// Create the multi_backend actor
+export const multiBackend = Actor.createActor(idlFactory, {
+  agent,
+  canisterId: multiBackendCanister,
 });
 
-// Export the test identity so tests can access the principal if needed
-export const testPrincipal = testIdentity.getPrincipal();
+// Export test identity principal
+export const testPrincipal = defaultIdentity.getPrincipal();
+
+// Export identity utilities
+export { defaultIdentity, newIdentity };
