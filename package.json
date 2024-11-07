@@ -8,7 +8,7 @@
     "test": "vitest",
     "test:unit": "mops test",
     "test:e2e": "vitest --run",
-    "test:full": "./run_tests.sh",
+    "test:full": "./scripts/test.sh",
     "test:watch": "vitest --watch",
     "format": "prettier --write --plugin=prettier-plugin-motoko \"**/*.{mo,ts,js,json,css,md}\"",
     "format:check": "prettier --check --plugin=prettier-plugin-motoko \"**/*.{mo,ts,js,json,css,md}\"",
