@@ -4,11 +4,13 @@ set -euo pipefail
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Helper functions
 print_green() { echo -e "${GREEN}$1${NC}"; }
 print_error() { echo -e "${RED}$1${NC}"; }
+print_info() { echo -e "${YELLOW}$1${NC}"; }
 
 # Setup test identity
 setup_test_identity() {
@@ -28,7 +30,11 @@ main() {
   # Setup identity
   print_green "=== Setting up test identity ==="
   setup_test_identity
-  export MINTER=$(dfx identity get-principal --identity multi-token-test)
+  dfx identity use multi-token-test
+  export MINTER=$(dfx identity get-principal)
+  
+  # The JS test identity needs initial balance
+  export TEST_IDENTITY="jg6qm-uw64t-m6ppo-oluwn-ogr5j-dc5pm-lgy2p-eh6px-hebcd-5v73i-nqe"
   
   # Create canisters
   print_green "=== Creating canisters ==="
@@ -46,6 +52,7 @@ main() {
           };
           initial_balances = vec {
             record { record { owner = principal \"${MINTER}\"; }; 100_000_000_000_000; };
+            record { record { owner = principal \"${TEST_IDENTITY}\"; }; 100_000_000_000_000; };
           };
           metadata = vec {};
           transfer_fee = 10_000;
@@ -60,14 +67,30 @@ main() {
         }
       })"
     
-    export "${token^^}_CANISTER_ID"=$(dfx canister id "$token")
+    # Generate declarations
+    print_info "Generating declarations for $token..."
+    dfx generate "$token"
+    
+    # Export canister ID
+    canister_id=$(dfx canister id "$token")
+    export "${token^^}_CANISTER_ID=$canister_id"
+    print_info "Exported ${token^^}_CANISTER_ID=$canister_id"
   done
   
   # Deploy multi token
   print_green "=== Deploying multi token canister ==="
   dfx deploy multi_backend
+  print_info "Generating declarations for multi_backend..."
+  dfx generate multi_backend
+  
+  # Export multi backend ID
+  export MULTI_BACKEND_ID=$(dfx canister id multi_backend)
+  print_info "Exported MULTI_BACKEND_ID=${MULTI_BACKEND_ID}"
   
   print_green "=== Deployment completed successfully! ==="
 }
+
+# Trap errors
+trap 'print_error "An error occurred during deployment"; exit 1' ERR
 
 main

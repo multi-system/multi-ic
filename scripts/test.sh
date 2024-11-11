@@ -102,15 +102,28 @@ run_unit_tests() {
 start_dfx() {
     info_msg "Starting dfx with clean state..."
     cleanup
-    dfx start --clean --background
+    # Start dfx in background but redirect output to a file
+    dfx start --clean --background > dfx.log 2>&1
+    
+    # Wait for dfx to be ready
     local counter=0
     while ! dfx ping >/dev/null 2>&1; do
         if [ $counter -gt 30 ]; then
+            # If timeout, show the logs to help debug
+            cat dfx.log
             handle_error "Timeout waiting for dfx to start"
         fi
         sleep 1
         counter=$((counter + 1))
     done
+    
+    # Follow the logs in background
+    tail -f dfx.log &
+    TAIL_PID=$!
+    
+    # Make sure to kill the tail process in cleanup
+    trap 'kill $TAIL_PID' EXIT
+    
     success_msg "DFX started successfully"
 }
 
@@ -151,11 +164,6 @@ main() {
             handle_error "Failed to deploy canisters for unknown reason"
         fi
     fi
-    
-    # Generate declarations after successful deployment
-    info_msg "Generating declarations..."
-    dfx generate multi_backend
-    check_success "Failed to generate declarations"
     
     # Run e2e tests
     info_msg "Running e2e tests..."
