@@ -10,4 +10,19 @@ module {
     supplyUnit : Nat;
     backingTokens : [TokenConfig];
   };
+
+  public type IssueArgs = {
+    amount : Nat;
+  };
+
+  public type IssueResponse = {
+    #Success;
+    #NotInitialized;
+    #InvalidAmount : Text;
+    #InsufficientAllowance : Principal;
+    #TransferFailed : {
+      token : Principal;
+      error : Text;
+    };
+  };
 };
