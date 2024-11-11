@@ -49,6 +49,19 @@
     asn1js "^3.0.5"
     bs58check "^3.0.1"
 
+"@dfinity/identity-secp256k1@^2.1.3":
+  version "2.1.3"
+  resolved "https://registry.yarnpkg.com/@dfinity/identity-secp256k1/-/identity-secp256k1-2.1.3.tgz#64044aea8e45ed20befccf51c1cf0bcaf100b892"
+  integrity sha512-YhtodAQvmTa7pldkfMm2wCAWk6qkPZetLDgBO3kjbXJVHRJLNTN4fPnEowdQOs+IRpYRpr7/c1iHngnaQYYE+g==
+  dependencies:
+    "@dfinity/agent" "^2.1.3"
+    "@noble/curves" "^1.4.0"
+    "@noble/hashes" "^1.3.1"
+    "@scure/bip32" "^1.4.0"
+    "@scure/bip39" "^1.3.0"
+    asn1js "^3.0.5"
+    bs58check "^3.0.1"
+
 "@dfinity/identity@2.1.0":
   version "2.1.0"
   resolved "https://registry.yarnpkg.com/@dfinity/identity/-/identity-2.1.0.tgz#e627a310b512778601c24f9cd76169fd58a55510"
