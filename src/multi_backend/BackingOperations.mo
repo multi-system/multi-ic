@@ -157,7 +157,7 @@ module {
           Debug.print("Transfer error: " # debug_show (e));
           #err(debug_show (e));
         };
-        case (#Ok(ok)) {
+        case (#Ok(_)) {
           Debug.print("Transfer successful");
           #ok();
         };

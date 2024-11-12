@@ -135,7 +135,7 @@ shared ({ caller = deployer }) actor class MultiToken(
   };
 
   /// Initialize token with backing configuration
-  public shared ({ caller }) func initialize(msg : Messages.InitializeMsg) : async Result.Result<(), Text> {
+  public shared ({ caller = _ }) func initialize(msg : Messages.InitializeMsg) : async Result.Result<(), Text> {
     if (hasInitialized) {
       return #err("Already initialized");
     };
@@ -287,8 +287,8 @@ shared ({ caller = deployer }) actor class MultiToken(
     switch (await* getIcrc2().approve_transfers(caller, args, false, null)) {
       case (#trappable(val)) val;
       case (#awaited(val)) val;
-      case (#err(#trappable(err))) #Err(#InsufficientFunds({ balance = 0 })); // Match the expected error format
-      case (#err(#awaited(err))) #Err(#InsufficientFunds({ balance = 0 })); // Match the expected error format
+      case (#err(#trappable(err))) Debug.trap(err);
+      case (#err(#awaited(err))) Debug.trap(err);
     };
   };
 
