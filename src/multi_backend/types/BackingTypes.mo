@@ -1,11 +1,9 @@
-import ICRC2 "mo:icrc2-types";
 import Principal "mo:base/Principal";
 
 module {
   /// Information about a backing token
   public type TokenInfo = {
     canisterId : Principal;
-    token : ICRC2.Service;
   };
 
   /// Represents a backing token and its configuration

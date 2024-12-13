@@ -1,9 +1,8 @@
 import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
-import ICRC2 "mo:icrc2-types";
-import Types "../../../src/multi_backend/BackingTypes";
-import Math "../../../src/multi_backend/BackingMath";
+import Types "../../multi_backend/types/BackingTypes";
+import Math "../../multi_backend/backing/BackingMath";
 
 suite(
   "Backing Math",
@@ -11,7 +10,6 @@ suite(
     let token1Principal = Principal.fromText("2vxsx-fae");
     let token1Info : Types.TokenInfo = {
       canisterId = token1Principal;
-      token = actor (Principal.toText(token1Principal)) : ICRC2.Service;
     };
 
     test(

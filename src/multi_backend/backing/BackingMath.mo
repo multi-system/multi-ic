@@ -1,5 +1,5 @@
 import Result "mo:base/Result";
-import Types "./BackingTypes";
+import Types "../types/BackingTypes";
 import Int "mo:base/Int";
 
 module {

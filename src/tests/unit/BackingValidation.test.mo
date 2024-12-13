@@ -1,9 +1,8 @@
 import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
-import ICRC2 "mo:icrc2-types";
-import Types "../../../src/multi_backend/BackingTypes";
-import Validation "../../../src/multi_backend/BackingValidation";
+import Types "../../multi_backend/types/BackingTypes";
+import Validation "../../multi_backend/backing/BackingValidation";
 
 suite(
   "Backing Validation",
@@ -13,19 +12,17 @@ suite(
 
     let token1Info : Types.TokenInfo = {
       canisterId = token1Principal;
-      token = actor (Principal.toText(token1Principal)) : ICRC2.Service;
     };
 
     let token2Info : Types.TokenInfo = {
       canisterId = token2Principal;
-      token = actor (Principal.toText(token2Principal)) : ICRC2.Service;
     };
 
     test(
       "rejects empty backing",
       func() {
         let backing : [Types.BackingPair] = [];
-        switch (Validation.validateBacking(backing)) {
+        switch (Validation.validateStructure(backing)) {
           case (#err(msg)) {
             assert msg == "Backing tokens cannot be empty";
           };
@@ -43,27 +40,9 @@ suite(
           reserveQuantity = 1000;
         }];
 
-        switch (Validation.validateBacking(backing)) {
+        switch (Validation.validateStructure(backing)) {
           case (#err(msg)) {
             assert msg == "Backing units must be greater than 0";
-          };
-          case (#ok()) { assert false };
-        };
-      },
-    );
-
-    test(
-      "rejects zero reserve",
-      func() {
-        let backing : [Types.BackingPair] = [{
-          tokenInfo = token1Info;
-          backingUnit = 100;
-          reserveQuantity = 0;
-        }];
-
-        switch (Validation.validateBacking(backing)) {
-          case (#err(msg)) {
-            assert msg == "Reserve must be greater than 0";
           };
           case (#ok()) { assert false };
         };
@@ -86,7 +65,7 @@ suite(
           },
         ];
 
-        switch (Validation.validateBacking(backing)) {
+        switch (Validation.validateStructure(backing)) {
           case (#err(msg)) {
             assert msg == "Duplicate token in backing";
           };
@@ -96,7 +75,7 @@ suite(
     );
 
     test(
-      "validates backing config",
+      "validates config correctly",
       func() {
         let config : Types.BackingConfig = {
           supplyUnit = 0;
@@ -104,7 +83,7 @@ suite(
           backingPairs = [];
         };
 
-        switch (Validation.validateBackingConfig(config)) {
+        switch (Validation.validateConfig(config)) {
           case (#err(msg)) {
             assert msg == "Supply unit cannot be zero";
           };

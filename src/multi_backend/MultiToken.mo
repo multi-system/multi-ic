@@ -5,9 +5,14 @@ import ICRC1 "mo:icrc1-mo/ICRC1";
 import ICRC2 "mo:icrc2-mo/ICRC2";
 import Result "mo:base/Result";
 import Error "mo:base/Error";
-import Backing "./Backing";
-import Messages "./Messages";
-import ICRC2_Types "mo:icrc2-types";
+import Types "./types/BackingTypes";
+import _ "./types/VirtualTypes";
+import BackingOperations "./backing/BackingOperations";
+import LedgerManager "./ledger/LedgerManager";
+import BackingMath "./backing/BackingMath";
+import BackingValidation "./backing/BackingValidation";
+import Messages "./types/Messages";
+import VirtualAccounts "./ledger/VirtualAccounts";
 
 shared ({ caller = deployer }) actor class MultiToken(
   args : ?{
@@ -15,14 +20,35 @@ shared ({ caller = deployer }) actor class MultiToken(
     icrc2 : ?ICRC2.InitArgs;
   }
 ) = this {
-
   // -- State Variables --
   private var hasInitialized : Bool = false;
-  private var backingTokens : [var Backing.BackingPair] = [var];
+  private var backingTokens : [var Types.BackingPair] = [var];
   private var supplyUnit : Nat = 0;
   private var totalSupply : Nat = 0;
-  stable var owner : Principal = deployer;
+  private let owner : Principal = deployer;
 
+  // -- Virtual Accounts Setup --
+  private let virtualAccounts = VirtualAccounts.VirtualAccountManager();
+
+  // -- Middleware Setup --
+  private var ledgerManager_ : ?LedgerManager.LedgerManager = null;
+  private let backingImpl = BackingOperations.BackingOperationsImpl(virtualAccounts);
+
+  private func getLedgerManager() : LedgerManager.LedgerManager {
+    switch (ledgerManager_) {
+      case (null) {
+        let instance = LedgerManager.LedgerManager(
+          Principal.fromActor(this),
+          virtualAccounts,
+        );
+        ledgerManager_ := ?instance;
+        instance;
+      };
+      case (?val) val;
+    };
+  };
+
+  // -- ICRC1 Setup --
   let defaultIcrc1Args : ICRC1.InitArgs = {
     name = ?"Multi Token";
     symbol = ?"MULTI";
@@ -30,7 +56,7 @@ shared ({ caller = deployer }) actor class MultiToken(
     decimals = 8;
     fee = ? #Fixed(10000);
     minting_account = ?{
-      owner = deployer; // We'll keep deployer as minting account initially
+      owner = deployer;
       subaccount = null;
     };
     max_supply = null;
@@ -60,7 +86,6 @@ shared ({ caller = deployer }) actor class MultiToken(
       switch (args.icrc1) {
         case (null) defaultIcrc1Args;
         case (?val) {
-          // Keep other values from val but ensure minting_account is deployer
           {
             val with minting_account = ?{
               owner = deployer;
@@ -85,9 +110,11 @@ shared ({ caller = deployer }) actor class MultiToken(
   stable let icrc1State = ICRC1.init(ICRC1.initialState(), #v0_1_0(#id), ?icrc1Args, deployer);
   stable let icrc2State = ICRC2.init(ICRC2.initialState(), #v0_1_0(#id), ?icrc2Args, deployer);
 
-  // -- ICRC1 Setup --
   let #v0_1_0(#data(_)) = icrc1State;
+  let #v0_1_0(#data(_)) = icrc2State;
+
   private var icrc1Instance_ : ?ICRC1.ICRC1 = null;
+  private var icrc2Instance_ : ?ICRC2.ICRC2 = null;
 
   private func getIcrc1Environment() : ICRC1.Environment {
     {
@@ -109,10 +136,6 @@ shared ({ caller = deployer }) actor class MultiToken(
     };
   };
 
-  // -- ICRC2 Setup --
-  let #v0_1_0(#data(_)) = icrc2State;
-  private var icrc2Instance_ : ?ICRC2.ICRC2 = null;
-
   private func getIcrc2Environment() : ICRC2.Environment {
     {
       icrc1 = getIcrc1();
@@ -122,7 +145,6 @@ shared ({ caller = deployer }) actor class MultiToken(
     };
   };
 
-  /// Returns or initializes ICRC2 instance
   private func getIcrc2() : ICRC2.ICRC2 {
     switch (icrc2Instance_) {
       case (null) {
@@ -134,23 +156,18 @@ shared ({ caller = deployer }) actor class MultiToken(
     };
   };
 
-  /// Initialize token with backing configuration
   public shared ({ caller = _ }) func initialize(msg : Messages.InitializeMsg) : async Result.Result<(), Text> {
-    if (hasInitialized) {
-      return #err("Already initialized");
-    };
+    if (hasInitialized) return #err("Already initialized");
 
-    // Convert message format to internal config
-    let internalConfig : Backing.BackingConfig = {
+    let internalConfig : Types.BackingConfig = {
       supplyUnit = msg.supplyUnit;
       totalSupply = 0;
-      backingPairs = Array.map<Messages.TokenConfig, Backing.BackingPair>(
+      backingPairs = Array.map<Messages.TokenConfig, Types.BackingPair>(
         msg.backingTokens,
-        func(tc : Messages.TokenConfig) : Backing.BackingPair {
+        func(tc : Messages.TokenConfig) : Types.BackingPair {
           {
             tokenInfo = {
               canisterId = tc.canisterId;
-              token = actor (Principal.toText(tc.canisterId)) : ICRC2_Types.Service;
             };
             backingUnit = tc.backingUnit;
             reserveQuantity = 0;
@@ -159,15 +176,21 @@ shared ({ caller = deployer }) actor class MultiToken(
       );
     };
 
-    switch (await* Backing.validateBackingFull(internalConfig)) {
-      case (#err(e)) { return #err(e) };
+    switch (BackingValidation.validateConfig(internalConfig)) {
+      case (#err(e)) return #err(e);
       case (#ok()) {
+        // Initialize ledger manager
+        getLedgerManager().initializeLedgers<system>(
+          Array.map(
+            internalConfig.backingPairs,
+            func(p : Types.BackingPair) : Principal = p.tokenInfo.canisterId,
+          )
+        );
+
         backingTokens := Array.thaw(internalConfig.backingPairs);
         supplyUnit := internalConfig.supplyUnit;
         hasInitialized := true;
 
-        // After initialization, update the minting account to this canister
-        // We'll do this through the update_ledger_info function which is part of ICRC1
         ignore getIcrc1().update_ledger_info([
           #MintingAccount({
             owner = Principal.fromActor(this);
@@ -180,62 +203,126 @@ shared ({ caller = deployer }) actor class MultiToken(
     };
   };
 
-  // -- Public Token Operations --
-
-  /// Issue new tokens by providing backing tokens
-  public shared ({ caller }) func issue(args : Messages.IssueArgs) : async Messages.IssueResponse {
-    Debug.print("=== Issue Operation Started ===");
-    Debug.print("Caller: " # debug_show (caller));
-    Debug.print("Amount: " # debug_show (args.amount));
-    Debug.print("Current total supply: " # debug_show (totalSupply));
-    Debug.print("Supply unit: " # debug_show (supplyUnit));
-
+  public shared ({ caller }) func deposit(args : Messages.DepositArgs) : async Messages.OperationResponse {
     if (not hasInitialized) {
-      Debug.print("Issue failed: not initialized");
       return #NotInitialized;
     };
 
+    // Verify token is one of our backing tokens
+    let ?backingToken = Array.find<Types.BackingPair>(
+      Array.freeze(backingTokens),
+      func(p) = p.tokenInfo.canisterId == args.token,
+    ) else return #TransferFailed({
+      token = args.token;
+      error = "Token not supported";
+    });
+
+    switch (await* getLedgerManager().deposit(caller, args.token, args.amount)) {
+      case (#err(e)) { #TransferFailed({ token = args.token; error = e }) };
+      case (#ok()) { #Success };
+    };
+  };
+
+  public shared ({ caller }) func withdraw(args : Messages.WithdrawArgs) : async Messages.OperationResponse {
+    if (not hasInitialized) {
+      return #NotInitialized;
+    };
+
+    switch (await* getLedgerManager().withdraw(caller, args.token, args.amount)) {
+      case (#err(e)) { #TransferFailed({ token = args.token; error = e }) };
+      case (#ok()) { #Success };
+    };
+  };
+
+  public shared ({ caller }) func issue(args : Messages.IssueArgs) : async Messages.IssueResponse {
+    if (not hasInitialized) {
+      return #NotInitialized;
+    };
+
+    let backingPairsArray = Array.freeze(backingTokens);
+
     switch (
-      await* Backing.processIssue(
+      backingImpl.processIssue(
+        caller,
+        Principal.fromActor(this),
         args.amount,
         supplyUnit,
         totalSupply,
-        caller,
-        Principal.fromActor(this),
-        backingTokens,
+        backingPairsArray,
       )
     ) {
       case (#err(e)) {
-        Debug.print("Issue failed in processIssue with error: " # e);
         #InvalidAmount(e);
       };
-      case (#ok({ totalSupply = newSupply; transferAmount })) {
-        Debug.print("Process issue succeeded");
-        Debug.print("New supply: " # debug_show (newSupply));
-        Debug.print("Transfer amount: " # debug_show (transferAmount));
-
-        switch (await* mintTokens({ owner = caller; subaccount = null }, transferAmount)) {
-          case (#Err(#GenericError({ message }))) {
-            Debug.print("Minting failed with generic error: " # message);
-            #InvalidAmount(message);
+      case (#ok({ totalSupply = newSupply; amount })) {
+        switch (await* mintTokens({ owner = caller; subaccount = null }, amount)) {
+          case (#Ok(_)) {
+            totalSupply := newSupply;
+            #Success;
           };
           case (#Err(_)) {
-            Debug.print("Minting failed with unexpected error");
-            #InvalidAmount("Unexpected error during minting");
-          };
-          case (#Ok(_)) {
-            Debug.print("Minting succeeded");
-            totalSupply := newSupply;
-            Debug.print("=== Issue Operation Completed Successfully ===");
-            #Success;
+            #InvalidAmount("Failed to mint tokens");
           };
         };
       };
     };
   };
 
-  // -- ICRC1 Interface --
+  private func mintTokens(to : ICRC1.Account, amount : Nat) : async* ICRC1.TransferResult {
+    if (not hasInitialized) {
+      return #Err(#GenericError({ message = "Not initialized"; error_code = 1 }));
+    };
 
+    if (amount % supplyUnit != 0) {
+      return #Err(#GenericError({ message = "Amount must be multiple of supply unit"; error_code = 3 }));
+    };
+
+    switch (
+      await* getIcrc1().mint_tokens(
+        Principal.fromActor(this),
+        {
+          to = to;
+          amount = amount;
+          memo = null;
+          created_at_time = null;
+        },
+      )
+    ) {
+      case (#trappable(val)) val;
+      case (#awaited(val)) val;
+      case (#err(#trappable(err))) #Err(#GenericError({ message = err; error_code = 5 }));
+      case (#err(#awaited(err))) #Err(#GenericError({ message = err; error_code = 5 }));
+    };
+  };
+
+  // -- Query Functions --
+  public query func getVirtualBalance(user : Principal, token : Principal) : async Nat {
+    virtualAccounts.getBalance(user, token);
+  };
+
+  public query func isInitialized() : async Bool {
+    hasInitialized;
+  };
+
+  public query func getBackingTokens() : async [Types.BackingPair] {
+    // Map over backing tokens and fill in reserve quantities from virtual balances
+    Array.map<Types.BackingPair, Types.BackingPair>(
+      Array.freeze(backingTokens),
+      func(pair : Types.BackingPair) : Types.BackingPair {
+        {
+          tokenInfo = pair.tokenInfo;
+          backingUnit = pair.backingUnit;
+          reserveQuantity = virtualAccounts.getBalance(Principal.fromActor(this), pair.tokenInfo.canisterId);
+        };
+      },
+    );
+  };
+
+  public query func getTotalSupply() : async Nat {
+    totalSupply;
+  };
+
+  // -- ICRC1 Interface --
   public shared query func icrc1_name() : async Text {
     getIcrc1().name();
   };
@@ -278,7 +365,6 @@ shared ({ caller = deployer }) actor class MultiToken(
   };
 
   // -- ICRC2 Interface --
-
   public query func icrc2_allowance(args : ICRC2.AllowanceArgs) : async ICRC2.Allowance {
     getIcrc2().allowance(args.spender, args.account, false);
   };
@@ -303,61 +389,5 @@ shared ({ caller = deployer }) actor class MultiToken(
     } catch (e) {
       #Err(#GenericError({ message = Error.message(e); error_code = 2 }));
     };
-  };
-
-  // -- Private Helper Functions --
-
-  /// Mint new tokens to specified account
-  private func mintTokens(to : ICRC1.Account, amount : Nat) : async* ICRC1.TransferResult {
-    if (not hasInitialized) {
-      return #Err(#GenericError({ message = "Not initialized"; error_code = 1 }));
-    };
-
-    if (amount % supplyUnit != 0) {
-      return #Err(#GenericError({ message = "Amount must be multiple of supply unit"; error_code = 3 }));
-    };
-
-    switch (
-      await* getIcrc1().mint_tokens(
-        Principal.fromActor(this),
-        {
-          to = to;
-          amount = amount;
-          memo = null;
-          created_at_time = null;
-        },
-      )
-    ) {
-      case (#trappable(val)) val;
-      case (#awaited(val)) val;
-      case (#err(#trappable(err))) #Err(#GenericError({ message = err; error_code = 5 }));
-      case (#err(#awaited(err))) #Err(#GenericError({ message = err; error_code = 5 }));
-    };
-  };
-
-  // -- Query Methods --
-
-  /// Returns whether token is initialized
-  public query func isInitialized() : async Bool {
-    hasInitialized;
-  };
-
-  /// Returns list of backing tokens
-  public query func getBackingTokens() : async [Backing.BackingPair] {
-    Array.freeze(backingTokens);
-  };
-
-  /// Returns the total supply
-  public query func getTotalSupply() : async Nat {
-    totalSupply;
-  };
-
-  // -- Admin Functions --
-
-  /// Update owner to new principal
-  public shared ({ caller }) func updateOwner(newOwner : Principal) : async Bool {
-    if (caller != owner) Debug.trap("Unauthorized");
-    owner := newOwner;
-    true;
   };
 };
