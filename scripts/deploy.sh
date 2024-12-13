@@ -39,6 +39,17 @@ main() {
   # Create canisters
   print_green "=== Creating canisters ==="
   dfx canister create --all
+
+  # Deploy multi token
+  print_green "=== Deploying multi token canister ==="
+  dfx deploy multi_backend
+  print_info "Generating declarations for multi_backend..."
+  dfx generate multi_backend
+  
+  # Export multi backend ID
+  export MULTI_BACKEND_ID=$(dfx canister id multi_backend)
+  print_info "Exported MULTI_BACKEND_ID=${MULTI_BACKEND_ID}"
+
   
   # Deploy backing tokens
   for token in "token_a" "token_b" "token_c"; do
@@ -76,16 +87,6 @@ main() {
     export "${token^^}_CANISTER_ID=$canister_id"
     print_info "Exported ${token^^}_CANISTER_ID=$canister_id"
   done
-  
-  # Deploy multi token
-  print_green "=== Deploying multi token canister ==="
-  dfx deploy multi_backend
-  print_info "Generating declarations for multi_backend..."
-  dfx generate multi_backend
-  
-  # Export multi backend ID
-  export MULTI_BACKEND_ID=$(dfx canister id multi_backend)
-  print_info "Exported MULTI_BACKEND_ID=${MULTI_BACKEND_ID}"
   
   print_green "=== Deployment completed successfully! ==="
 }
