@@ -869,4 +869,202 @@ describe("Multi Token Backing System", () => {
       });
     },
   );
+
+  test.sequential(
+    "11. should handle redeem operations correctly",
+    { timeout: 60000 },
+    async () => {
+      const testUser = newIdentity();
+      const backend = multiBackend(testUser);
+
+      // Fund test account
+      await Promise.all([
+        fundTestAccount(tokenA(minter), testUser, BigInt(100_000)),
+        fundTestAccount(tokenB(minter), testUser, BigInt(100_000)),
+        fundTestAccount(tokenC(minter), testUser, BigInt(100_000)),
+      ]);
+
+      // Get fees
+      const [feeA, feeB, feeC] = await Promise.all([
+        tokenA(testUser).icrc1_fee(),
+        tokenB(testUser).icrc1_fee(),
+        tokenC(testUser).icrc1_fee(),
+      ]);
+
+      // Use amounts that match backing unit ratios and exceed fees
+      const depositAmounts = [
+        { token: tokenA(testUser), tokenId: TOKEN_A, amount: BigInt(20_000) }, // Backing unit 100
+        { token: tokenB(testUser), tokenId: TOKEN_B, amount: BigInt(15_000) }, // Backing unit 50
+        { token: tokenC(testUser), tokenId: TOKEN_C, amount: BigInt(40_000) }, // Backing unit 200
+      ];
+
+      // Deposit tokens
+      for (const { token, tokenId, amount } of depositAmounts) {
+        await token.icrc2_approve({
+          spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
+          amount: amount + feeA,
+          fee: [],
+          memo: [],
+          from_subaccount: [],
+          created_at_time: [],
+          expected_allowance: [],
+          expires_at: [],
+        });
+
+        const result = await backend.deposit({
+          token: tokenId,
+          amount,
+        });
+        expect(result).toEqual({ Success: null });
+
+        const virtualBalance = await backend.getVirtualBalance(
+          testUser.getPrincipal(),
+          tokenId,
+        );
+        expect(virtualBalance).toBe(amount - feeA);
+      }
+
+      // Initial issue
+      const issueAmount = BigInt(500);
+      const issueResult = await backend.issue({ amount: issueAmount });
+      expect(issueResult).toEqual({ Success: null });
+
+      // Get initial state
+      const totalSupplyBeforeRedeem = await backend.getTotalSupply();
+      const balanceBeforeRedeem = await backend.icrc1_balance_of({
+        owner: testUser.getPrincipal(),
+        subaccount: [],
+      });
+      const tokensBeforeRedeem = await backend.getBackingTokens();
+
+      // Test error cases
+      // 1. Test unaligned amount
+      const unalignedResult = await backend.redeem({ amount: BigInt(150) });
+      expect(unalignedResult).toHaveProperty("InvalidAmount");
+      expect(unalignedResult.InvalidAmount).toContain(
+        "multiple of supply unit",
+      );
+
+      // 2. Test insufficient balance (more than total supply)
+      const tooLargeResult = await backend.redeem({
+        amount: totalSupplyBeforeRedeem + BigInt(100),
+      });
+      expect(tooLargeResult).toHaveProperty("InvalidAmount");
+      expect(tooLargeResult.InvalidAmount).toContain("Insufficient balance");
+
+      // Test successful redeem
+      const redeemAmount = BigInt(100);
+      const redeemResult = await backend.redeem({ amount: redeemAmount });
+      expect(redeemResult).toEqual({ Success: null });
+
+      // Verify state changes
+      const finalSupply = await backend.getTotalSupply();
+      expect(finalSupply).toBe(totalSupplyBeforeRedeem - redeemAmount);
+
+      const finalIcrc1Balance = await backend.icrc1_balance_of({
+        owner: testUser.getPrincipal(),
+        subaccount: [],
+      });
+      expect(finalIcrc1Balance).toBe(balanceBeforeRedeem - redeemAmount);
+
+      // Verify backing token changes
+      const finalTokens = await backend.getBackingTokens();
+      finalTokens.forEach((token, i) => {
+        const backingUnit = tokensBeforeRedeem[i].backingUnit;
+        const expectedDecrease = (redeemAmount * backingUnit) / BigInt(100);
+        expect(token.reserveQuantity).toBe(
+          tokensBeforeRedeem[i].reserveQuantity - expectedDecrease,
+        );
+      });
+    },
+  );
+
+  test.sequential(
+    "12. should handle concurrent redeem operations safely",
+    { timeout: 60000 },
+    async () => {
+      // Create fresh identities for concurrent test
+      const testUsers = [newIdentity(), newIdentity(), newIdentity()];
+      const backend = multiBackend(testUsers[0]);
+      const redeemAmount = BigInt(100);
+
+      // Setup each identity
+      for (const user of testUsers) {
+        // Fund accounts
+        await Promise.all([
+          fundTestAccount(tokenA(minter), user, BigInt(100_000)),
+          fundTestAccount(tokenB(minter), user, BigInt(100_000)),
+          fundTestAccount(tokenC(minter), user, BigInt(100_000)),
+        ]);
+
+        // Use same deposit amounts as test 11
+        const depositAmounts = [
+          { token: tokenA(user), tokenId: TOKEN_A, amount: BigInt(20_000) },
+          { token: tokenB(user), tokenId: TOKEN_B, amount: BigInt(15_000) },
+          { token: tokenC(user), tokenId: TOKEN_C, amount: BigInt(40_000) },
+        ];
+
+        // Deposit tokens
+        for (const { token, tokenId, amount } of depositAmounts) {
+          const fee = await token.icrc1_fee();
+
+          await token.icrc2_approve({
+            spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
+            amount: amount + fee,
+            fee: [],
+            memo: [],
+            from_subaccount: [],
+            created_at_time: [],
+            expected_allowance: [],
+            expires_at: [],
+          });
+
+          const result = await multiBackend(user).deposit({
+            token: tokenId,
+            amount,
+          });
+          expect(result).toEqual({ Success: null });
+        }
+
+        // Issue tokens
+        const issueResult = await multiBackend(user).issue({
+          amount: redeemAmount,
+        });
+        expect(issueResult).toEqual({ Success: null });
+      }
+
+      // Record initial state
+      const initialSupply = await backend.getTotalSupply();
+      const initialTokens = await backend.getBackingTokens();
+
+      // Execute concurrent redeem operations
+      const results = await Promise.all(
+        testUsers.map((user) =>
+          multiBackend(user).redeem({ amount: redeemAmount }),
+        ),
+      );
+
+      // Verify all operations succeeded
+      results.forEach((result) => {
+        expect(result).toEqual({ Success: null });
+      });
+
+      // Calculate total redeemed
+      const totalRedeemed = BigInt(testUsers.length) * redeemAmount;
+
+      // Verify final state
+      const finalSupply = await backend.getTotalSupply();
+      expect(finalSupply).toBe(initialSupply - totalRedeemed);
+
+      // Verify backing token reserves
+      const finalTokens = await backend.getBackingTokens();
+      finalTokens.forEach((token, i) => {
+        const expectedDecrease =
+          (totalRedeemed * token.backingUnit) / BigInt(100);
+        expect(token.reserveQuantity).toBe(
+          initialTokens[i].reserveQuantity - expectedDecrease,
+        );
+      });
+    },
+  );
 });

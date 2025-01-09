@@ -25,6 +25,10 @@ module {
     amount : Nat;
   };
 
+  public type RedeemArgs = {
+    amount : Nat;
+  };
+
   public type OperationResponse = {
     #Success;
     #NotInitialized;
@@ -37,6 +41,12 @@ module {
   };
 
   public type IssueResponse = {
+    #Success;
+    #NotInitialized;
+    #InvalidAmount : Text;
+  };
+
+  public type RedeemResponse = {
     #Success;
     #NotInitialized;
     #InvalidAmount : Text;

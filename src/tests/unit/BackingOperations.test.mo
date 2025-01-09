@@ -83,7 +83,36 @@ suite(
         assert (virtualAccounts.getBalance(systemAccount, tokenA) == 0);
         assert (virtualAccounts.getBalance(systemAccount, tokenB) == 0);
 
-        // Attempting the transfer will trap, but state should be unchanged
+        let backingTokens : [Types.BackingPair] = [
+          {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 100;
+            reserveQuantity = 0;
+          },
+          {
+            tokenInfo = { canisterId = tokenB };
+            backingUnit = 50;
+            reserveQuantity = 0;
+          },
+        ];
+
+        let supplyUnit = 100;
+        let amount = 100;
+
+        switch (backingImpl.processIssue(caller, systemAccount, amount, supplyUnit, 0, backingTokens)) {
+          case (#err(e)) {
+            assert (e == "Insufficient balance for token " # Principal.toText(tokenA));
+          };
+          case (#ok(_)) {
+            assert (false);
+          };
+        };
+
+        // Verify state remains unchanged
+        assert (virtualAccounts.getBalance(caller, tokenA) == 50);
+        assert (virtualAccounts.getBalance(caller, tokenB) == 100);
+        assert (virtualAccounts.getBalance(systemAccount, tokenA) == 0);
+        assert (virtualAccounts.getBalance(systemAccount, tokenB) == 0);
       },
     );
 
@@ -114,20 +143,124 @@ suite(
     );
 
     test(
-      "preserves atomicity on partial failure",
+      "handles redeem with sufficient system balance",
       func() {
         setup();
-        // Setup balances where first transfer would succeed but second would fail
-        virtualAccounts.mint(caller, tokenA, 200); // Enough for first token
-        virtualAccounts.mint(caller, tokenB, 20); // Not enough for second token
+        // Setup virtual balances for system account
+        virtualAccounts.mint(systemAccount, tokenA, 200);
+        virtualAccounts.mint(systemAccount, tokenB, 100);
 
-        // Verify initial state
-        assert (virtualAccounts.getBalance(caller, tokenA) == 200);
-        assert (virtualAccounts.getBalance(caller, tokenB) == 20);
-        assert (virtualAccounts.getBalance(systemAccount, tokenA) == 0);
-        assert (virtualAccounts.getBalance(systemAccount, tokenB) == 0);
+        let backingTokens : [Types.BackingPair] = [
+          {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 100; // 2:1 ratio
+            reserveQuantity = 0;
+          },
+          {
+            tokenInfo = { canisterId = tokenB };
+            backingUnit = 50; // 1:1 ratio
+            reserveQuantity = 0;
+          },
+        ];
 
-        // Attempting the transfer will trap, but state should be unchanged
+        let supplyUnit = 100;
+        let totalSupply = 200;
+        let amount = 100; // Should transfer 100 of tokenA and 50 of tokenB
+
+        switch (backingImpl.processRedeem(caller, systemAccount, amount, supplyUnit, totalSupply, backingTokens)) {
+          case (#err(e)) {
+            Debug.print("Redeem failed: " # e);
+            assert (false);
+          };
+          case (#ok(result)) {
+            // Check the total supply was updated
+            assert (result.totalSupply == totalSupply - amount);
+            assert (result.amount == amount);
+
+            // Check that virtual balances were transferred correctly
+            assert (virtualAccounts.getBalance(systemAccount, tokenA) == 100); // 200 - 100
+            assert (virtualAccounts.getBalance(systemAccount, tokenB) == 50); // 100 - 50
+            assert (virtualAccounts.getBalance(caller, tokenA) == 100);
+            assert (virtualAccounts.getBalance(caller, tokenB) == 50);
+          };
+        };
+      },
+    );
+
+    test(
+      "fails redeem when amount exceeds eta",
+      func() {
+        setup();
+        virtualAccounts.mint(systemAccount, tokenA, 200);
+        virtualAccounts.mint(systemAccount, tokenB, 100);
+
+        let backingTokens : [Types.BackingPair] = [
+          {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 100;
+            reserveQuantity = 0;
+          },
+          {
+            tokenInfo = { canisterId = tokenB };
+            backingUnit = 50;
+            reserveQuantity = 0;
+          },
+        ];
+
+        let supplyUnit = 100;
+        let totalSupply = 200; // eta = 2
+        let amount = 300; // Requesting 3 units > eta
+
+        switch (backingImpl.processRedeem(caller, systemAccount, amount, supplyUnit, totalSupply, backingTokens)) {
+          case (#err(e)) {
+            assert (e == "Cannot redeem more units than eta (M/u)");
+          };
+          case (#ok(_)) {
+            assert (false);
+          };
+        };
+
+        // Verify state remains unchanged
+        assert (virtualAccounts.getBalance(systemAccount, tokenA) == 200);
+        assert (virtualAccounts.getBalance(systemAccount, tokenB) == 100);
+        assert (virtualAccounts.getBalance(caller, tokenA) == 0);
+        assert (virtualAccounts.getBalance(caller, tokenB) == 0);
+      },
+    );
+
+    test(
+      "fails redeem with insufficient system balance",
+      func() {
+        setup();
+        // Setup insufficient system balances
+        virtualAccounts.mint(systemAccount, tokenA, 50); // Not enough
+        virtualAccounts.mint(systemAccount, tokenB, 100);
+
+        let backingTokens : [Types.BackingPair] = [
+          {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 100;
+            reserveQuantity = 0;
+          },
+          {
+            tokenInfo = { canisterId = tokenB };
+            backingUnit = 50;
+            reserveQuantity = 0;
+          },
+        ];
+
+        let supplyUnit = 100;
+        let totalSupply = 200;
+        let amount = 100;
+
+        switch (backingImpl.processRedeem(caller, systemAccount, amount, supplyUnit, totalSupply, backingTokens)) {
+          case (#err(e)) {
+            assert (e == "Insufficient system balance for token " # Principal.toText(tokenA));
+          };
+          case (#ok(_)) {
+            assert (false);
+          };
+        };
       },
     );
   },

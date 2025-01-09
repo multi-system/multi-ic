@@ -60,7 +60,7 @@ shared ({ caller = deployer }) actor class MultiToken(
       subaccount = null;
     };
     max_supply = null;
-    min_burn_amount = ?10000;
+    min_burn_amount = null;
     max_memo = ?64;
     advanced_settings = null;
     metadata = null;
@@ -238,9 +238,7 @@ shared ({ caller = deployer }) actor class MultiToken(
     if (not hasInitialized) {
       return #NotInitialized;
     };
-
     let backingPairsArray = Array.freeze(backingTokens);
-
     switch (
       backingImpl.processIssue(
         caller,
@@ -261,7 +259,46 @@ shared ({ caller = deployer }) actor class MultiToken(
             #Success;
           };
           case (#Err(_)) {
-            #InvalidAmount("Failed to mint tokens");
+            Debug.trap("Critical error: Backing tokens transferred but mint failed");
+          };
+        };
+      };
+    };
+  };
+
+  public shared ({ caller }) func redeem(args : Messages.RedeemArgs) : async Messages.RedeemResponse {
+    if (not hasInitialized) {
+      return #NotInitialized;
+    };
+
+    // Check balance first
+    let balance = getIcrc1().balance_of({ owner = caller; subaccount = null });
+    if (balance < args.amount) {
+      return #InvalidAmount("Insufficient balance");
+    };
+
+    let backingPairsArray = Array.freeze(backingTokens);
+    switch (
+      backingImpl.processRedeem(
+        caller,
+        Principal.fromActor(this),
+        args.amount,
+        supplyUnit,
+        totalSupply,
+        backingPairsArray,
+      )
+    ) {
+      case (#err(e)) {
+        #InvalidAmount(e);
+      };
+      case (#ok({ totalSupply = newSupply; amount })) {
+        switch (await* burnTokens({ owner = caller; subaccount = null }, amount)) {
+          case (#Ok(_)) {
+            totalSupply := newSupply;
+            #Success;
+          };
+          case (#Err(_)) {
+            Debug.trap("Critical error: Backing tokens transferred but burn failed");
           };
         };
       };
@@ -286,6 +323,33 @@ shared ({ caller = deployer }) actor class MultiToken(
           memo = null;
           created_at_time = null;
         },
+      )
+    ) {
+      case (#trappable(val)) val;
+      case (#awaited(val)) val;
+      case (#err(#trappable(err))) #Err(#GenericError({ message = err; error_code = 5 }));
+      case (#err(#awaited(err))) #Err(#GenericError({ message = err; error_code = 5 }));
+    };
+  };
+
+  private func burnTokens(from : ICRC1.Account, amount : Nat) : async* ICRC1.TransferResult {
+    if (not hasInitialized) {
+      return #Err(#GenericError({ message = "Not initialized"; error_code = 1 }));
+    };
+    if (amount % supplyUnit != 0) {
+      return #Err(#GenericError({ message = "Amount must be multiple of supply unit"; error_code = 3 }));
+    };
+
+    switch (
+      await* getIcrc1().burn_tokens(
+        from.owner,
+        {
+          from_subaccount = from.subaccount;
+          amount = amount;
+          memo = null;
+          created_at_time = null;
+        },
+        false,
       )
     ) {
       case (#trappable(val)) val;
