@@ -14,6 +14,7 @@ suite(
     let alice = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
     let bob = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
     let tokenA = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
+    let tokenB = Principal.fromText("r7inp-6aaaa-aaaaa-aaabq-cai");
     let initState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
     var manager : VirtualAccounts.VirtualAccountManager = VirtualAccounts.VirtualAccountManager(initState);
 
@@ -23,7 +24,16 @@ suite(
       manager := VirtualAccounts.VirtualAccountManager(freshState);
     };
 
-    // Validation tests
+    // Validation function tests
+    test(
+      "validates multiple principals correctly",
+      func() {
+        setup();
+        let validPrincipals = [alice, bob, tokenA];
+        assert (manager.hasValidPrincipals(validPrincipals));
+      },
+    );
+
     test(
       "validates insufficient balance correctly",
       func() {
@@ -53,7 +63,16 @@ suite(
       },
     );
 
-    // Operation tests
+    test(
+      "handles non-existent token balances correctly",
+      func() {
+        setup();
+        let nonExistentToken = Principal.fromText("r7inp-6aaaa-aaaaa-aaabq-cai");
+        assert (manager.getBalance(alice, nonExistentToken) == 0);
+      },
+    );
+
+    // Basic operation tests
     test(
       "handles simple transfer",
       func() {
@@ -80,7 +99,6 @@ suite(
       func() {
         setup();
         manager.mint(alice, tokenA, 200);
-        let tokenB = Principal.fromText("r7inp-6aaaa-aaaaa-aaabq-cai");
         manager.mint(alice, tokenB, 300);
 
         let balances = manager.getAllBalances(alice);
@@ -97,6 +115,15 @@ suite(
 
         assert (Option.isSome(hasTokenA));
         assert (Option.isSome(hasTokenB));
+      },
+    );
+
+    test(
+      "handles getAllBalances for empty account",
+      func() {
+        setup();
+        let emptyAccBalances = manager.getAllBalances(alice);
+        assert (emptyAccBalances.size() == 0);
       },
     );
 
@@ -120,15 +147,19 @@ suite(
       },
     );
 
+    // Complex operation tests
     test(
-      "handles multiple token operations",
+      "maintains correct balances after multiple token operations",
       func() {
         setup();
-        let tokenB = Principal.fromText("r7inp-6aaaa-aaaaa-aaabq-cai");
-        manager.mint(alice, tokenA, 100);
-        manager.mint(alice, tokenB, 200);
-        manager.mint(bob, tokenA, 50);
+        let tokenC = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
 
+        // Setup initial state
+        manager.mint(alice, tokenA, 100);
+        manager.mint(alice, tokenB, 50);
+        manager.mint(bob, tokenC, 75);
+
+        // Perform multiple operations
         manager.transfer({
           from = alice;
           to = bob;
@@ -136,13 +167,62 @@ suite(
           amount = 30;
         });
 
-        manager.burn(alice, tokenB, 100);
-        manager.mint(bob, tokenB, 75);
+        manager.mint(bob, tokenB, 25);
 
+        // Verify multiple token balances
         assert (manager.getBalance(alice, tokenA) == 70);
-        assert (manager.getBalance(alice, tokenB) == 100);
-        assert (manager.getBalance(bob, tokenA) == 80);
-        assert (manager.getBalance(bob, tokenB) == 75);
+        assert (manager.getBalance(alice, tokenB) == 50);
+        assert (manager.getBalance(bob, tokenA) == 30);
+        assert (manager.getBalance(bob, tokenB) == 25);
+        assert (manager.getBalance(bob, tokenC) == 75);
+
+        // Verify getAllBalances consistency
+        let aliceBalances = manager.getAllBalances(alice);
+        let bobBalances = manager.getAllBalances(bob);
+
+        assert (aliceBalances.size() == 2);
+        assert (bobBalances.size() == 3);
+      },
+    );
+
+    test(
+      "maintains state consistency in complex transfer patterns",
+      func() {
+        setup();
+        let charlie = Principal.fromText("rkp4c-7iaaa-aaaaa-aaaca-cai");
+
+        // Initial mints
+        manager.mint(alice, tokenA, 100);
+        manager.mint(bob, tokenB, 100);
+
+        // Create circular transfer pattern
+        manager.transfer({
+          from = alice;
+          to = bob;
+          token = tokenA;
+          amount = 50;
+        });
+
+        manager.transfer({
+          from = bob;
+          to = charlie;
+          token = tokenA;
+          amount = 20;
+        });
+
+        manager.transfer({
+          from = bob;
+          to = charlie;
+          token = tokenB;
+          amount = 40;
+        });
+
+        // Verify final state
+        assert (manager.getBalance(alice, tokenA) == 50);
+        assert (manager.getBalance(bob, tokenA) == 30);
+        assert (manager.getBalance(bob, tokenB) == 60);
+        assert (manager.getBalance(charlie, tokenA) == 20);
+        assert (manager.getBalance(charlie, tokenB) == 40);
       },
     );
   },
