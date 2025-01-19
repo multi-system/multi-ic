@@ -6,6 +6,7 @@ import Types "../../multi_backend/types/BackingTypes";
 import VirtualTypes "../../multi_backend/types/VirtualTypes";
 import VirtualAccounts "../../multi_backend/ledger/VirtualAccounts";
 import BackingOperations "../../multi_backend/backing/BackingOperations";
+import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 
 suite(
   "Backing Operations",
@@ -16,12 +17,14 @@ suite(
     let tokenA = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
     let tokenB = Principal.fromText("r7inp-6aaaa-aaaaa-aaabq-cai");
 
-    var virtualAccounts : VirtualAccounts.VirtualAccountManager = VirtualAccounts.VirtualAccountManager();
+    let initState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
+    var virtualAccounts : VirtualAccounts.VirtualAccountManager = VirtualAccounts.VirtualAccountManager(initState);
     var backingImpl : BackingOperations.BackingOperationsImpl = BackingOperations.BackingOperationsImpl(virtualAccounts);
 
     // Reset state before each test
     let setup = func() {
-      virtualAccounts := VirtualAccounts.VirtualAccountManager();
+      let freshState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
+      virtualAccounts := VirtualAccounts.VirtualAccountManager(freshState);
       backingImpl := BackingOperations.BackingOperationsImpl(virtualAccounts);
     };
 

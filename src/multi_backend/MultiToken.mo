@@ -13,6 +13,7 @@ import BackingMath "./backing/BackingMath";
 import BackingValidation "./backing/BackingValidation";
 import Messages "./types/Messages";
 import VirtualAccounts "./ledger/VirtualAccounts";
+import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 
 shared ({ caller = deployer }) actor class MultiToken(
   args : ?{
@@ -21,14 +22,15 @@ shared ({ caller = deployer }) actor class MultiToken(
   }
 ) = this {
   // -- State Variables --
-  private var hasInitialized : Bool = false;
-  private var backingTokens : [var Types.BackingPair] = [var];
-  private var supplyUnit : Nat = 0;
-  private var totalSupply : Nat = 0;
+  private stable var hasInitialized : Bool = false;
+  private stable var backingTokens : [var Types.BackingPair] = [var];
+  private stable var supplyUnit : Nat = 0;
+  private stable var totalSupply : Nat = 0;
   private let owner : Principal = deployer;
 
   // -- Virtual Accounts Setup --
-  private let virtualAccounts = VirtualAccounts.VirtualAccountManager();
+  private stable var accountsState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
+  private let virtualAccounts = VirtualAccounts.VirtualAccountManager(accountsState);
 
   // -- Middleware Setup --
   private var ledgerManager_ : ?LedgerManager.LedgerManager = null;
