@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
-
 # Helper functions
 print_green() { echo -e "${GREEN}$1${NC}"; }
 print_error() { echo -e "${RED}$1${NC}"; }
 print_info() { echo -e "${YELLOW}$1${NC}"; }
-
 # Setup test identity
 setup_test_identity() {
   if ! (dfx identity list | grep multi-token-test 2>&1 >/dev/null) ; then
@@ -25,17 +22,16 @@ EOF
     )
   fi
 }
-
 main() {
   # Setup identity
   print_green "=== Setting up test identity ==="
   setup_test_identity
   dfx identity use multi-token-test
   export MINTER=$(dfx identity get-principal)
-  
+ 
   # The JS test identity needs initial balance
   export TEST_IDENTITY="jg6qm-uw64t-m6ppo-oluwn-ogr5j-dc5pm-lgy2p-eh6px-hebcd-5v73i-nqe"
-  
+ 
   # Create canisters
   print_green "=== Creating canisters ==="
   dfx canister create --all
@@ -45,12 +41,21 @@ main() {
   dfx deploy multi_backend
   print_info "Generating declarations for multi_backend..."
   dfx generate multi_backend
-  
+ 
   # Export multi backend ID
   export MULTI_BACKEND_ID=$(dfx canister id multi_backend)
   print_info "Exported MULTI_BACKEND_ID=${MULTI_BACKEND_ID}"
 
-  
+  # Deploy governance token
+  print_green "=== Deploying governance token canister ==="
+  dfx deploy governance_token
+  print_info "Generating declarations for governance_token..."
+  dfx generate governance_token
+
+  # Export governance token ID
+  export GOVERNANCE_TOKEN_ID=$(dfx canister id governance_token)
+  print_info "Exported GOVERNANCE_TOKEN_ID=${GOVERNANCE_TOKEN_ID}"
+ 
   # Deploy backing tokens
   for token in "token_a" "token_b" "token_c"; do
     print_green "Deploying $token..."
@@ -77,21 +82,19 @@ main() {
           };
         }
       })"
-    
+   
     # Generate declarations
     print_info "Generating declarations for $token..."
     dfx generate "$token"
-    
+   
     # Export canister ID
     canister_id=$(dfx canister id "$token")
     export "${token^^}_CANISTER_ID=$canister_id"
     print_info "Exported ${token^^}_CANISTER_ID=$canister_id"
   done
-  
+ 
   print_green "=== Deployment completed successfully! ==="
 }
-
 # Trap errors
 trap 'print_error "An error occurred during deployment"; exit 1' ERR
-
 main
