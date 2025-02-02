@@ -11,7 +11,6 @@ import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 suite(
   "Backing Operations",
   func() {
-    // Test principals
     let caller = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
     let systemAccount = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
     let tokenA = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
@@ -21,7 +20,6 @@ suite(
     var virtualAccounts : VirtualAccounts.VirtualAccountManager = VirtualAccounts.VirtualAccountManager(initState);
     var backingImpl : BackingOperations.BackingOperationsImpl = BackingOperations.BackingOperationsImpl(virtualAccounts);
 
-    // Reset state before each test
     let setup = func() {
       let freshState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
       virtualAccounts := VirtualAccounts.VirtualAccountManager(freshState);
@@ -32,39 +30,35 @@ suite(
       "handles issue with sufficient virtual balance",
       func() {
         setup();
-        // Setup virtual balances
         virtualAccounts.mint(caller, tokenA, 200);
         virtualAccounts.mint(caller, tokenB, 100);
 
         let backingTokens : [Types.BackingPair] = [
           {
             tokenInfo = { canisterId = tokenA };
-            backingUnit = 100; // 2:1 ratio
+            backingUnit = 100;
             reserveQuantity = 0;
           },
           {
             tokenInfo = { canisterId = tokenB };
-            backingUnit = 50; // 1:1 ratio
+            backingUnit = 50;
             reserveQuantity = 0;
           },
         ];
 
         let supplyUnit = 100;
-        let amount = 100; // Should require 100 of tokenA and 50 of tokenB
+        let amount = 100;
 
         switch (backingImpl.processIssue(caller, systemAccount, amount, supplyUnit, 0, backingTokens)) {
           case (#err(e)) {
             Debug.print("Issue failed: " # e);
-            assert (false);
+            assert false;
           };
           case (#ok(result)) {
-            // Check the total supply was updated
             assert (result.totalSupply == amount);
             assert (result.amount == amount);
-
-            // Check that virtual balances were transferred correctly
-            assert (virtualAccounts.getBalance(caller, tokenA) == 100); // 200 - 100
-            assert (virtualAccounts.getBalance(caller, tokenB) == 50); // 100 - 50
+            assert (virtualAccounts.getBalance(caller, tokenA) == 100);
+            assert (virtualAccounts.getBalance(caller, tokenB) == 50);
             assert (virtualAccounts.getBalance(systemAccount, tokenA) == 100);
             assert (virtualAccounts.getBalance(systemAccount, tokenB) == 50);
           };
@@ -76,11 +70,9 @@ suite(
       "fails issue with insufficient virtual balance",
       func() {
         setup();
-        // Setup insufficient balances
-        virtualAccounts.mint(caller, tokenA, 50); // Not enough
-        virtualAccounts.mint(caller, tokenB, 100); // Enough
+        virtualAccounts.mint(caller, tokenA, 50);
+        virtualAccounts.mint(caller, tokenB, 100);
 
-        // Verify initial state
         assert (virtualAccounts.getBalance(caller, tokenA) == 50);
         assert (virtualAccounts.getBalance(caller, tokenB) == 100);
         assert (virtualAccounts.getBalance(systemAccount, tokenA) == 0);
@@ -107,11 +99,10 @@ suite(
             assert (e == "Insufficient balance for token " # Principal.toText(tokenA));
           };
           case (#ok(_)) {
-            assert (false);
+            assert false;
           };
         };
 
-        // Verify state remains unchanged
         assert (virtualAccounts.getBalance(caller, tokenA) == 50);
         assert (virtualAccounts.getBalance(caller, tokenB) == 100);
         assert (virtualAccounts.getBalance(systemAccount, tokenA) == 0);
@@ -132,14 +123,14 @@ suite(
         ];
 
         let supplyUnit = 100;
-        let amount = 150; // Not aligned with supply unit
+        let amount = 150;
 
         switch (backingImpl.processIssue(caller, systemAccount, amount, supplyUnit, 0, backingTokens)) {
           case (#err(e)) {
             assert (e == "Amount must be multiple of supply unit");
           };
           case (#ok(_)) {
-            assert (false);
+            assert false;
           };
         };
       },
@@ -149,40 +140,36 @@ suite(
       "handles redeem with sufficient system balance",
       func() {
         setup();
-        // Setup virtual balances for system account
         virtualAccounts.mint(systemAccount, tokenA, 200);
         virtualAccounts.mint(systemAccount, tokenB, 100);
 
         let backingTokens : [Types.BackingPair] = [
           {
             tokenInfo = { canisterId = tokenA };
-            backingUnit = 100; // 2:1 ratio
+            backingUnit = 100;
             reserveQuantity = 0;
           },
           {
             tokenInfo = { canisterId = tokenB };
-            backingUnit = 50; // 1:1 ratio
+            backingUnit = 50;
             reserveQuantity = 0;
           },
         ];
 
         let supplyUnit = 100;
         let totalSupply = 200;
-        let amount = 100; // Should transfer 100 of tokenA and 50 of tokenB
+        let amount = 100;
 
         switch (backingImpl.processRedeem(caller, systemAccount, amount, supplyUnit, totalSupply, backingTokens)) {
           case (#err(e)) {
             Debug.print("Redeem failed: " # e);
-            assert (false);
+            assert false;
           };
           case (#ok(result)) {
-            // Check the total supply was updated
             assert (result.totalSupply == totalSupply - amount);
             assert (result.amount == amount);
-
-            // Check that virtual balances were transferred correctly
-            assert (virtualAccounts.getBalance(systemAccount, tokenA) == 100); // 200 - 100
-            assert (virtualAccounts.getBalance(systemAccount, tokenB) == 50); // 100 - 50
+            assert (virtualAccounts.getBalance(systemAccount, tokenA) == 100);
+            assert (virtualAccounts.getBalance(systemAccount, tokenB) == 50);
             assert (virtualAccounts.getBalance(caller, tokenA) == 100);
             assert (virtualAccounts.getBalance(caller, tokenB) == 50);
           };
@@ -211,19 +198,18 @@ suite(
         ];
 
         let supplyUnit = 100;
-        let totalSupply = 200; // eta = 2
-        let amount = 300; // Requesting 3 units > eta
+        let totalSupply = 200;
+        let amount = 300;
 
         switch (backingImpl.processRedeem(caller, systemAccount, amount, supplyUnit, totalSupply, backingTokens)) {
           case (#err(e)) {
             assert (e == "Cannot redeem more units than eta (M/u)");
           };
           case (#ok(_)) {
-            assert (false);
+            assert false;
           };
         };
 
-        // Verify state remains unchanged
         assert (virtualAccounts.getBalance(systemAccount, tokenA) == 200);
         assert (virtualAccounts.getBalance(systemAccount, tokenB) == 100);
         assert (virtualAccounts.getBalance(caller, tokenA) == 0);
@@ -235,8 +221,7 @@ suite(
       "fails redeem with insufficient system balance",
       func() {
         setup();
-        // Setup insufficient system balances
-        virtualAccounts.mint(systemAccount, tokenA, 50); // Not enough
+        virtualAccounts.mint(systemAccount, tokenA, 50);
         virtualAccounts.mint(systemAccount, tokenB, 100);
 
         let backingTokens : [Types.BackingPair] = [
@@ -261,7 +246,133 @@ suite(
             assert (e == "Insufficient system balance for token " # Principal.toText(tokenA));
           };
           case (#ok(_)) {
-            assert (false);
+            assert false;
+          };
+        };
+      },
+    );
+
+    test(
+      "handles backing increase with valid amount",
+      func() {
+        setup();
+
+        let backingTokens : [var Types.BackingPair] = [
+          var {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 100;
+            reserveQuantity = 300;
+          },
+          {
+            tokenInfo = { canisterId = tokenB };
+            backingUnit = 50;
+            reserveQuantity = 150;
+          },
+        ];
+
+        let supplyUnit = 100;
+        let totalSupply = 200;
+        let amount = 100;
+
+        switch (backingImpl.processBackingIncrease(amount, supplyUnit, totalSupply, backingTokens)) {
+          case (#err(e)) {
+            Debug.print("Backing increase failed: " # e);
+            assert false;
+          };
+          case (#ok(result)) {
+            assert (result.totalSupply == 300);
+            assert (result.amount == amount);
+          };
+        };
+      },
+    );
+
+    test(
+      "fails backing increase when amount not aligned with supply unit",
+      func() {
+        setup();
+
+        let backingTokens : [var Types.BackingPair] = [
+          var {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 100;
+            reserveQuantity = 200;
+          },
+        ];
+
+        let supplyUnit = 100;
+        let totalSupply = 200;
+        let amount = 150;
+
+        switch (backingImpl.processBackingIncrease(amount, supplyUnit, totalSupply, backingTokens)) {
+          case (#err(e)) {
+            assert (e == "Amount must be multiple of supply unit");
+          };
+          case (#ok(_)) {
+            assert false;
+          };
+        };
+      },
+    );
+
+    test(
+      "handles backing decrease with valid amount",
+      func() {
+        setup();
+
+        let backingTokens : [var Types.BackingPair] = [
+          var {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 100;
+            reserveQuantity = 100;
+          },
+          {
+            tokenInfo = { canisterId = tokenB };
+            backingUnit = 50;
+            reserveQuantity = 50;
+          },
+        ];
+
+        let supplyUnit = 100;
+        let totalSupply = 200;
+        let amount = 100;
+
+        switch (backingImpl.processBackingDecrease(amount, supplyUnit, totalSupply, backingTokens)) {
+          case (#err(e)) {
+            Debug.print("Backing decrease failed: " # e);
+            assert false;
+          };
+          case (#ok(result)) {
+            assert (result.totalSupply == 100);
+            assert (result.amount == amount);
+          };
+        };
+      },
+    );
+
+    test(
+      "fails backing decrease when supply would become invalid",
+      func() {
+        setup();
+
+        let backingTokens : [var Types.BackingPair] = [
+          var {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 100;
+            reserveQuantity = 200;
+          },
+        ];
+
+        let supplyUnit = 100;
+        let totalSupply = 200;
+        let amount = 150;
+
+        switch (backingImpl.processBackingDecrease(amount, supplyUnit, totalSupply, backingTokens)) {
+          case (#err(e)) {
+            assert (e == "Amount must be multiple of supply unit");
+          };
+          case (#ok(_)) {
+            assert false;
           };
         };
       },

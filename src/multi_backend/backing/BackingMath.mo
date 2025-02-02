@@ -17,8 +17,11 @@ module {
   };
 
   /// Calculates backing units from reserve quantity and eta
-  public func calculateBackingUnits(reserveQuantity : Nat, eta : Nat) : Nat {
-    reserveQuantity / eta;
+  public func calculateBackingUnits(reserveQuantity : Nat, eta : Nat) : Result.Result<Nat, Text> {
+    if (eta == 0) {
+      return #err("Eta cannot be zero");
+    };
+    #ok(reserveQuantity / eta);
   };
 
   /// Validates backing ratios in configuration
@@ -27,9 +30,13 @@ module {
       case (#err(e)) return #err(e);
       case (#ok(eta)) {
         for (pair in config.backingPairs.vals()) {
-          let requiredUnits = calculateBackingUnits(pair.reserveQuantity, eta);
-          if (requiredUnits != pair.backingUnit) {
-            return #err("Invalid backing ratio");
+          switch (calculateBackingUnits(pair.reserveQuantity, eta)) {
+            case (#err(e)) return #err(e);
+            case (#ok(requiredUnits)) {
+              if (requiredUnits != pair.backingUnit) {
+                return #err("Invalid backing ratio");
+              };
+            };
           };
         };
       };

@@ -26,15 +26,14 @@ suite(
       "validates correct backing ratios",
       func() {
         let config : Types.BackingConfig = {
-          supplyUnit = 100; // minimum issuable amount
-          totalSupply = 1000; // eta will be 10
+          supplyUnit = 100;
+          totalSupply = 1000; // eta = 10
           backingPairs = [{
             tokenInfo = token1Info;
-            backingUnit = 100; // backing token requirement for one supply unit
+            backingUnit = 100; // reserveQuantity/eta = 1000/10 = 100
             reserveQuantity = 1000;
           }];
         };
-
         switch (Math.validateBackingRatios(config)) {
           case (#err(msg)) {
             Debug.print(msg);
@@ -50,14 +49,13 @@ suite(
       func() {
         let config : Types.BackingConfig = {
           supplyUnit = 100;
-          totalSupply = 1000; // eta will be 10
+          totalSupply = 1000; // eta = 10
           backingPairs = [{
             tokenInfo = token1Info;
-            backingUnit = 150; // incorrect since reserveQuantity/eta should equal backingUnit
+            backingUnit = 150; // incorrect: reserveQuantity/eta = 1000/10 = 100 != 150
             reserveQuantity = 1000;
           }];
         };
-
         switch (Math.validateBackingRatios(config)) {
           case (#err(msg)) { assert msg == "Invalid backing ratio" };
           case (#ok()) { assert false };
@@ -73,7 +71,6 @@ suite(
           backingUnit = 100;
           reserveQuantity = 1000;
         };
-
         switch (Math.calculateRequiredBacking(1000, 1000, pair)) {
           case (#ok(required)) {
             // phi = 1, so required = phi * backingUnit = 1 * 100 = 100
@@ -92,7 +89,6 @@ suite(
           backingUnit = 100;
           reserveQuantity = 1000;
         };
-
         switch (Math.calculateRequiredBacking(3000, 1000, pair)) {
           case (#ok(required)) {
             // phi = 3, so required = phi * backingUnit = 3 * 100 = 300
@@ -111,7 +107,6 @@ suite(
           backingUnit = 100;
           reserveQuantity = 1000;
         };
-
         switch (Math.calculateRequiredBacking(1500, 1000, pair)) {
           case (#ok(_)) assert false;
           case (#err(msg)) {
@@ -129,7 +124,6 @@ suite(
           backingUnit = 250;
           reserveQuantity = 1000;
         };
-
         switch (Math.calculateRequiredBacking(2000, 1000, pair)) {
           case (#ok(required)) {
             // phi = 2, so required = phi * backingUnit = 2 * 250 = 500

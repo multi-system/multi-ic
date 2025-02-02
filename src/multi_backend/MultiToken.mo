@@ -307,6 +307,52 @@ shared ({ caller = deployer }) actor class MultiToken(
     };
   };
 
+  private func increaseSupply(amount : Nat) : async* Result.Result<(), Text> {
+    if (not hasInitialized) {
+      return #err("Not initialized");
+    };
+
+    switch (await* mintTokens({ owner = Principal.fromActor(this); subaccount = null }, amount)) {
+      case (#Err(e)) {
+        #err("Mint failed: " # debug_show (e));
+      };
+      case (#Ok(_)) {
+        switch (backingImpl.processBackingIncrease(amount, supplyUnit, totalSupply, backingTokens)) {
+          case (#err(e)) {
+            Debug.trap("Critical error: Tokens minted but backing update failed: " # e);
+          };
+          case (#ok(_)) {
+            totalSupply := totalSupply + amount;
+            #ok(());
+          };
+        };
+      };
+    };
+  };
+
+  private func decreaseSupply(amount : Nat) : async* Result.Result<(), Text> {
+    if (not hasInitialized) {
+      return #err("Not initialized");
+    };
+
+    switch (await* burnTokens({ owner = Principal.fromActor(this); subaccount = null }, amount)) {
+      case (#Err(e)) {
+        #err("Burn failed: " # debug_show (e));
+      };
+      case (#Ok(_)) {
+        switch (backingImpl.processBackingDecrease(amount, supplyUnit, totalSupply, backingTokens)) {
+          case (#err(e)) {
+            Debug.trap("Critical error: Tokens burned but backing update failed: " # e);
+          };
+          case (#ok(_)) {
+            totalSupply := totalSupply - amount;
+            #ok(());
+          };
+        };
+      };
+    };
+  };
+
   private func mintTokens(to : ICRC1.Account, amount : Nat) : async* ICRC1.TransferResult {
     if (not hasInitialized) {
       return #Err(#GenericError({ message = "Not initialized"; error_code = 1 }));

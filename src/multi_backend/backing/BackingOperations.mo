@@ -28,13 +28,10 @@ module {
       totalSupply : Nat,
       backingTokens : [Types.BackingPair],
     ) : Result.Result<IssueResult, Text> {
-
-      // Validate supply unit alignment first
       if (amount % supplyUnit != 0) {
         return #err("Amount must be multiple of supply unit");
       };
 
-      // Pre-validate all balances and calculate required amounts
       let requiredTransfers = Buffer.Buffer<(Principal, Nat)>(backingTokens.size());
 
       for (pair in backingTokens.vals()) {
@@ -50,9 +47,7 @@ module {
         };
       };
 
-      // All validation passed - now execute transfers atomically
       for ((tokenId, requiredAmount) in requiredTransfers.vals()) {
-        // This will trap on any unexpected failure, rolling back all changes
         virtualAccounts.transfer({
           from = caller;
           to = systemAccount;
@@ -75,15 +70,13 @@ module {
       totalSupply : Nat,
       backingTokens : [Types.BackingPair],
     ) : Result.Result<RedeemResult, Text> {
+      if (amount % supplyUnit != 0) {
+        return #err("Amount must be multiple of supply unit");
+      };
 
-      // First calculate eta to validate maximum possible redemption
       switch (BackingMath.calculateEta(totalSupply, supplyUnit)) {
         case (#err(e)) return #err(e);
         case (#ok(eta)) {
-          // Validate amount is divisible by supplyUnit and calculate requested units
-          if (amount % supplyUnit != 0) {
-            return #err("Amount must be multiple of supply unit");
-          };
           let requestedUnits = amount / supplyUnit;
           if (requestedUnits > eta) {
             return #err("Cannot redeem more units than eta (M/u)");
@@ -91,7 +84,6 @@ module {
         };
       };
 
-      // Pre-validate all balances and calculate required amounts
       let requiredTransfers = Buffer.Buffer<(Principal, Nat)>(backingTokens.size());
 
       for (pair in backingTokens.vals()) {
@@ -107,9 +99,7 @@ module {
         };
       };
 
-      // All validation passed - now execute transfers atomically
       for ((tokenId, requiredAmount) in requiredTransfers.vals()) {
-        // This will trap on any unexpected failure, rolling back all changes
         virtualAccounts.transfer({
           from = systemAccount;
           to = caller;
@@ -122,6 +112,75 @@ module {
         totalSupply = totalSupply - amount;
         amount = amount;
       });
+    };
+
+    public func processBackingIncrease(
+      amount : Nat,
+      supplyUnit : Nat,
+      totalSupply : Nat,
+      backingTokens : [var Types.BackingPair],
+    ) : Result.Result<IssueResult, Text> {
+      if (amount % supplyUnit != 0) {
+        return #err("Amount must be multiple of supply unit");
+      };
+
+      switch (BackingMath.calculateEta(totalSupply + amount, supplyUnit)) {
+        case (#err(e)) return #err(e);
+        case (#ok(newEta)) {
+          // Update all backing units
+          for (i in backingTokens.keys()) {
+            let pair = backingTokens[i];
+            let newBackingUnits = pair.reserveQuantity / newEta;
+            backingTokens[i] := {
+              tokenInfo = pair.tokenInfo;
+              backingUnit = newBackingUnits;
+              reserveQuantity = pair.reserveQuantity;
+            };
+          };
+
+          #ok({
+            totalSupply = totalSupply + amount;
+            amount = amount;
+          });
+        };
+      };
+    };
+
+    public func processBackingDecrease(
+      amount : Nat,
+      supplyUnit : Nat,
+      totalSupply : Nat,
+      backingTokens : [var Types.BackingPair],
+    ) : Result.Result<RedeemResult, Text> {
+      if (amount % supplyUnit != 0) {
+        return #err("Amount must be multiple of supply unit");
+      };
+
+      let newTotalSupply = totalSupply - amount;
+      if (newTotalSupply < supplyUnit) {
+        return #err("Total supply cannot be less than supply unit");
+      };
+
+      switch (BackingMath.calculateEta(newTotalSupply, supplyUnit)) {
+        case (#err(e)) return #err(e);
+        case (#ok(newEta)) {
+          // Update all backing units
+          for (i in backingTokens.keys()) {
+            let pair = backingTokens[i];
+            let newBackingUnits = pair.reserveQuantity / newEta;
+            backingTokens[i] := {
+              tokenInfo = pair.tokenInfo;
+              backingUnit = newBackingUnits;
+              reserveQuantity = pair.reserveQuantity;
+            };
+          };
+
+          #ok({
+            totalSupply = newTotalSupply;
+            amount = amount;
+          });
+        };
+      };
     };
   };
 };
