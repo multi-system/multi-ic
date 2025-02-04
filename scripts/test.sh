@@ -92,7 +92,7 @@ check_formatting() {
 # Function to run unit tests
 run_unit_tests() {
     info_msg "Running Motoko unit tests..."
-    if ! mops test; then
+    if ! mops test -r verbose; then
         handle_error "Motoko unit tests failed"
     fi
     success_msg "Motoko unit tests passed"
