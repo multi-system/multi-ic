@@ -6,6 +6,7 @@ import Types "../../multi_backend/types/BackingTypes";
 import VirtualTypes "../../multi_backend/types/VirtualTypes";
 import VirtualAccounts "../../multi_backend/ledger/VirtualAccounts";
 import BackingOperations "../../multi_backend/backing/BackingOperations";
+import Array "mo:base/Array";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 
 suite(
@@ -377,5 +378,93 @@ suite(
         };
       },
     );
+
+    test(
+      "correctly adjusts backing ratios after supply changes",
+      func() {
+        setup();
+
+        // Initial state setup
+        virtualAccounts.mint(caller, tokenA, 400);
+        virtualAccounts.mint(caller, tokenB, 200);
+        virtualAccounts.mint(systemAccount, tokenA, 200);
+        virtualAccounts.mint(systemAccount, tokenB, 100);
+
+        let backingTokens : [var Types.BackingPair] = [
+          var {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 100;
+            reserveQuantity = 200;
+          },
+          {
+            tokenInfo = { canisterId = tokenB };
+            backingUnit = 50;
+            reserveQuantity = 100;
+          },
+        ];
+
+        let supplyUnit = 100;
+        var totalSupply = 200;
+
+        // 1. Supply increase: 2 -> 6 supply units
+        let increaseAmount = 400;
+        switch (backingImpl.processBackingIncrease(increaseAmount, supplyUnit, totalSupply, backingTokens)) {
+          case (#err(e)) { assert false };
+          case (#ok(result)) {
+            totalSupply := result.totalSupply;
+
+            // Verify new backing units
+            assert backingTokens[0].backingUnit == 33; // 200/6 = 33
+            assert backingTokens[1].backingUnit == 16; // 100/6 = 16
+          };
+        };
+
+        // 2. Issue with new ratios (33/16)
+        let issueAmount = 100;
+        let frozenTokens = Array.freeze(backingTokens);
+        switch (backingImpl.processIssue(caller, systemAccount, issueAmount, supplyUnit, totalSupply, frozenTokens)) {
+          case (#err(e)) { assert false };
+          case (#ok(result)) {
+            totalSupply := result.totalSupply;
+
+            // Verify transfers used 33/16 ratios
+            assert virtualAccounts.getBalance(caller, tokenA) == 367; // 400 - 33
+            assert virtualAccounts.getBalance(caller, tokenB) == 184; // 200 - 16
+            assert virtualAccounts.getBalance(systemAccount, tokenA) == 233; // 200 + 33
+            assert virtualAccounts.getBalance(systemAccount, tokenB) == 116; // 100 + 16
+          };
+        };
+
+        // 3. Supply decrease: 7 -> 4 supply units
+        let decreaseAmount = 300;
+        switch (backingImpl.processBackingDecrease(decreaseAmount, supplyUnit, totalSupply, backingTokens)) {
+          case (#err(e)) { assert false };
+          case (#ok(result)) {
+            totalSupply := result.totalSupply;
+
+            // Verify new backing units
+            assert backingTokens[0].backingUnit == 50; // 200/4 = 50
+            assert backingTokens[1].backingUnit == 25; // 100/4 = 25
+          };
+        };
+
+        // 4. Redeem with new ratios (50/25)
+        let redeemAmount = 100;
+        let frozenTokens2 = Array.freeze(backingTokens);
+        switch (backingImpl.processRedeem(caller, systemAccount, redeemAmount, supplyUnit, totalSupply, frozenTokens2)) {
+          case (#err(e)) { assert false };
+          case (#ok(result)) {
+            totalSupply := result.totalSupply;
+
+            // Verify transfers used 50/25 ratios
+            assert virtualAccounts.getBalance(caller, tokenA) == 417; // 367 + 50
+            assert virtualAccounts.getBalance(caller, tokenB) == 209; // 184 + 25
+            assert virtualAccounts.getBalance(systemAccount, tokenA) == 183; // 233 - 50
+            assert virtualAccounts.getBalance(systemAccount, tokenB) == 91; // 116 - 25
+          };
+        };
+      },
+    );
+
   },
 );
