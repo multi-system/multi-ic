@@ -130,11 +130,15 @@ module {
           // Update all backing units
           for (i in backingTokens.keys()) {
             let pair = backingTokens[i];
-            let newBackingUnits = pair.reserveQuantity / newEta;
-            backingTokens[i] := {
-              tokenInfo = pair.tokenInfo;
-              backingUnit = newBackingUnits;
-              reserveQuantity = pair.reserveQuantity;
+            switch (BackingMath.calculateBackingUnits(pair.reserveQuantity, newEta)) {
+              case (#err(e)) return #err(e);
+              case (#ok(newBackingUnits)) {
+                backingTokens[i] := {
+                  tokenInfo = pair.tokenInfo;
+                  backingUnit = newBackingUnits;
+                  reserveQuantity = pair.reserveQuantity;
+                };
+              };
             };
           };
 
@@ -167,11 +171,15 @@ module {
           // Update all backing units
           for (i in backingTokens.keys()) {
             let pair = backingTokens[i];
-            let newBackingUnits = pair.reserveQuantity / newEta;
-            backingTokens[i] := {
-              tokenInfo = pair.tokenInfo;
-              backingUnit = newBackingUnits;
-              reserveQuantity = pair.reserveQuantity;
+            switch (BackingMath.calculateBackingUnits(pair.reserveQuantity, newEta)) {
+              case (#err(e)) return #err(e);
+              case (#ok(newBackingUnits)) {
+                backingTokens[i] := {
+                  tokenInfo = pair.tokenInfo;
+                  backingUnit = newBackingUnits;
+                  reserveQuantity = pair.reserveQuantity;
+                };
+              };
             };
           };
 
