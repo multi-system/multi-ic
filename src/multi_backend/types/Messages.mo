@@ -6,6 +6,12 @@ module {
     backingUnit : Nat;
   };
 
+  public type BackingTokenResponse = {
+    tokenInfo : { canisterId : Principal };
+    backingUnit : Nat;
+    reserveQuantity : Nat;
+  };
+
   public type InitializeMsg = {
     supplyUnit : Nat;
     backingTokens : [TokenConfig];

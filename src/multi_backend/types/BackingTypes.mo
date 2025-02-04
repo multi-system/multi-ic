@@ -10,7 +10,6 @@ module {
   public type BackingPair = {
     tokenInfo : TokenInfo;
     backingUnit : Nat;
-    reserveQuantity : Nat;
   };
 
   /// Overall configuration for backing tokens
@@ -18,5 +17,11 @@ module {
     supplyUnit : Nat;
     totalSupply : Nat;
     backingPairs : [BackingPair];
+  };
+
+  /// The complete backing state that needs to be persisted
+  public type BackingState = {
+    var hasInitialized : Bool;
+    var config : BackingConfig;
   };
 };

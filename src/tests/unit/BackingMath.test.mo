@@ -3,14 +3,20 @@ import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
 import Types "../../multi_backend/types/BackingTypes";
 import Math "../../multi_backend/backing/BackingMath";
+import VirtualAccounts "../../multi_backend/ledger/VirtualAccounts";
+import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 
 suite(
   "Backing Math",
   func() {
-    let token1Principal = Principal.fromText("2vxsx-fae");
+    let token1Principal = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
+    let systemAccount = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
     let token1Info : Types.TokenInfo = {
       canisterId = token1Principal;
     };
+
+    let initState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
+    var virtualAccounts : VirtualAccounts.VirtualAccountManager = VirtualAccounts.VirtualAccountManager(initState);
 
     test(
       "calculates eta correctly",
@@ -31,10 +37,13 @@ suite(
           backingPairs = [{
             tokenInfo = token1Info;
             backingUnit = 100; // reserveQuantity/eta = 1000/10 = 100
-            reserveQuantity = 1000;
           }];
         };
-        switch (Math.validateBackingRatios(config)) {
+
+        // Set up the virtual account balance to match what we expect
+        virtualAccounts.mint(systemAccount, token1Principal, 1000);
+
+        switch (Math.validateBackingRatios(config, virtualAccounts, systemAccount)) {
           case (#err(msg)) {
             Debug.print(msg);
             assert false;
@@ -53,10 +62,13 @@ suite(
           backingPairs = [{
             tokenInfo = token1Info;
             backingUnit = 150; // incorrect: reserveQuantity/eta = 1000/10 = 100 != 150
-            reserveQuantity = 1000;
           }];
         };
-        switch (Math.validateBackingRatios(config)) {
+
+        // Set up the virtual account balance
+        virtualAccounts.mint(systemAccount, token1Principal, 1000);
+
+        switch (Math.validateBackingRatios(config, virtualAccounts, systemAccount)) {
           case (#err(msg)) { assert msg == "Invalid backing ratio" };
           case (#ok()) { assert false };
         };
@@ -69,7 +81,6 @@ suite(
         let pair : Types.BackingPair = {
           tokenInfo = token1Info;
           backingUnit = 100;
-          reserveQuantity = 1000;
         };
         switch (Math.calculateRequiredBacking(1000, 1000, pair)) {
           case (#ok(required)) {
@@ -87,7 +98,6 @@ suite(
         let pair : Types.BackingPair = {
           tokenInfo = token1Info;
           backingUnit = 100;
-          reserveQuantity = 1000;
         };
         switch (Math.calculateRequiredBacking(3000, 1000, pair)) {
           case (#ok(required)) {
@@ -105,7 +115,6 @@ suite(
         let pair : Types.BackingPair = {
           tokenInfo = token1Info;
           backingUnit = 100;
-          reserveQuantity = 1000;
         };
         switch (Math.calculateRequiredBacking(1500, 1000, pair)) {
           case (#ok(_)) assert false;
@@ -122,7 +131,6 @@ suite(
         let pair : Types.BackingPair = {
           tokenInfo = token1Info;
           backingUnit = 250;
-          reserveQuantity = 1000;
         };
         switch (Math.calculateRequiredBacking(2000, 1000, pair)) {
           case (#ok(required)) {

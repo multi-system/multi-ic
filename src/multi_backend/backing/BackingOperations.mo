@@ -7,28 +7,22 @@ import Array "mo:base/Array";
 import Types "../types/BackingTypes";
 import VirtualAccounts "../ledger/VirtualAccounts";
 import BackingMath "./BackingMath";
+import BackingStore "./BackingStore";
 
 module {
-  public type IssueResult = {
-    totalSupply : Nat;
-    amount : Nat;
-  };
-
-  public type RedeemResult = {
-    totalSupply : Nat;
-    amount : Nat;
-  };
-
-  public class BackingOperationsImpl(virtualAccounts : VirtualAccounts.VirtualAccountManager) {
-
+  public class BackingOperationsImpl(
+    store : BackingStore.BackingStore,
+    virtualAccounts : VirtualAccounts.VirtualAccountManager,
+    systemAccount : Principal,
+  ) {
     public func processIssue(
       caller : Principal,
-      systemAccount : Principal,
       amount : Nat,
-      supplyUnit : Nat,
-      totalSupply : Nat,
-      backingTokens : [Types.BackingPair],
-    ) : Result.Result<IssueResult, Text> {
+    ) : Result.Result<(), Text> {
+      let supplyUnit = store.getSupplyUnit();
+      let totalSupply = store.getTotalSupply();
+      let backingTokens = store.getBackingTokens();
+
       if (amount % supplyUnit != 0) {
         return #err("Amount must be multiple of supply unit");
       };
@@ -48,6 +42,7 @@ module {
         };
       };
 
+      // Execute transfers
       for ((tokenId, requiredAmount) in requiredTransfers.vals()) {
         virtualAccounts.transfer({
           from = caller;
@@ -57,20 +52,23 @@ module {
         });
       };
 
-      #ok({
-        totalSupply = totalSupply + amount;
-        amount = amount;
-      });
+      // Update total supply
+      switch (store.updateTotalSupply(totalSupply + amount)) {
+        case (#err(e)) return #err(e);
+        case (#ok()) {};
+      };
+
+      #ok(());
     };
 
     public func processRedeem(
       caller : Principal,
-      systemAccount : Principal,
       amount : Nat,
-      supplyUnit : Nat,
-      totalSupply : Nat,
-      backingTokens : [Types.BackingPair],
-    ) : Result.Result<RedeemResult, Text> {
+    ) : Result.Result<(), Text> {
+      let supplyUnit = store.getSupplyUnit();
+      let totalSupply = store.getTotalSupply();
+      let backingTokens = store.getBackingTokens();
+
       if (amount % supplyUnit != 0) {
         return #err("Amount must be multiple of supply unit");
       };
@@ -100,6 +98,7 @@ module {
         };
       };
 
+      // Execute transfers
       for ((tokenId, requiredAmount) in requiredTransfers.vals()) {
         virtualAccounts.transfer({
           from = systemAccount;
@@ -109,48 +108,63 @@ module {
         });
       };
 
-      #ok({
-        totalSupply = totalSupply - amount;
-        amount = amount;
-      });
-    };
-
-    public func processBackingIncrease(
-      amount : Nat,
-      supplyUnit : Nat,
-      totalSupply : Nat,
-      backingTokens : [var Types.BackingPair],
-    ) : Result.Result<IssueResult, Text> {
-      if (amount % supplyUnit != 0) {
-        return #err("Amount must be multiple of supply unit");
+      // Update total supply
+      switch (store.updateTotalSupply(totalSupply - amount)) {
+        case (#err(e)) return #err(e);
+        case (#ok()) {};
       };
 
-      switch (BackingMath.calculateBacking(totalSupply + amount, supplyUnit, Array.freeze(backingTokens))) {
-        case (#err(e)) #err(e);
+      #ok(());
+    };
+
+    public func processSupplyIncrease(amount : Nat) : Result.Result<(), Text> {
+      let supplyUnit = store.getSupplyUnit();
+      let totalSupply = store.getTotalSupply();
+      let backingTokens = store.getBackingTokens();
+
+      switch (store.validateBackingUpdate(amount)) {
+        case (#err(e)) return #err(e);
+        case (#ok()) {};
+      };
+
+      let newTotalSupply = totalSupply + amount;
+
+      switch (BackingMath.calculateBacking(newTotalSupply, supplyUnit, backingTokens, virtualAccounts, systemAccount)) {
+        case (#err(e)) return #err(e);
         case (#ok(backingUnits)) {
-          for (i in backingTokens.keys()) {
-            backingTokens[i] := {
-              tokenInfo = backingTokens[i].tokenInfo;
-              backingUnit = backingUnits[i];
-              reserveQuantity = backingTokens[i].reserveQuantity;
-            };
+          let newPairs = Array.mapEntries<Types.BackingPair, Types.BackingPair>(
+            backingTokens,
+            func(pair : Types.BackingPair, index : Nat) : Types.BackingPair {
+              {
+                tokenInfo = pair.tokenInfo;
+                backingUnit = backingUnits[index];
+              };
+            },
+          );
+
+          switch (store.updateBackingTokens(newPairs)) {
+            case (#err(e)) return #err(e);
+            case (#ok()) {};
           };
-          #ok({
-            totalSupply = totalSupply + amount;
-            amount = amount;
-          });
+
+          switch (store.updateTotalSupply(newTotalSupply)) {
+            case (#err(e)) return #err(e);
+            case (#ok()) {};
+          };
+
+          #ok(());
         };
       };
     };
 
-    public func processBackingDecrease(
-      amount : Nat,
-      supplyUnit : Nat,
-      totalSupply : Nat,
-      backingTokens : [var Types.BackingPair],
-    ) : Result.Result<RedeemResult, Text> {
-      if (amount % supplyUnit != 0) {
-        return #err("Amount must be multiple of supply unit");
+    public func processSupplyDecrease(amount : Nat) : Result.Result<(), Text> {
+      let supplyUnit = store.getSupplyUnit();
+      let totalSupply = store.getTotalSupply();
+      let backingTokens = store.getBackingTokens();
+
+      switch (store.validateBackingUpdate(amount)) {
+        case (#err(e)) return #err(e);
+        case (#ok()) {};
       };
 
       let newTotalSupply = totalSupply - amount;
@@ -158,20 +172,30 @@ module {
         return #err("Total supply cannot be less than supply unit");
       };
 
-      switch (BackingMath.calculateBacking(newTotalSupply, supplyUnit, Array.freeze(backingTokens))) {
-        case (#err(e)) #err(e);
+      switch (BackingMath.calculateBacking(newTotalSupply, supplyUnit, backingTokens, virtualAccounts, systemAccount)) {
+        case (#err(e)) return #err(e);
         case (#ok(backingUnits)) {
-          for (i in backingTokens.keys()) {
-            backingTokens[i] := {
-              tokenInfo = backingTokens[i].tokenInfo;
-              backingUnit = backingUnits[i];
-              reserveQuantity = backingTokens[i].reserveQuantity;
-            };
+          let newPairs = Array.mapEntries<Types.BackingPair, Types.BackingPair>(
+            backingTokens,
+            func(pair : Types.BackingPair, index : Nat) : Types.BackingPair {
+              {
+                tokenInfo = pair.tokenInfo;
+                backingUnit = backingUnits[index];
+              };
+            },
+          );
+
+          switch (store.updateBackingTokens(newPairs)) {
+            case (#err(e)) return #err(e);
+            case (#ok()) {};
           };
-          #ok({
-            totalSupply = newTotalSupply;
-            amount = amount;
-          });
+
+          switch (store.updateTotalSupply(newTotalSupply)) {
+            case (#err(e)) return #err(e);
+            case (#ok()) {};
+          };
+
+          #ok(());
         };
       };
     };
