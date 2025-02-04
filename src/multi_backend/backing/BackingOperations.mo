@@ -3,6 +3,7 @@ import Result "mo:base/Result";
 import Debug "mo:base/Debug";
 import Nat "mo:base/Nat";
 import Buffer "mo:base/Buffer";
+import Array "mo:base/Array";
 import Types "../types/BackingTypes";
 import VirtualAccounts "../ledger/VirtualAccounts";
 import BackingMath "./BackingMath";
@@ -124,24 +125,16 @@ module {
         return #err("Amount must be multiple of supply unit");
       };
 
-      switch (BackingMath.calculateEta(totalSupply + amount, supplyUnit)) {
-        case (#err(e)) return #err(e);
-        case (#ok(newEta)) {
-          // Update all backing units
+      switch (BackingMath.calculateBacking(totalSupply + amount, supplyUnit, Array.freeze(backingTokens))) {
+        case (#err(e)) #err(e);
+        case (#ok(backingUnits)) {
           for (i in backingTokens.keys()) {
-            let pair = backingTokens[i];
-            switch (BackingMath.calculateBackingUnits(pair.reserveQuantity, newEta)) {
-              case (#err(e)) return #err(e);
-              case (#ok(newBackingUnits)) {
-                backingTokens[i] := {
-                  tokenInfo = pair.tokenInfo;
-                  backingUnit = newBackingUnits;
-                  reserveQuantity = pair.reserveQuantity;
-                };
-              };
+            backingTokens[i] := {
+              tokenInfo = backingTokens[i].tokenInfo;
+              backingUnit = backingUnits[i];
+              reserveQuantity = backingTokens[i].reserveQuantity;
             };
           };
-
           #ok({
             totalSupply = totalSupply + amount;
             amount = amount;
@@ -165,24 +158,16 @@ module {
         return #err("Total supply cannot be less than supply unit");
       };
 
-      switch (BackingMath.calculateEta(newTotalSupply, supplyUnit)) {
-        case (#err(e)) return #err(e);
-        case (#ok(newEta)) {
-          // Update all backing units
+      switch (BackingMath.calculateBacking(newTotalSupply, supplyUnit, Array.freeze(backingTokens))) {
+        case (#err(e)) #err(e);
+        case (#ok(backingUnits)) {
           for (i in backingTokens.keys()) {
-            let pair = backingTokens[i];
-            switch (BackingMath.calculateBackingUnits(pair.reserveQuantity, newEta)) {
-              case (#err(e)) return #err(e);
-              case (#ok(newBackingUnits)) {
-                backingTokens[i] := {
-                  tokenInfo = pair.tokenInfo;
-                  backingUnit = newBackingUnits;
-                  reserveQuantity = pair.reserveQuantity;
-                };
-              };
+            backingTokens[i] := {
+              tokenInfo = backingTokens[i].tokenInfo;
+              backingUnit = backingUnits[i];
+              reserveQuantity = backingTokens[i].reserveQuantity;
             };
           };
-
           #ok({
             totalSupply = newTotalSupply;
             amount = amount;
