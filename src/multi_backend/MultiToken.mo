@@ -300,6 +300,46 @@ shared ({ caller = deployer }) actor class MultiToken(
     };
   };
 
+  private func increaseSupply(amount : Nat) : async* Result.Result<(), Text> {
+    if (not backingStore.hasInitialized()) {
+      return #err("Not initialized");
+    };
+    switch (backingImpl.processBackingIncrease(amount)) {
+      case (#err(e)) return #err(e);
+      case (#ok()) {
+        switch (await* mintTokens({ owner = Principal.fromActor(this); subaccount = null }, amount)) {
+          case (#Err(e)) {
+            // TODO: System state inconsistency detected - backing ratios were updated
+            // but mint operation failed. Add recovery mechanism to retry the mint
+            // since backing store changes are already committed.
+            Debug.trap("Critical error: Backing updated but mint failed");
+          };
+          case (#Ok(_)) #ok(());
+        };
+      };
+    };
+  };
+
+  private func decreaseSupply(amount : Nat) : async* Result.Result<(), Text> {
+    if (not backingStore.hasInitialized()) {
+      return #err("Not initialized");
+    };
+    switch (backingImpl.processBackingDecrease(amount)) {
+      case (#err(e)) return #err(e);
+      case (#ok()) {
+        switch (await* burnTokens({ owner = Principal.fromActor(this); subaccount = null }, amount)) {
+          case (#Err(e)) {
+            // TODO: System state inconsistency detected - backing ratios were updated
+            // but burn operation failed. Add recovery mechanism to retry the burn
+            // since backing store changes are already committed.
+            Debug.trap("Critical error: Backing updated but burn failed");
+          };
+          case (#Ok(_)) #ok(());
+        };
+      };
+    };
+  };
+
   private func mintTokens(to : ICRC1.Account, amount : Nat) : async* ICRC1.TransferResult {
     if (not backingStore.hasInitialized()) {
       return #Err(#GenericError({ message = "Not initialized"; error_code = 1 }));
