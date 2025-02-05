@@ -314,7 +314,7 @@ shared ({ caller = deployer }) actor class MultiToken(
     if (not backingStore.hasInitialized()) {
       return #err("Not initialized");
     };
-    switch (backingImpl.processBackingIncrease(amount)) {
+    switch (getBackingImpl().processSupplyIncrease(amount)) {
       case (#err(e)) return #err(e);
       case (#ok()) {
         switch (await* mintTokens({ owner = Principal.fromActor(this); subaccount = null }, amount)) {
@@ -334,7 +334,7 @@ shared ({ caller = deployer }) actor class MultiToken(
     if (not backingStore.hasInitialized()) {
       return #err("Not initialized");
     };
-    switch (backingImpl.processBackingDecrease(amount)) {
+    switch (getBackingImpl().processSupplyDecrease(amount)) {
       case (#err(e)) return #err(e);
       case (#ok()) {
         switch (await* burnTokens({ owner = Principal.fromActor(this); subaccount = null }, amount)) {
