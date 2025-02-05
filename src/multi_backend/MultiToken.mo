@@ -264,6 +264,9 @@ shared ({ caller = deployer }) actor class MultiToken(
             #Success;
           };
           case (#Err(_)) {
+            // TODO: System state inconsistency detected - backing tokens were processed
+            // but mint operation failed. Add recovery mechanism to retry the mint
+            // since system has control of backing tokens.
             Debug.trap("Critical error: Backing tokens transferred but mint failed");
           };
         };
@@ -275,6 +278,10 @@ shared ({ caller = deployer }) actor class MultiToken(
     if (not backingStore.hasInitialized()) {
       return #NotInitialized;
     };
+
+    // TODO: Safety enhancement - require users to first deposit their Multi tokens
+    // into the virtual account system before redemption. This ensures the system
+    // has control over both Multi tokens and backing tokens during the entire process.
 
     // Check balance first
     let balance = getIcrc1().balance_of({ owner = caller; subaccount = null });
@@ -293,6 +300,9 @@ shared ({ caller = deployer }) actor class MultiToken(
             #Success;
           };
           case (#Err(_)) {
+            // TODO: System state inconsistency detected - backing tokens were transferred
+            // but burn operation failed. Add recovery mechanism to reconcile actual token
+            // supply with calculated supply.
             Debug.trap("Critical error: Backing tokens transferred but burn failed");
           };
         };
