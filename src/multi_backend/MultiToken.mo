@@ -20,8 +20,15 @@ shared ({ caller = deployer }) actor class MultiToken(
     icrc2 : ?ICRC2.InitArgs;
   }
 ) = this {
-  // -- State Setup --
-  private let owner : Principal = deployer;
+
+  // -- STABLE STATE --
+  // Canister owner
+  private stable let owner : Principal = deployer;
+
+  // List of approved tokens
+  private stable var approvedTokens : [Types.TokenInfo] = [];
+
+  // Backing configuration and initialization status
   private stable var backingState : Types.BackingState = {
     var hasInitialized = false;
     var config = {
@@ -31,41 +38,52 @@ shared ({ caller = deployer }) actor class MultiToken(
     };
   };
 
-  // -- Virtual Accounts Setup --
+  // Maps user principals to their token balances
   private stable var accountsState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
+
+  // -- CORE COMPONENTS --
+  // Manages the list of approved tokens
+  private let tokenRegistry = TokenRegistry.TokenRegistryManager({
+    var approvedTokens = approvedTokens;
+  });
+
+  // Manages user token balances
   private let virtualAccounts = VirtualAccounts.VirtualAccountManager(accountsState);
 
-  // -- Middleware Setup --
-  private var ledgerManager_ : ?LedgerManager.LedgerManager = null;
+  // Manages the backing configuration
   private let backingStore = BackingStore.BackingStore(backingState);
-  private var backingImpl_ : ?BackingOperations.BackingOperationsImpl = null;
 
+  // -- LAZY-LOADED COMPONENTS --
+
+  private var backingImpl_ : ?BackingOperations.BackingOperationsImpl = null;
   private func getBackingImpl() : BackingOperations.BackingOperationsImpl {
     switch (backingImpl_) {
-      case (null) {
+      case (null) : {
         let instance = BackingOperations.BackingOperationsImpl(
           backingStore,
           virtualAccounts,
           Principal.fromActor(this),
         );
         backingImpl_ := ?instance;
-        instance;
+        return instance;
       };
-      case (?val) val;
+      case (?val) : return val;
     };
   };
 
+  private var ledgerManager_ : ?LedgerManager.LedgerManager = null;
   private func getLedgerManager() : LedgerManager.LedgerManager {
     switch (ledgerManager_) {
-      case (null) {
+      case (null) : {
         let instance = LedgerManager.LedgerManager(
-          Principal.fromActor(this),
+          tokenRegistry,
           virtualAccounts,
+          Principal.fromActor(this),
         );
         ledgerManager_ := ?instance;
-        instance;
+        return instance;
       };
-      case (?val) val;
+      case (?val) : return val;
     };
   };
 
@@ -213,6 +231,21 @@ shared ({ caller = deployer }) actor class MultiToken(
         ]);
 
         #ok(());
+      };
+    };
+  };
+
+  public shared ({ caller }) func approveToken(msg : Messages.ApproveTokenMsg) : async Messages.ApproveTokenResponse {
+    switch (backingStore.approveToken({ canisterId = msg.canisterId })) {
+      case (#err("Already initialized")) #AlreadyInitialized;
+      case (#err("Token already approved for backing")) #TokenAlreadyApproved;
+      case (#err(e)) #TokenAlreadyApproved;
+      case (#ok()) {
+        // Initialize ledger for the newly approved token
+        switch (await* getLedgerManager().addLedger(msg.canisterId)) {
+          case (#err(e)) #LedgerError(e);
+          case (#ok()) #Success;
+        };
       };
     };
   };

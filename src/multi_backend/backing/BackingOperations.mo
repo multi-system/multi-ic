@@ -5,9 +5,11 @@ import Nat "mo:base/Nat";
 import Buffer "mo:base/Buffer";
 import Array "mo:base/Array";
 import Types "../types/BackingTypes";
+import Error "../types/Error";
 import VirtualAccounts "../ledger/VirtualAccounts";
 import BackingMath "./BackingMath";
 import BackingStore "./BackingStore";
+import BackingValidation "./BackingValidation";
 
 module {
   public class BackingOperationsImpl(
@@ -15,173 +17,183 @@ module {
     virtualAccounts : VirtualAccounts.VirtualAccountManager,
     systemAccount : Principal,
   ) {
-    // Helper function that reconfigures reserve ratios based on new supply
-    private func reconfigureReserve(
-      newTotalSupply : Nat,
-      supplyUnit : Nat,
-      backingTokens : [Types.BackingPair],
-    ) : Result.Result<(), Text> {
-      switch (BackingMath.calculateBacking(newTotalSupply, supplyUnit, backingTokens, virtualAccounts, systemAccount)) {
+    public func approveToken(caller : Principal, tokenInfo : Types.TokenInfo) : Result.Result<(), Error.ApprovalError> {
+      switch (BackingValidation.validateTokenApproval(tokenInfo, store)) {
         case (#err(e)) return #err(e);
-        case (#ok(backingUnits)) {
-          let newPairs = Array.mapEntries<Types.BackingPair, Types.BackingPair>(
-            backingTokens,
-            func(pair : Types.BackingPair, index : Nat) : Types.BackingPair {
-              {
-                tokenInfo = pair.tokenInfo;
-                backingUnit = backingUnits[index];
-              };
-            },
-          );
-
-          switch (store.updateBackingTokens(newPairs)) {
-            case (#err(e)) return #err(e);
-            case (#ok()) {};
-          };
-
-          switch (store.updateTotalSupply(newTotalSupply)) {
-            case (#err(e)) return #err(e);
-            case (#ok()) {};
-          };
-
+        case (#ok()) {
+          store.addBackingToken(tokenInfo);
           #ok(());
         };
       };
     };
 
-    // Helper function that scales reserve up/down while maintaining ratios
-    private func scaleReserve(
-      amount : Nat,
-      from : Principal,
-      to : Principal,
-      checkBalanceFor : Principal,
+    public func processInitialize(
+      caller : Principal,
+      initialAmounts : [(Principal, Nat)],
       supplyUnit : Nat,
-      backingTokens : [Types.BackingPair],
-      updateSupplyAmount : Int,
-    ) : Result.Result<(), Text> {
-      if (amount % supplyUnit != 0) {
-        return #err("Amount must be multiple of supply unit");
+      initialSupply : Nat,
+      multiToken : Types.TokenInfo,
+    ) : Result.Result<(), Error.InitError> {
+      switch (BackingValidation.validateInitialization(supplyUnit, initialSupply, store)) {
+        case (#err(e)) return #err(e);
+        case (#ok()) {};
       };
 
-      let requiredTransfers = Buffer.Buffer<(Principal, Nat)>(backingTokens.size());
+      switch (BackingValidation.validateInitialAmounts(initialAmounts, store.getBackingTokens(), caller, virtualAccounts)) {
+        case (#err(e)) return #err(e);
+        case (#ok(transfers)) {
+          // First initialize the store
+          store.initialize(supplyUnit, initialSupply, multiToken);
+
+          // Then execute validated transfers
+          for ((tokenId, amount) in transfers.vals()) {
+            virtualAccounts.transfer({
+              from = caller;
+              to = systemAccount;
+              token = tokenId;
+              amount = amount;
+            });
+          };
+
+          // Update ratios after transfers
+          updateBackingRatios();
+
+          // Finally mint multi tokens
+          virtualAccounts.mint(caller, multiToken.canisterId, initialSupply);
+          #ok(());
+        };
+      };
+    };
+
+    public func processIssue(caller : Principal, amount : Nat) : Result.Result<(), Error.OperationError> {
+      let config = store.getConfig();
+
+      switch (
+        BackingValidation.validateBackingTokenTransfer(
+          amount,
+          caller,
+          store.getSupplyUnit(),
+          store.getBackingTokens(),
+          virtualAccounts,
+        )
+      ) {
+        case (#err(e)) return #err(e);
+        case (#ok(transfers)) {
+          // Execute backing token transfers
+          for ((tokenId, amount) in transfers.vals()) {
+            virtualAccounts.transfer({
+              from = caller;
+              to = systemAccount;
+              token = tokenId;
+              amount = amount;
+            });
+          };
+
+          // Mint multi tokens after backing tokens are received
+          virtualAccounts.mint(caller, config.multiToken.canisterId, amount);
+
+          // Update supply
+          store.updateTotalSupply(store.getTotalSupply() + amount);
+          #ok(());
+        };
+      };
+    };
+
+    public func processRedeem(caller : Principal, amount : Nat) : Result.Result<(), Error.OperationError> {
+      let config = store.getConfig();
+
+      // First validate multi token balance
+      switch (BackingValidation.validateRedeemBalance(amount, caller, config.multiToken.canisterId, virtualAccounts)) {
+        case (#err(e)) return #err(e);
+        case (#ok()) {};
+      };
+
+      // Then validate backing tokens
+      switch (
+        BackingValidation.validateBackingTokenTransfer(
+          amount,
+          systemAccount,
+          store.getSupplyUnit(),
+          store.getBackingTokens(),
+          virtualAccounts,
+        )
+      ) {
+        case (#err(e)) return #err(e);
+        case (#ok(transfers)) {
+          // First transfer backing tokens
+          for ((tokenId, amount) in transfers.vals()) {
+            virtualAccounts.transfer({
+              from = systemAccount;
+              to = caller;
+              token = tokenId;
+              amount = amount;
+            });
+          };
+
+          // Then burn multi tokens
+          virtualAccounts.burn(caller, config.multiToken.canisterId, amount);
+
+          // Update supply
+          store.updateTotalSupply(store.getTotalSupply() - amount);
+          #ok(());
+        };
+      };
+    };
+
+    public func processSupplyIncrease(amount : Nat) : Result.Result<(), Error.OperationError> {
+      let currentSupply = store.getTotalSupply();
+
+      switch (BackingValidation.validateSupplyChange(amount, true, currentSupply, store.getSupplyUnit())) {
+        case (#err(e)) return #err(e);
+        case (#ok()) {
+          updateSupply(currentSupply + amount);
+          #ok(());
+        };
+      };
+    };
+
+    public func processSupplyDecrease(amount : Nat) : Result.Result<(), Error.OperationError> {
+      let currentSupply = store.getTotalSupply();
+
+      switch (BackingValidation.validateSupplyChange(amount, false, currentSupply, store.getSupplyUnit())) {
+        case (#err(e)) return #err(e);
+        case (#ok()) {
+          updateSupply(currentSupply - amount);
+          #ok(());
+        };
+      };
+    };
+
+    private func updateSupply(newSupply : Nat) {
+      store.updateTotalSupply(newSupply);
+      updateBackingRatios();
+    };
+
+    private func updateBackingRatios() {
+      let totalSupply = store.getTotalSupply();
+      let supplyUnit = store.getSupplyUnit();
+      let backingTokens = store.getBackingTokens();
+
+      let eta = BackingMath.calculateEta(totalSupply, supplyUnit);
+      let backingUnits = Buffer.Buffer<Nat>(backingTokens.size());
 
       for (pair in backingTokens.vals()) {
-        switch (BackingMath.calculateRequiredBacking(amount, supplyUnit, pair)) {
-          case (#err(e)) { return #err(e) };
-          case (#ok(requiredAmount)) {
-            let balance = virtualAccounts.getBalance(checkBalanceFor, pair.tokenInfo.canisterId);
-            if (balance < requiredAmount) {
-              return #err("Insufficient balance for token " # Principal.toText(pair.tokenInfo.canisterId));
-            };
-            requiredTransfers.add((pair.tokenInfo.canisterId, requiredAmount));
-          };
-        };
+        let reserveQuantity = virtualAccounts.getBalance(systemAccount, pair.tokenInfo.canisterId);
+        let unit = BackingMath.calculateBackingUnit(reserveQuantity, eta);
+        backingUnits.add(unit);
       };
 
-      // Execute transfers
-      for ((tokenId, requiredAmount) in requiredTransfers.vals()) {
-        virtualAccounts.transfer({
-          from = from;
-          to = to;
-          token = tokenId;
-          amount = requiredAmount;
-        });
-      };
-
-      // Update total supply
-      let totalSupply = store.getTotalSupply();
-      let newSupply = if (updateSupplyAmount >= 0) {
-        totalSupply + amount;
-      } else {
-        totalSupply - amount;
-      };
-
-      switch (store.updateTotalSupply(newSupply)) {
-        case (#err(e)) return #err(e);
-        case (#ok()) {};
-      };
-
-      #ok(());
-    };
-
-    public func processIssue(
-      caller : Principal,
-      amount : Nat,
-    ) : Result.Result<(), Text> {
-      let supplyUnit = store.getSupplyUnit();
-      let backingTokens = store.getBackingTokens();
-
-      scaleReserve(
-        amount,
-        caller,
-        systemAccount,
-        caller,
-        supplyUnit,
+      let newPairs = Array.mapEntries<Types.BackingPair, Types.BackingPair>(
         backingTokens,
-        +amount,
-      );
-    };
-
-    public func processRedeem(
-      caller : Principal,
-      amount : Nat,
-    ) : Result.Result<(), Text> {
-      let supplyUnit = store.getSupplyUnit();
-      let totalSupply = store.getTotalSupply();
-      let backingTokens = store.getBackingTokens();
-
-      // Additional validation specific to redeem
-      switch (BackingMath.calculateEta(totalSupply, supplyUnit)) {
-        case (#err(e)) return #err(e);
-        case (#ok(eta)) {
-          let requestedUnits = amount / supplyUnit;
-          if (requestedUnits > eta) {
-            return #err("Cannot redeem more units than eta (M/u)");
+        func(pair : Types.BackingPair, index : Nat) : Types.BackingPair {
+          {
+            tokenInfo = pair.tokenInfo;
+            backingUnit = backingUnits.get(index);
           };
-        };
-      };
-
-      scaleReserve(
-        amount,
-        systemAccount,
-        caller,
-        systemAccount,
-        supplyUnit,
-        backingTokens,
-        -amount,
+        },
       );
-    };
 
-    public func processSupplyIncrease(amount : Nat) : Result.Result<(), Text> {
-      let supplyUnit = store.getSupplyUnit();
-      let totalSupply = store.getTotalSupply();
-      let backingTokens = store.getBackingTokens();
-
-      switch (store.validateBackingUpdate(amount)) {
-        case (#err(e)) return #err(e);
-        case (#ok()) {};
-      };
-
-      let newTotalSupply = totalSupply + amount;
-      reconfigureReserve(newTotalSupply, supplyUnit, backingTokens);
-    };
-
-    public func processSupplyDecrease(amount : Nat) : Result.Result<(), Text> {
-      let supplyUnit = store.getSupplyUnit();
-      let totalSupply = store.getTotalSupply();
-      let backingTokens = store.getBackingTokens();
-
-      switch (store.validateBackingUpdate(amount)) {
-        case (#err(e)) return #err(e);
-        case (#ok()) {};
-      };
-
-      let newTotalSupply = totalSupply - amount;
-      if (newTotalSupply < supplyUnit) {
-        return #err("Total supply cannot be less than supply unit");
-      };
-
-      reconfigureReserve(newTotalSupply, supplyUnit, backingTokens);
+      store.updateBackingTokens(newPairs);
     };
   };
 };

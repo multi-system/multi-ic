@@ -832,9 +832,9 @@ describe("Multi Token Backing System", () => {
 
       // Test cases that verify supply unit alignment with backing ratios
       const testCases = [
-        { amount: BigInt(99), expected: "multiple of supply unit" }, // Just under supply unit
-        { amount: BigInt(101), expected: "multiple of supply unit" }, // Just over supply unit
-        { amount: BigInt(150), expected: "multiple of supply unit" }, // Between supply units
+        { amount: BigInt(99), expected: "divisible by supply unit" }, // Just under supply unit
+        { amount: BigInt(101), expected: "divisible by supply unit" }, // Just over supply unit
+        { amount: BigInt(150), expected: "divisible by supply unit" }, // Between supply units
       ];
 
       // Verify misaligned amounts return appropriate errors
@@ -942,7 +942,7 @@ describe("Multi Token Backing System", () => {
       const unalignedResult = await backend.redeem({ amount: BigInt(150) });
       expect(unalignedResult).toHaveProperty("InvalidAmount");
       expect(unalignedResult.InvalidAmount).toContain(
-        "multiple of supply unit",
+        "divisible by supply unit",
       );
 
       // 2. Test insufficient balance (more than total supply)
