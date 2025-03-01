@@ -3,8 +3,6 @@ import Array "mo:base/Array";
 import Result "mo:base/Result";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Debug "mo:base/Debug";
-
-// Import existing modules
 import Types "../types/BackingTypes";
 import VirtualAccounts "../ledger/VirtualAccounts";
 import BackingStore "../backing/BackingStore";
@@ -83,7 +81,6 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
     };
   };
 
-  // Initialize the API Helper lazily too
   private var apiHelper_ : ?BackingApiHelper.ApiHelper = null;
   private func getApiHelper() : BackingApiHelper.ApiHelper {
     switch (apiHelper_) {

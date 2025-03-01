@@ -2,8 +2,6 @@ import Principal "mo:base/Principal";
 import Array "mo:base/Array";
 import Result "mo:base/Result";
 import Debug "mo:base/Debug";
-
-// Import existing modules
 import Types "../types/BackingTypes";
 import Error "../error/Error";
 import BackingValidation "../backing/BackingValidation";
@@ -58,7 +56,6 @@ module {
 
           switch (tokenRegistry.approve(tokenInfo)) {
             case (#err(e)) {
-              // e is already an Error.ApprovalError, so we can return it directly
               return #err(e);
             };
             case (#ok()) {
