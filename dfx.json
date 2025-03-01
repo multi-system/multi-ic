@@ -1,12 +1,18 @@
 {
   "canisters": {
     "multi_backend": {
-      "main": "src/multi_backend/MultiToken.mo",
+      "main": "src/multi_backend/api/BackingApi.mo",
       "type": "motoko"
     },
+    "multi_token": {
+      "type": "custom",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/2e3589427cd9648d4edaebc1b96b5daf8fdd94d8/rs/rosetta-api/icrc1/ledger/ledger.did",
+      "wasm": "https://download.dfinity.systems/ic/2e3589427cd9648d4edaebc1b96b5daf8fdd94d8/canisters/ic-icrc1-ledger.wasm.gz"
+    },
     "governance_token": {
-      "main": "src/multi_backend/governance/GovernanceToken.mo",
-      "type": "motoko"
+      "type": "custom",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/2e3589427cd9648d4edaebc1b96b5daf8fdd94d8/rs/rosetta-api/icrc1/ledger/ledger.did",
+      "wasm": "https://download.dfinity.systems/ic/2e3589427cd9648d4edaebc1b96b5daf8fdd94d8/canisters/ic-icrc1-ledger.wasm.gz"
     },
     "token_a": {
       "type": "custom",

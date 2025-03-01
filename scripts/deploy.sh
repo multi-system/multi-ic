@@ -36,8 +36,8 @@ main() {
   print_green "=== Creating canisters ==="
   dfx canister create --all
 
-  # Deploy multi token
-  print_green "=== Deploying multi token canister ==="
+  # Deploy multi backend
+  print_green "=== Deploying multi backend canister ==="
   dfx deploy multi_backend
   print_info "Generating declarations for multi_backend..."
   dfx generate multi_backend
@@ -46,9 +46,61 @@ main() {
   export MULTI_BACKEND_ID=$(dfx canister id multi_backend)
   print_info "Exported MULTI_BACKEND_ID=${MULTI_BACKEND_ID}"
 
+  # Deploy multi token
+  print_green "=== Deploying multi token canister ==="
+  dfx deploy multi_token --argument "(variant {
+      Init = record {
+        token_name = \"Multi Token\";
+        token_symbol = \"MULTI\";
+        minting_account = record {
+          owner = principal \"${MULTI_BACKEND_ID}\";
+        };
+        initial_balances = vec {};
+        metadata = vec {};
+        transfer_fee = 10_000;
+        archive_options = record {
+          trigger_threshold = 2000;
+          num_blocks_to_archive = 1000;
+          controller_id = principal \"${MINTER}\";
+        };
+        feature_flags = opt record {
+          icrc2 = true;
+        };
+      }
+    })"
+  
+  print_info "Generating declarations for multi_token..."
+  dfx generate multi_token
+  
+  # Export multi token ID
+  export MULTI_TOKEN_ID=$(dfx canister id multi_token)
+  print_info "Exported MULTI_TOKEN_ID=${MULTI_TOKEN_ID}"
+
   # Deploy governance token
   print_green "=== Deploying governance token canister ==="
-  dfx deploy governance_token
+  dfx deploy governance_token --argument "(variant {
+      Init = record {
+        token_name = \"Foresight Token\";
+        token_symbol = \"FORESIGHT\";
+        minting_account = record {
+          owner = principal \"${MINTER}\";
+        };
+        initial_balances = vec {
+          record { record { owner = principal \"${MINTER}\"; }; 100_000_000_000_000; };
+          record { record { owner = principal \"${TEST_IDENTITY}\"; }; 100_000_000_000_000; };
+        };
+        metadata = vec {};
+        transfer_fee = 10_000;
+        archive_options = record {
+          trigger_threshold = 2000;
+          num_blocks_to_archive = 1000;
+          controller_id = principal \"${MINTER}\";
+        };
+        feature_flags = opt record {
+          icrc2 = true;
+        };
+      }
+    })"
   print_info "Generating declarations for governance_token..."
   dfx generate governance_token
 
