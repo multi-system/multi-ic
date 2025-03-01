@@ -36,7 +36,6 @@ module {
       true;
     };
 
-    // Private functions that trap
     private func validatePrincipals(principals : [Principal]) {
       if (not hasValidPrincipals(principals)) {
         Debug.trap("Invalid principal detected");

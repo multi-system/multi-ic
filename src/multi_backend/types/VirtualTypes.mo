@@ -9,11 +9,4 @@ module {
     token : Principal;
     amount : Nat;
   };
-
-  public type TransferError = {
-    #InsufficientBalance;
-    #InvalidAmount;
-    #InvalidPrincipal;
-    #Other : Text;
-  };
 };
