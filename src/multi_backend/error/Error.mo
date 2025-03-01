@@ -2,39 +2,40 @@ import Principal "mo:base/Principal";
 import Int "mo:base/Int";
 
 module {
+  // Common error structures
+  public type InsufficientBalanceError = {
+    token : Principal;
+    required : Nat;
+    balance : Nat;
+  };
+
   // Error type for initialization-related operations
   public type InitError = {
     #AlreadyInitialized;
-    #InsufficientBalance : {
-      token : Principal;
-      required : Nat;
-      balance : Nat;
-    };
     #InvalidSupplyUnit;
-    #TokenNotApproved : Principal;
     #Unauthorized;
+    #DuplicateToken : Principal;
+    #InvalidBackingUnit : Principal;
+    #TokenNotApproved : Principal;
+    #InvalidPrincipal : { principal : Principal; reason : Text };
   };
 
   public func initErrorMessage(error : InitError) : Text {
     switch (error) {
       case (#AlreadyInitialized) "System has already been initialized";
-      case (#InsufficientBalance({ token; required; balance })) "Insufficient balance for token " # Principal.toText(token) #
-      ": required " # Int.toText(required) #
-      " but only have " # Int.toText(balance);
-      case (#InvalidSupplyUnit) "Supply unit must be greater than zero and divide total supply evenly";
-      case (#TokenNotApproved(token)) "Token " # Principal.toText(token) # " has not been approved";
+      case (#InvalidSupplyUnit) "Supply unit must be greater than zero";
       case (#Unauthorized) "Caller is not authorized to perform this action";
+      case (#DuplicateToken(token)) "Duplicate token " # Principal.toText(token) # " in initialization config";
+      case (#InvalidBackingUnit(token)) "Backing unit for token " # Principal.toText(token) # " must be greater than zero";
+      case (#TokenNotApproved(token)) "Token " # Principal.toText(token) # " has not been approved";
+      case (#InvalidPrincipal({ principal; reason })) "Invalid principal " # Principal.toText(principal) # ": " # reason;
     };
   };
 
   // Error type for standard operations (issue, redeem, etc.)
   public type OperationError = {
     #NotInitialized;
-    #InsufficientBalance : {
-      token : Principal;
-      required : Nat;
-      balance : Nat;
-    };
+    #InsufficientBalance : InsufficientBalanceError;
     #InvalidAmount : {
       reason : Text;
       amount : Nat;
@@ -49,6 +50,8 @@ module {
       requestedChange : Nat;
       reason : Text;
     };
+    #TokenNotApproved : Principal;
+    #InvalidPrincipal : { principal : Principal; reason : Text };
   };
 
   public func operationErrorMessage(error : OperationError) : Text {
@@ -64,6 +67,8 @@ module {
       case (#InvalidSupplyChange({ currentSupply; requestedChange; reason })) "Invalid supply change: current supply " # Int.toText(currentSupply) #
       ", requested change " # Int.toText(requestedChange) #
       " - " # reason;
+      case (#TokenNotApproved(token)) "Token " # Principal.toText(token) # " has not been approved";
+      case (#InvalidPrincipal({ principal; reason })) "Invalid principal " # Principal.toText(principal) # ": " # reason;
     };
   };
 
@@ -73,6 +78,8 @@ module {
     #TokenAlreadyApproved : Principal;
     #Unauthorized;
     #LedgerError : Text;
+    #TokenNotApproved : Principal;
+    #InvalidPrincipal : { principal : Principal; reason : Text };
   };
 
   public func approvalErrorMessage(error : ApprovalError) : Text {
@@ -81,21 +88,20 @@ module {
       case (#TokenAlreadyApproved(token)) "Token " # Principal.toText(token) # " is already approved";
       case (#Unauthorized) "Only the owner can approve tokens";
       case (#LedgerError(msg)) "Ledger operation failed: " # msg;
+      case (#TokenNotApproved(token)) "Token " # Principal.toText(token) # " has not been approved";
+      case (#InvalidPrincipal({ principal; reason })) "Invalid token principal " # Principal.toText(principal) # ": " # reason;
     };
   };
 
   // Error type for virtual account operations
   public type TransferError = {
-    #InsufficientBalance : {
-      token : Principal;
-      required : Nat;
-      balance : Nat;
-    };
+    #InsufficientBalance : InsufficientBalanceError;
     #TokenNotSupported : Principal;
     #TransferFailed : {
       token : Principal;
       error : Text;
     };
+    #InvalidPrincipal : { principal : Principal; reason : Text };
   };
 
   public func transferErrorMessage(error : TransferError) : Text {
@@ -105,6 +111,7 @@ module {
       " but only have " # Int.toText(balance);
       case (#TokenNotSupported(token)) "Token " # Principal.toText(token) # " is not supported";
       case (#TransferFailed({ token; error })) "Transfer failed for token " # Principal.toText(token) # ": " # error;
+      case (#InvalidPrincipal({ principal; reason })) "Invalid principal " # Principal.toText(principal) # ": " # reason;
     };
   };
 };
