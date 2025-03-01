@@ -95,6 +95,8 @@ export const TOKEN_A = getCanisterId("token_a");
 export const TOKEN_B = getCanisterId("token_b");
 export const TOKEN_C = getCanisterId("token_c");
 export const MULTI_BACKEND_ID = getCanisterId("multi_backend");
+export const MULTI_TOKEN_ID = getCanisterId("multi_token");
+export const GOVERNANCE_TOKEN_ID = getCanisterId("governance_token");
 
 // Token actor creation functions
 export function tokenA(identity?: Identity) {
@@ -111,6 +113,18 @@ export function tokenB(identity?: Identity) {
 
 export function tokenC(identity?: Identity) {
   return createActor<TokenService>(TOKEN_C, tokenIdl, {
+    agent: createAgent(identity),
+  });
+}
+
+export function multiToken(identity?: Identity) {
+  return createActor<TokenService>(MULTI_TOKEN_ID, tokenIdl, {
+    agent: createAgent(identity),
+  });
+}
+
+export function governanceToken(identity?: Identity) {
+  return createActor<TokenService>(GOVERNANCE_TOKEN_ID, tokenIdl, {
     agent: createAgent(identity),
   });
 }
