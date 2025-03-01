@@ -5,8 +5,63 @@ import Text "mo:base/Text";
 import Error "./Error";
 import Messages "../api/Messages";
 
+/**
+ * Error Mapping Module
+ *
+ * This module defines a systematic approach to error codes in the Foresight/Multi system.
+ *
+ * Error Code Format: Each error code follows a hierarchical numbering system
+ * where the first digit identifies the subsystem responsible for the error,
+ * and the last 3 digits identify the specific error within that subsystem.
+ *
+ * Error Code Ranges:
+ * - 1xxx: Token Registry and Management
+ *   - 1001-1099: Token registry operations
+ *   - 1101-1199: Token approval operations
+ *
+ * - 2xxx: Core System
+ *   - 2001-2099: Initialization state
+ *   - 2101-2199: Configuration validation
+ *
+ * - 3xxx: BackingApi Operations
+ *   - 3001-3099: General backing operations
+ *   - 3101-3199: Value or balance related errors
+ *   - 3201-3299: Supply management errors
+ *
+ * - 4xxx: Virtual Account System
+ *   - 4001-4099: Balance operations
+ *   - 4101-4199: Transfer operations
+ *
+ * - 5xxx: External Ledger Interactions
+ *   - 5001-5099: Communication errors
+ *   - 5101-5199: Operation errors
+ *
+ * - 6xxx: Competition System (Future)
+ *   - 6001-6099: Competition lifecycle
+ *   - 6101-6199: Stake submission
+ *   - 6201-6299: Settlement phase
+ *   - 6301-6399: Performance calculation
+ *   - 6401-6499: Reward distribution
+ *
+ * - 7xxx: Market Stabilizer (Future)
+ *   - 7001-7099: Order matching
+ *   - 7101-7199: Exchange ratio
+ *   - 7201-7299: Price discovery
+ *   - 7301-7399: Reserve ratio maintenance
+ *
+ * - 8xxx: Governance Operations (Future)
+ *   - 8001-8099: Parameter management
+ *   - 8101-8199: Voting and proposals
+ *
+ * - 9xxx: System-wide errors
+ *   - 9001-9099: Authorization errors
+ *   - 9901-9999: Unexpected errors and catch-alls
+ */
 module {
-  // Common error code constants
+  // Token Registry errors
+  private let _ERROR_TOKEN_NOT_APPROVED : Nat = 1101;
+  private let _ERROR_TOKEN_ALREADY_APPROVED : Nat = 1102;
+
   // Core System errors
   private let _ERROR_ALREADY_INITIALIZED : Nat = 2001;
   private let _ERROR_NOT_INITIALIZED : Nat = 2002;
@@ -14,10 +69,6 @@ module {
   private let ERROR_INVALID_BACKING_UNIT : Nat = 2102;
   private let ERROR_DUPLICATE_TOKEN : Nat = 2103;
   private let ERROR_INVALID_PRINCIPAL : Nat = 2104;
-
-  // Token Registry errors
-  private let _ERROR_TOKEN_NOT_APPROVED : Nat = 1101;
-  private let _ERROR_TOKEN_ALREADY_APPROVED : Nat = 1102;
 
   // Authorization
   private let _ERROR_UNAUTHORIZED : Nat = 9001;
@@ -28,15 +79,15 @@ module {
   private let ERROR_BACKING_UNIT_ZERO : Nat = 3103;
   private let _ERROR_INVALID_SUPPLY_CHANGE : Nat = 3201;
 
+  // Virtual Account errors
+  private let ERROR_TRANSFER_FAILED : Nat = 4101;
+  private let ERROR_TOKEN_NOT_SUPPORTED : Nat = 4001;
+
   // External Ledger errors
   private let _ERROR_LEDGER_ERROR : Nat = 5001;
   private let _ERROR_LEDGER_COMMUNICATION : Nat = 5002;
   private let _ERROR_LEDGER_TRANSFER : Nat = 5101;
   private let _ERROR_LEDGER_ALLOWANCE : Nat = 5102;
-
-  // Virtual Account errors
-  private let ERROR_TRANSFER_FAILED : Nat = 4101;
-  private let ERROR_TOKEN_NOT_SUPPORTED : Nat = 4001;
 
   // Catch-all
   private let ERROR_UNEXPECTED : Nat = 9999;
