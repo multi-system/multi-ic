@@ -5,7 +5,7 @@ import Nat "mo:base/Nat";
 import Buffer "mo:base/Buffer";
 import Array "mo:base/Array";
 import Types "../types/BackingTypes";
-import Error "../types/Error";
+import Error "../error/Error";
 import VirtualAccounts "../ledger/VirtualAccounts";
 import BackingMath "./BackingMath";
 import BackingStore "./BackingStore";
@@ -17,49 +17,19 @@ module {
     virtualAccounts : VirtualAccounts.VirtualAccountManager,
     systemAccount : Principal,
   ) {
-    public func approveToken(caller : Principal, tokenInfo : Types.TokenInfo) : Result.Result<(), Error.ApprovalError> {
-      switch (BackingValidation.validateTokenApproval(tokenInfo, store)) {
-        case (#err(e)) return #err(e);
-        case (#ok()) {
-          store.addBackingToken(tokenInfo);
-          #ok(());
-        };
-      };
-    };
 
     public func processInitialize(
       caller : Principal,
-      initialAmounts : [(Principal, Nat)],
+      backingTokens : [Types.BackingPair],
       supplyUnit : Nat,
-      initialSupply : Nat,
       multiToken : Types.TokenInfo,
+      governanceToken : Types.TokenInfo,
     ) : Result.Result<(), Error.InitError> {
-      switch (BackingValidation.validateInitialization(supplyUnit, initialSupply, store)) {
+      switch (BackingValidation.validateInitialization(supplyUnit, backingTokens, store)) {
         case (#err(e)) return #err(e);
-        case (#ok()) {};
-      };
-
-      switch (BackingValidation.validateInitialAmounts(initialAmounts, store.getBackingTokens(), caller, virtualAccounts)) {
-        case (#err(e)) return #err(e);
-        case (#ok(transfers)) {
-          // First initialize the store
-          store.initialize(supplyUnit, initialSupply, multiToken);
-
-          // Then execute validated transfers
-          for ((tokenId, amount) in transfers.vals()) {
-            virtualAccounts.transfer({
-              from = caller;
-              to = systemAccount;
-              token = tokenId;
-              amount = amount;
-            });
-          };
-
-          // Update ratios after transfers
-          updateBackingRatios();
-
-          // Finally mint multi tokens
-          virtualAccounts.mint(caller, multiToken.canisterId, initialSupply);
+        case (#ok()) {
+          store.initialize(supplyUnit, multiToken, governanceToken);
+          store.updateBackingTokens(backingTokens);
           #ok(());
         };
       };
@@ -79,7 +49,6 @@ module {
       ) {
         case (#err(e)) return #err(e);
         case (#ok(transfers)) {
-          // Execute backing token transfers
           for ((tokenId, amount) in transfers.vals()) {
             virtualAccounts.transfer({
               from = caller;
@@ -89,10 +58,7 @@ module {
             });
           };
 
-          // Mint multi tokens after backing tokens are received
           virtualAccounts.mint(caller, config.multiToken.canisterId, amount);
-
-          // Update supply
           store.updateTotalSupply(store.getTotalSupply() + amount);
           #ok(());
         };
@@ -102,13 +68,16 @@ module {
     public func processRedeem(caller : Principal, amount : Nat) : Result.Result<(), Error.OperationError> {
       let config = store.getConfig();
 
-      // First validate multi token balance
+      switch (BackingValidation.validateRedeemAmount(amount, store.getTotalSupply(), store.getSupplyUnit())) {
+        case (#err(e)) return #err(e);
+        case (#ok()) {};
+      };
+
       switch (BackingValidation.validateRedeemBalance(amount, caller, config.multiToken.canisterId, virtualAccounts)) {
         case (#err(e)) return #err(e);
         case (#ok()) {};
       };
 
-      // Then validate backing tokens
       switch (
         BackingValidation.validateBackingTokenTransfer(
           amount,
@@ -120,7 +89,6 @@ module {
       ) {
         case (#err(e)) return #err(e);
         case (#ok(transfers)) {
-          // First transfer backing tokens
           for ((tokenId, amount) in transfers.vals()) {
             virtualAccounts.transfer({
               from = systemAccount;
@@ -130,10 +98,7 @@ module {
             });
           };
 
-          // Then burn multi tokens
           virtualAccounts.burn(caller, config.multiToken.canisterId, amount);
-
-          // Update supply
           store.updateTotalSupply(store.getTotalSupply() - amount);
           #ok(());
         };

@@ -9,11 +9,11 @@ suite(
   func() {
     let token1Principal = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
     let multiTokenPrincipal = Principal.fromText("qhbym-qaaaa-aaaaa-aaafq-cai");
+    let govTokenPrincipal = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
 
     let token1Info : Types.TokenInfo = { canisterId = token1Principal };
-    let multiTokenInfo : Types.TokenInfo = {
-      canisterId = multiTokenPrincipal;
-    };
+    let multiTokenInfo : Types.TokenInfo = { canisterId = multiTokenPrincipal };
+    let govTokenInfo : Types.TokenInfo = { canisterId = govTokenPrincipal };
 
     let createStore = func() : BackingStore.BackingStore {
       let state : Types.BackingState = {
@@ -23,6 +23,7 @@ suite(
           totalSupply = 0;
           backingPairs = [];
           multiToken = { canisterId = Principal.fromText("aaaaa-aa") };
+          governanceToken = { canisterId = Principal.fromText("aaaaa-aa") };
         };
       };
       BackingStore.BackingStore(state);
@@ -44,11 +45,12 @@ suite(
       "initializes state correctly",
       func() {
         let store = createStore();
-        store.initialize(100, 1000, multiTokenInfo);
+        store.initialize(100, multiTokenInfo, govTokenInfo);
         assert store.hasInitialized();
         assert store.getSupplyUnit() == 100;
-        assert store.getTotalSupply() == 1000;
+        assert store.getTotalSupply() == 0;
         assert Principal.equal(store.getConfig().multiToken.canisterId, multiTokenPrincipal);
+        assert Principal.equal(store.getConfig().governanceToken.canisterId, govTokenPrincipal);
       },
     );
 

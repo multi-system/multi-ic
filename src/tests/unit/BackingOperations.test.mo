@@ -7,7 +7,9 @@ import BackingOperations "../../multi_backend/backing/BackingOperations";
 import VirtualAccounts "../../multi_backend/ledger/VirtualAccounts";
 import BackingMath "../../multi_backend/backing/BackingMath";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
-import Error "../../multi_backend/types/Error";
+import Error "../../multi_backend/error/Error";
+import Result "mo:base/Result";
+import BackingValidation "../../multi_backend/backing/BackingValidation";
 
 suite(
   "Backing Operations",
@@ -16,11 +18,27 @@ suite(
     let tokenB = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
     let systemAccount = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
     let multiTokenLedger = Principal.fromText("qhbym-qaaaa-aaaaa-aaafq-cai");
+    let govTokenLedger = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
     let caller = Principal.fromText("aaaaa-aa");
 
     let tokenAInfo : Types.TokenInfo = { canisterId = tokenA };
     let tokenBInfo : Types.TokenInfo = { canisterId = tokenB };
     let multiTokenInfo : Types.TokenInfo = { canisterId = multiTokenLedger };
+    let govTokenInfo : Types.TokenInfo = { canisterId = govTokenLedger };
+
+    let approveToken = func(
+      store : BackingStore.BackingStore,
+      caller : Principal,
+      tokenInfo : Types.TokenInfo,
+    ) : Result.Result<(), Error.ApprovalError> {
+      switch (BackingValidation.validateTokenApproval(tokenInfo, store)) {
+        case (#err(e)) return #err(e);
+        case (#ok()) {
+          store.addBackingToken(tokenInfo);
+          return #ok(());
+        };
+      };
+    };
 
     let createTestEnv = func() : (BackingStore.BackingStore, BackingOperations.BackingOperationsImpl, VirtualAccounts.VirtualAccountManager) {
       let state : Types.BackingState = {
@@ -30,6 +48,7 @@ suite(
           totalSupply = 0;
           backingPairs = [];
           multiToken = { canisterId = Principal.fromText("aaaaa-aa") };
+          governanceToken = { canisterId = Principal.fromText("aaaaa-aa") };
         };
       };
 
@@ -54,7 +73,6 @@ suite(
       initialAmountB : Nat,
       redeemToZero : Bool,
     ) {
-      // Clear any existing balances by burning them
       let existingBalanceA = va.getBalance(caller, tokenA);
       let existingBalanceB = va.getBalance(caller, tokenB);
 
@@ -65,28 +83,45 @@ suite(
         va.burn(caller, tokenB, existingBalanceB);
       };
 
-      // Mint fresh amounts
       va.mint(caller, tokenA, initialAmountA);
       va.mint(caller, tokenB, initialAmountB);
 
-      assert (ops.approveToken(caller, tokenAInfo) == #ok());
-      assert (ops.approveToken(caller, tokenBInfo) == #ok());
+      assert (approveToken(store, caller, tokenAInfo) == #ok());
+      assert (approveToken(store, caller, tokenBInfo) == #ok());
 
-      let initialAmounts = [
-        (tokenA, initialAmountA),
-        (tokenB, initialAmountB),
+      let backingPairs = [
+        {
+          tokenInfo = tokenAInfo;
+          backingUnit = initialAmountA / 10;
+        },
+        {
+          tokenInfo = tokenBInfo;
+          backingUnit = initialAmountB / 10;
+        },
       ];
 
-      assert (ops.processInitialize(caller, initialAmounts, 100, 1000, multiTokenInfo) == #ok());
-      let multiBalance = va.getBalance(caller, multiTokenLedger);
-      assert (multiBalance == 1000);
+      assert (ops.processInitialize(caller, backingPairs, 100, multiTokenInfo, govTokenInfo) == #ok());
+
+      va.transfer({
+        from = caller;
+        to = systemAccount;
+        token = tokenA;
+        amount = initialAmountA;
+      });
+      va.transfer({
+        from = caller;
+        to = systemAccount;
+        token = tokenB;
+        amount = initialAmountB;
+      });
+      va.mint(caller, multiTokenLedger, 1000);
+      store.updateTotalSupply(1000);
 
       if (redeemToZero) {
         assert (va.getBalance(caller, multiTokenLedger) == 1000);
         assert (ops.processRedeem(caller, 1000) == #ok());
         assert (store.getTotalSupply() == 0);
 
-        // Clear remaining balances after redeem
         let remainingBalanceA = va.getBalance(caller, tokenA);
         let remainingBalanceB = va.getBalance(caller, tokenB);
 
@@ -104,16 +139,29 @@ suite(
       func() {
         let (store, ops, va) = createTestEnv();
 
-        assert (ops.approveToken(caller, tokenAInfo) == #ok());
+        assert (approveToken(store, caller, tokenAInfo) == #ok());
         va.mint(caller, tokenA, 1000);
 
-        let initialAmounts = [(tokenA, 1000)];
+        let backingPairs = [{
+          tokenInfo = tokenAInfo;
+          backingUnit = 10;
+        }];
 
-        switch (ops.processInitialize(caller, initialAmounts, 100, 1000, multiTokenInfo)) {
+        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenInfo, govTokenInfo)) {
           case (#err(e)) { assert false };
           case (#ok()) {
             assert (store.getSupplyUnit() == 100);
-            assert (store.getTotalSupply() == 1000);
+            assert (store.getTotalSupply() == 0);
+
+            va.transfer({
+              from = caller;
+              to = systemAccount;
+              token = tokenA;
+              amount = 1000;
+            });
+            va.mint(caller, multiTokenLedger, 1000);
+            store.updateTotalSupply(1000);
+
             assert (va.getBalance(systemAccount, tokenA) == 1000);
             assert (va.getBalance(caller, multiTokenLedger) == 1000);
           };
@@ -126,12 +174,17 @@ suite(
       func() {
         let (store, ops, va) = createTestEnv();
 
-        assert (ops.approveToken(caller, tokenAInfo) == #ok());
+        assert (approveToken(store, caller, tokenAInfo) == #ok());
         va.mint(caller, tokenA, 1000);
-        let initialAmounts = [(tokenA, 1000)];
-        assert (ops.processInitialize(caller, initialAmounts, 100, 1000, multiTokenInfo) == #ok());
 
-        switch (ops.processInitialize(caller, initialAmounts, 100, 1000, multiTokenInfo)) {
+        let backingPairs = [{
+          tokenInfo = tokenAInfo;
+          backingUnit = 10;
+        }];
+
+        assert (ops.processInitialize(caller, backingPairs, 100, multiTokenInfo, govTokenInfo) == #ok());
+
+        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenInfo, govTokenInfo)) {
           case (#err(#AlreadyInitialized)) {};
           case _ { assert false };
         };
@@ -145,9 +198,13 @@ suite(
         let unauthorizedToken = Principal.fromText("aaaaa-aa");
 
         va.mint(caller, unauthorizedToken, 1000);
-        let initialAmounts = [(unauthorizedToken, 1000)];
 
-        switch (ops.processInitialize(caller, initialAmounts, 100, 1000, multiTokenInfo)) {
+        let backingPairs = [{
+          tokenInfo = { canisterId = unauthorizedToken };
+          backingUnit = 10;
+        }];
+
+        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenInfo, govTokenInfo)) {
           case (#err(#TokenNotApproved(token))) {
             assert Principal.equal(token, unauthorizedToken);
           };
@@ -157,20 +214,21 @@ suite(
     );
 
     test(
-      "fails to initialize with insufficient balance",
+      "fails to initialize with zero backing unit",
       func() {
         let (store, ops, va) = createTestEnv();
 
-        assert (ops.approveToken(caller, tokenAInfo) == #ok());
+        assert (approveToken(store, caller, tokenAInfo) == #ok());
         va.mint(caller, tokenA, 500);
 
-        let initialAmounts = [(tokenA, 1000)];
+        let backingPairs = [{
+          tokenInfo = tokenAInfo;
+          backingUnit = 0;
+        }];
 
-        switch (ops.processInitialize(caller, initialAmounts, 100, 1000, multiTokenInfo)) {
-          case (#err(#InsufficientBalance({ token; required; balance }))) {
+        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenInfo, govTokenInfo)) {
+          case (#err(#InvalidBackingUnit(token))) {
             assert Principal.equal(token, tokenA);
-            assert required == 1000;
-            assert balance == 500;
           };
           case _ { assert false };
         };
@@ -178,16 +236,19 @@ suite(
     );
 
     test(
-      "fails to initialize with invalid supply unit ratio",
+      "fails to initialize with zero supply unit",
       func() {
         let (store, ops, va) = createTestEnv();
 
-        assert (ops.approveToken(caller, tokenAInfo) == #ok());
+        assert (approveToken(store, caller, tokenAInfo) == #ok());
         va.mint(caller, tokenA, 1000);
 
-        let initialAmounts = [(tokenA, 1000)];
+        let backingPairs = [{
+          tokenInfo = tokenAInfo;
+          backingUnit = 10;
+        }];
 
-        switch (ops.processInitialize(caller, initialAmounts, 100, 150, multiTokenInfo)) {
+        switch (ops.processInitialize(caller, backingPairs, 0, multiTokenInfo, govTokenInfo)) {
           case (#err(#InvalidSupplyUnit)) {};
           case _ { assert false };
         };
@@ -290,11 +351,9 @@ suite(
         let (store, ops, va) = createTestEnv();
         setupSystem(store, ops, va, 1000, 500, true);
 
-        // Initial state setup with proper backing
-        va.mint(caller, tokenA, 400); // Initial reserve for Token A
-        va.mint(caller, tokenB, 200); // Initial reserve for Token B
+        va.mint(caller, tokenA, 400);
+        va.mint(caller, tokenB, 200);
 
-        // 1. First issue sets up our reserve quantities
         assert (ops.processIssue(caller, 200) == #ok());
 
         let initialTokens = store.getBackingTokens();
@@ -303,49 +362,40 @@ suite(
         assert (va.getBalance(systemAccount, tokenA) == 200);
         assert (va.getBalance(systemAccount, tokenB) == 100);
 
-        // 2. Process supply increase (which decreases backing ratios since tokens are spread thinner)
         switch (ops.processSupplyIncrease(400)) {
           case (#err(e)) { assert false };
           case (#ok()) {
             let backingTokens = store.getBackingTokens();
-            // Verify new backing units decreased due to higher supply
-            assert backingTokens[0].backingUnit == 33; // 200/6 = 33 (decreased from 100)
-            assert backingTokens[1].backingUnit == 16; // 100/6 = 16 (decreased from 50)
+            assert backingTokens[0].backingUnit == 33;
+            assert backingTokens[1].backingUnit == 16;
           };
         };
 
-        // 3. Issue with new lower ratios
         assert (ops.processIssue(caller, 100) == #ok());
 
-        // Verify transfers used new lower ratios
-        assert va.getBalance(caller, tokenA) == 167; // 200 - 33
-        assert va.getBalance(caller, tokenB) == 84; // 100 - 16
-        assert va.getBalance(systemAccount, tokenA) == 233; // 200 + 33
-        assert va.getBalance(systemAccount, tokenB) == 116; // 100 + 16
+        assert va.getBalance(caller, tokenA) == 167;
+        assert va.getBalance(caller, tokenB) == 84;
+        assert va.getBalance(systemAccount, tokenA) == 233;
+        assert va.getBalance(systemAccount, tokenB) == 116;
 
-        // 4. Process supply decrease (which increases backing ratios)
         switch (ops.processSupplyDecrease(300)) {
           case (#err(e)) { assert false };
           case (#ok()) {
             let backingTokens = store.getBackingTokens();
-            // Verify new backing units increased due to lower supply
-            assert backingTokens[0].backingUnit == 58; // 233/4 = 58 (increased from 33)
-            assert backingTokens[1].backingUnit == 29; // 116/4 = 29 (increased from 16)
+            assert backingTokens[0].backingUnit == 58;
+            assert backingTokens[1].backingUnit == 29;
           };
         };
 
-        // 5. Redeem with new higher ratios
         assert (ops.processRedeem(caller, 100) == #ok());
 
-        // Verify transfers used new higher ratios
-        assert va.getBalance(caller, tokenA) == 225; // 167 + 58
-        assert va.getBalance(caller, tokenB) == 113; // 84 + 29
-        assert va.getBalance(systemAccount, tokenA) == 175; // 233 - 58
-        assert va.getBalance(systemAccount, tokenB) == 87; // 116 - 29
+        assert va.getBalance(caller, tokenA) == 225;
+        assert va.getBalance(caller, tokenB) == 113;
+        assert va.getBalance(systemAccount, tokenA) == 175;
+        assert va.getBalance(systemAccount, tokenB) == 87;
 
-        // Verify ratios maintained throughout
         let finalTokens = store.getBackingTokens();
-        assert (finalTokens[0].backingUnit / finalTokens[1].backingUnit == 2); // Original ratio maintained
+        assert (finalTokens[0].backingUnit / finalTokens[1].backingUnit == 2);
       },
     );
 
@@ -355,7 +405,6 @@ suite(
         let (store, ops, va) = createTestEnv();
         setupSystem(store, ops, va, 1000, 500, true);
 
-        // Test 1: Cannot decrease supply when at zero
         switch (ops.processSupplyDecrease(100)) {
           case (#err(#InvalidSupplyChange({ currentSupply; requestedChange; reason }))) {
             assert currentSupply == 0;
@@ -365,19 +414,15 @@ suite(
           case _ { assert false };
         };
 
-        // Mint tokens for testing
         va.mint(caller, tokenA, 400);
         va.mint(caller, tokenB, 200);
 
-        // Test 2: Issue some tokens to test with
         assert (ops.processIssue(caller, 200) == #ok());
 
-        // Verify initial ratios
         let initialTokens = store.getBackingTokens();
         assert initialTokens[0].backingUnit == 100;
         assert initialTokens[1].backingUnit == 50;
 
-        // Test 3: Cannot decrease by non-aligned amount
         switch (ops.processSupplyDecrease(150)) {
           case (#err(#InvalidAmount({ reason; amount }))) {
             assert reason == "Amount must be divisible by supply unit";
@@ -386,16 +431,13 @@ suite(
           case _ { assert false };
         };
 
-        // Test 4: Large supply increase
         assert (ops.processSupplyIncrease(1000) == #ok());
         let afterIncreaseTokens = store.getBackingTokens();
-        assert afterIncreaseTokens[0].backingUnit == 16; // 200/12 = 16
-        assert afterIncreaseTokens[1].backingUnit == 8; // 100/12 = 8
+        assert afterIncreaseTokens[0].backingUnit == 16;
+        assert afterIncreaseTokens[1].backingUnit == 8;
 
-        // Verify ratios maintained
         assert (afterIncreaseTokens[0].backingUnit / afterIncreaseTokens[1].backingUnit == 2);
 
-        // Verify system balances remained consistent
         assert (va.getBalance(systemAccount, tokenA) == 200);
         assert (va.getBalance(systemAccount, tokenB) == 100);
       },

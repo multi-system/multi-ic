@@ -5,7 +5,7 @@ import Types "../../multi_backend/types/BackingTypes";
 import BackingValidation "../../multi_backend/backing/BackingValidation";
 import VirtualAccounts "../../multi_backend/ledger/VirtualAccounts";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
-import Error "../../multi_backend/types/Error";
+import Error "../../multi_backend/error/Error";
 import Result "mo:base/Result";
 
 suite(
@@ -14,6 +14,7 @@ suite(
     let alice = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
     let tokenA = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
     let tokenB = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
+    let govToken = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
 
     var hasInitializedValue = false;
     var backingTokens : [Types.BackingPair] = [];
@@ -22,6 +23,7 @@ suite(
       totalSupply = 0;
       backingPairs = [];
       multiToken = { canisterId = Principal.fromText("aaaaa-aa") };
+      governanceToken = { canisterId = govToken };
     };
 
     let mockStore = {
@@ -80,53 +82,103 @@ suite(
       "validates initialization",
       func() {
         hasInitializedValue := false;
-        backingTokens := [{
-          tokenInfo = { canisterId = tokenA };
-          backingUnit = 100;
-        }];
+
+        // Add tokens to the backing tokens list so they are "approved"
+        backingTokens := [
+          {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 10; // Some value, not important for approval check
+          },
+          {
+            tokenInfo = { canisterId = tokenB };
+            backingUnit = 10; // Some value, not important for approval check
+          },
+        ];
 
         // Test valid initialization
-        assert (BackingValidation.validateInitialization(100, 1000, mockStore) == #ok());
+        let validTokens = [
+          {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 100;
+          },
+          {
+            tokenInfo = { canisterId = tokenB };
+            backingUnit = 50;
+          },
+        ];
+
+        assert (BackingValidation.validateInitialization(100, validTokens, mockStore) == #ok());
+
+        // Reset backingTokens for other test cases to maintain consistent state
+        backingTokens := [
+          {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 10;
+          },
+          {
+            tokenInfo = { canisterId = tokenB };
+            backingUnit = 10;
+          },
+        ];
 
         // Test with zero supply unit
-        switch (BackingValidation.validateInitialization(0, 1000, mockStore)) {
+        switch (BackingValidation.validateInitialization(0, validTokens, mockStore)) {
           case (#ok()) { assert false };
           case (#err(#InvalidSupplyUnit)) {};
           case (#err(_)) { assert false };
         };
-      },
-    );
 
-    test(
-      "validates initial amounts",
-      func() {
-        let initVAState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
-        let virtualAccounts = VirtualAccounts.VirtualAccountManager(initVAState);
+        // Test with zero backing unit
+        let invalidTokens = [
+          {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 0; // Invalid backing unit
+          },
+          {
+            tokenInfo = { canisterId = tokenB };
+            backingUnit = 50;
+          },
+        ];
 
-        backingTokens := [{
-          tokenInfo = { canisterId = tokenA };
-          backingUnit = 100;
-        }];
-
-        // Test with insufficient balance
-        let initialAmounts = [(tokenA, 1000)];
-        switch (BackingValidation.validateInitialAmounts(initialAmounts, backingTokens, alice, virtualAccounts)) {
-          case (#ok(_)) { assert false };
-          case (#err(#InsufficientBalance({ token; required; balance }))) {
+        switch (BackingValidation.validateInitialization(100, invalidTokens, mockStore)) {
+          case (#ok()) { assert false };
+          case (#err(#InvalidBackingUnit(token))) {
             assert Principal.equal(token, tokenA);
-            assert required == 1000;
-            assert balance == 0;
           };
           case (#err(_)) { assert false };
         };
 
-        // Test with sufficient balance
-        virtualAccounts.mint(alice, tokenA, 1000);
-        switch (BackingValidation.validateInitialAmounts(initialAmounts, backingTokens, alice, virtualAccounts)) {
-          case (#ok(transfers)) {
-            assert transfers.size() == 1;
-            assert Principal.equal(transfers[0].0, tokenA);
-            assert transfers[0].1 == 1000;
+        // Test with duplicate tokens
+        let duplicateTokens = [
+          {
+            tokenInfo = { canisterId = tokenA };
+            backingUnit = 100;
+          },
+          {
+            tokenInfo = { canisterId = tokenA }; // Duplicate token
+            backingUnit = 50;
+          },
+        ];
+
+        switch (BackingValidation.validateInitialization(100, duplicateTokens, mockStore)) {
+          case (#ok()) { assert false };
+          case (#err(#DuplicateToken(token))) {
+            assert Principal.equal(token, tokenA);
+          };
+          case (#err(_)) { assert false };
+        };
+
+        // Add test for unapproved token
+        let unapprovedToken = Principal.fromText("aaaaa-aa");
+        let unapprovedTokens = [{
+          tokenInfo = { canisterId = unapprovedToken };
+          backingUnit = 100;
+        }];
+
+        switch (BackingValidation.validateInitialization(100, unapprovedTokens, mockStore)) {
+          case (#ok()) { assert false };
+          case (#err(#TokenNotApproved(token))) {
+            assert Principal.equal(token, unapprovedToken);
           };
           case (#err(_)) { assert false };
         };

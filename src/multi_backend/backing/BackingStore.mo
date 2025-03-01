@@ -1,7 +1,7 @@
 import Principal "mo:base/Principal";
 import Array "mo:base/Array";
 import Types "../types/BackingTypes";
-import Error "../types/Error";
+import Error "../error/Error";
 
 module {
   public class BackingStore(state : Types.BackingState) {
@@ -18,14 +18,15 @@ module {
 
     public func initialize(
       supplyUnit : Nat,
-      initialSupply : Nat,
       multiToken : Types.TokenInfo,
+      governanceToken : Types.TokenInfo,
     ) {
       state.config := {
         state.config with
         supplyUnit = supplyUnit;
-        totalSupply = initialSupply;
+        totalSupply = 0;
         multiToken = multiToken;
+        governanceToken = governanceToken;
       };
       state.hasInitialized := true;
     };
