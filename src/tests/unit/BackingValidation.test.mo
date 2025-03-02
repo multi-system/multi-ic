@@ -186,7 +186,7 @@ suite(
       "validates backing token transfer",
       func() {
         let initVAState = StableHashMap.init<Principal, AccountTypes.BalanceMap>();
-        let virtualAccounts = VirtualAccounts.VirtualAccountManager(initVAState);
+        let virtualAccounts = VirtualAccounts.VirtualAccounts(initVAState);
 
         backingTokens := [{
           token = tokenA;
@@ -239,7 +239,7 @@ suite(
       "validates redeem balance",
       func() {
         let initVAState = StableHashMap.init<Principal, AccountTypes.BalanceMap>();
-        let virtualAccounts = VirtualAccounts.VirtualAccountManager(initVAState);
+        let virtualAccounts = VirtualAccounts.VirtualAccounts(initVAState);
 
         // Test with insufficient balance
         switch (BackingValidation.validateRedeemBalance(100, alice, tokenA, virtualAccounts)) {

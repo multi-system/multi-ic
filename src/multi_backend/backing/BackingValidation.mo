@@ -52,7 +52,7 @@ module {
     principal : Types.Account,
     token : Types.Token,
     requiredAmount : Nat,
-    virtualAccounts : VirtualAccounts.VirtualAccountManager,
+    virtualAccounts : VirtualAccounts.VirtualAccounts,
     makeError : (Error.InsufficientBalanceError) -> E,
   ) : Result.Result<Nat, E> {
     let balance = virtualAccounts.getBalance(principal, token);
@@ -152,7 +152,7 @@ module {
     from : Types.Account,
     supplyUnit : Nat,
     backingTokens : [BackingTypes.BackingPair],
-    virtualAccounts : VirtualAccounts.VirtualAccountManager,
+    virtualAccounts : VirtualAccounts.VirtualAccounts,
   ) : Result.Result<[(Types.Token, Nat)], Error.OperationError> {
     switch (validateSupplyUnitDivisible(amount, supplyUnit)) {
       case (#err(e)) return #err(e);
@@ -204,7 +204,7 @@ module {
     amount : Nat,
     caller : Types.Account,
     multiToken : Types.Token,
-    virtualAccounts : VirtualAccounts.VirtualAccountManager,
+    virtualAccounts : VirtualAccounts.VirtualAccounts,
   ) : Result.Result<(), Error.OperationError> {
     switch (
       checkSufficientBalance<Error.OperationError>(

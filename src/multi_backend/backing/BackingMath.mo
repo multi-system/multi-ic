@@ -26,7 +26,7 @@ module {
     totalSupply : Nat,
     supplyUnit : Nat,
     backingPairs : [BackingTypes.BackingPair],
-    virtualAccounts : VirtualAccounts.VirtualAccountManager,
+    virtualAccounts : VirtualAccounts.VirtualAccounts,
     systemAccount : Types.Account,
   ) : [Nat] {
     let eta = calculateEta(totalSupply, supplyUnit);

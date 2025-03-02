@@ -8,7 +8,7 @@ import AccountTypes "../types/AccountTypes";
 import TransferTypes "../types/TransferTypes";
 
 module {
-  public class VirtualAccountManager(initialState : AccountTypes.AccountMap) {
+  public class VirtualAccounts(initialState : AccountTypes.AccountMap) {
     private let accounts = initialState;
 
     // Public testable validations that return bools

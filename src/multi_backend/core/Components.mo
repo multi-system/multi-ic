@@ -4,37 +4,37 @@ import BackingStore "../backing/BackingStore";
 import BackingOperations "../backing/BackingOperations";
 import TokenRegistry "../token/TokenRegistry";
 import CustodialManager "../custodial/CustodialManager";
-import BackingApiHelper "../api/BackingApiHelper";
+import RequestHandler "../api/RequestHandler";
 import BackingTypes "../types/BackingTypes";
 import Types "../types/Types";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import AccountTypes "../types/AccountTypes";
 
 module {
-  public class ComponentManager(
+  public class Components(
     tokenRegistryState : { var approvedTokens : [Types.Token] },
     accountsState : StableHashMap.StableHashMap<Principal, AccountTypes.BalanceMap>,
     backingState : BackingTypes.BackingState,
   ) {
     // Initialize core components that don't need the canister ID
     private let tokenRegistry = TokenRegistry.TokenRegistryManager(tokenRegistryState);
-    private let virtualAccounts = VirtualAccounts.VirtualAccountManager(accountsState);
+    private let virtualAccounts = VirtualAccounts.VirtualAccounts(accountsState);
     private let backingStore = BackingStore.BackingStore(backingState);
 
     // Lazy component initialization
-    private var backingImpl_ : ?BackingOperations.BackingOperationsImpl = null;
+    private var backingOperations_ : ?BackingOperations.BackingOperations = null;
     private var custodialManager_ : ?CustodialManager.CustodialManager = null;
-    private var apiHelper_ : ?BackingApiHelper.ApiHelper = null;
+    private var requestHandler_ : ?RequestHandler.RequestHandler = null;
 
-    public func getBackingImpl(canisterId : Principal) : BackingOperations.BackingOperationsImpl {
-      switch (backingImpl_) {
+    public func getBackingOperations(canisterId : Principal) : BackingOperations.BackingOperations {
+      switch (backingOperations_) {
         case (null) {
-          let instance = BackingOperations.BackingOperationsImpl(
+          let instance = BackingOperations.BackingOperations(
             backingStore,
             virtualAccounts,
             canisterId,
           );
-          backingImpl_ := ?instance;
+          backingOperations_ := ?instance;
           return instance;
         };
         case (?val) {
@@ -60,16 +60,16 @@ module {
       };
     };
 
-    public func getApiHelper(canisterId : Principal) : BackingApiHelper.ApiHelper {
-      switch (apiHelper_) {
+    public func getRequestHandler(canisterId : Principal) : RequestHandler.RequestHandler {
+      switch (requestHandler_) {
         case (null) {
-          let instance = BackingApiHelper.ApiHelper(
+          let instance = RequestHandler.RequestHandler(
             backingStore,
             tokenRegistry,
             virtualAccounts,
             canisterId,
           );
-          apiHelper_ := ?instance;
+          requestHandler_ := ?instance;
           return instance;
         };
         case (?val) {
@@ -83,7 +83,7 @@ module {
       tokenRegistry;
     };
 
-    public func getVirtualAccounts() : VirtualAccounts.VirtualAccountManager {
+    public func getVirtualAccounts() : VirtualAccounts.VirtualAccounts {
       virtualAccounts;
     };
 

@@ -8,7 +8,7 @@ import BackingValidation "../backing/BackingValidation";
 import Messages "./Messages";
 
 module {
-  public class ApiHelper(
+  public class RequestHandler(
     backingStore : {
       hasInitialized : () -> Bool;
       getConfig : () -> BackingTypes.BackingConfig;

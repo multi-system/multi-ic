@@ -11,7 +11,7 @@ import ErrorModule "../error/Error";
 module {
   public class CustodialManager(
     tokenRegistry : TokenRegistry.TokenRegistryManager,
-    virtualAccounts : VirtualAccounts.VirtualAccountManager,
+    virtualAccounts : VirtualAccounts.VirtualAccounts,
     owner : Principal,
   ) {
     private let ledgers = HashMap.HashMap<Principal, ICRC2.Service>(10, Principal.equal, Principal.hash);

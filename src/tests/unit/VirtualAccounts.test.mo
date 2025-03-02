@@ -17,12 +17,12 @@ suite(
     let tokenA : Types.Token = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
     let tokenB : Types.Token = Principal.fromText("r7inp-6aaaa-aaaaa-aaabq-cai");
     let initState = StableHashMap.init<Principal, AccountTypes.BalanceMap>();
-    var manager : VirtualAccounts.VirtualAccountManager = VirtualAccounts.VirtualAccountManager(initState);
+    var manager : VirtualAccounts.VirtualAccounts = VirtualAccounts.VirtualAccounts(initState);
 
     // Reset state before each test
     let setup = func() {
       let freshState = StableHashMap.init<Principal, AccountTypes.BalanceMap>();
-      manager := VirtualAccounts.VirtualAccountManager(freshState);
+      manager := VirtualAccounts.VirtualAccounts(freshState);
     };
 
     // Validation function tests

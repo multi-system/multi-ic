@@ -9,7 +9,7 @@ import ErrorMapping "../error/ErrorMapping";
 import Components "../core/Components";
 import AccountTypes "../types/AccountTypes";
 
-shared ({ caller = deployer }) actor class BackingApi() = this {
+shared ({ caller = deployer }) actor class MultiBackend() = this {
   //
   // STATE VARIABLES
   //
@@ -32,7 +32,7 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
   //
   // COMPONENT INITIALIZATION
   //
-  private let components = Components.ComponentManager(
+  private let c = Components.Components(
     { var approvedTokens = approvedTokens },
     accountsState,
     backingState,
@@ -43,12 +43,12 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
   //
   public shared ({ caller }) func approveToken(request : Messages.ApproveTokenRequest) : async Messages.ApproveTokenResponse {
     // Use the API helper for token approval with explicit type annotation
-    let result : Result.Result<(), Error.ApprovalError> = await* components.getApiHelper(Principal.fromActor(this)).approveToken(
+    let result : Result.Result<(), Error.ApprovalError> = await* c.getRequestHandler(Principal.fromActor(this)).approveToken(
       caller,
       owner,
       { canisterId = request.canisterId },
       func(p : Types.Token) : async* Result.Result<(), Error.ApprovalError> {
-        return await* components.getCustodialManager(Principal.fromActor(this)).addLedger(p);
+        return await* c.getCustodialManager(Principal.fromActor(this)).addLedger(p);
       },
     );
 
@@ -58,11 +58,11 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
   public shared ({ caller }) func initialize(request : Messages.InitializeRequest) : async Messages.InitializeResponse {
     // Use the API helper for initialization
     switch (
-      components.getApiHelper(Principal.fromActor(this)).initialize(
+      c.getRequestHandler(Principal.fromActor(this)).initialize(
         caller,
         owner,
         request,
-        components.getBackingImpl(Principal.fromActor(this)).processInitialize,
+        c.getBackingOperations(Principal.fromActor(this)).processInitialize,
       )
     ) {
       case (#err(e)) {
@@ -79,13 +79,13 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
   //
   public shared ({ caller }) func deposit(request : Messages.DepositRequest) : async Messages.DepositResponse {
     // Validate preconditions
-    switch (components.getApiHelper(Principal.fromActor(this)).validateDepositPreconditions(caller)) {
+    switch (c.getRequestHandler(Principal.fromActor(this)).validateDepositPreconditions(caller)) {
       case (?error) return #err(error);
       case (null) {};
     };
 
     // Proceed with operation
-    switch (await* components.getCustodialManager(Principal.fromActor(this)).deposit(caller, request.token, request.amount)) {
+    switch (await* c.getCustodialManager(Principal.fromActor(this)).deposit(caller, request.token, request.amount)) {
       case (#err(e)) {
         return ErrorMapping.mapToDepositResponse(e);
       };
@@ -97,13 +97,13 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
 
   public shared ({ caller }) func withdraw(request : Messages.WithdrawRequest) : async Messages.WithdrawResponse {
     // Validate preconditions
-    switch (components.getApiHelper(Principal.fromActor(this)).validateWithdrawPreconditions(caller)) {
+    switch (c.getRequestHandler(Principal.fromActor(this)).validateWithdrawPreconditions(caller)) {
       case (?error) return #err(error);
       case (null) {};
     };
 
     // Proceed with operation
-    switch (await* components.getCustodialManager(Principal.fromActor(this)).withdraw(caller, request.token, request.amount)) {
+    switch (await* c.getCustodialManager(Principal.fromActor(this)).withdraw(caller, request.token, request.amount)) {
       case (#err(e)) {
         return ErrorMapping.mapToWithdrawResponse(e);
       };
@@ -115,13 +115,13 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
 
   public shared ({ caller }) func issue(request : Messages.IssueRequest) : async Messages.IssueResponse {
     // Validate preconditions
-    switch (components.getApiHelper(Principal.fromActor(this)).validateIssuePreconditions(caller)) {
+    switch (c.getRequestHandler(Principal.fromActor(this)).validateIssuePreconditions(caller)) {
       case (?error) return #err(error);
       case (null) {};
     };
 
     // Proceed with operation
-    switch (components.getBackingImpl(Principal.fromActor(this)).processIssue(caller, request.amount)) {
+    switch (c.getBackingOperations(Principal.fromActor(this)).processIssue(caller, request.amount)) {
       case (#err(e)) {
         return #err(ErrorMapping.mapOperationError(e));
       };
@@ -133,13 +133,13 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
 
   public shared ({ caller }) func redeem(request : Messages.RedeemRequest) : async Messages.RedeemResponse {
     // Validate preconditions
-    switch (components.getApiHelper(Principal.fromActor(this)).validateRedeemPreconditions(caller)) {
+    switch (c.getRequestHandler(Principal.fromActor(this)).validateRedeemPreconditions(caller)) {
       case (?error) return #err(error);
       case (null) {};
     };
 
     // Proceed with operation
-    switch (components.getBackingImpl(Principal.fromActor(this)).processRedeem(caller, request.amount)) {
+    switch (c.getBackingOperations(Principal.fromActor(this)).processRedeem(caller, request.amount)) {
       case (#err(e)) {
         return #err(ErrorMapping.mapOperationError(e));
       };
@@ -153,34 +153,34 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
   // QUERY METHODS (READ-ONLY)
   //
   public query func isInitialized() : async Bool {
-    components.getBackingStore().hasInitialized();
+    c.getBackingStore().hasInitialized();
   };
 
   public query func getBackingTokens() : async Messages.GetTokensResponse {
-    return components.getApiHelper(Principal.fromActor(this)).formatBackingTokensResponse();
+    return c.getRequestHandler(Principal.fromActor(this)).formatBackingTokensResponse();
   };
 
   public query func getVirtualBalance(user : Principal, token : Principal) : async Messages.GetBalanceResponse {
-    return components.getApiHelper(Principal.fromActor(this)).getBalanceResponse(user, token);
+    return c.getRequestHandler(Principal.fromActor(this)).getBalanceResponse(user, token);
   };
 
   public query func getTotalSupply() : async Messages.GetBalanceResponse {
-    return components.getApiHelper(Principal.fromActor(this)).getTotalSupplyResponse();
+    return c.getRequestHandler(Principal.fromActor(this)).getTotalSupplyResponse();
   };
 
   public query func getMultiTokenBalance(user : Principal) : async Messages.GetBalanceResponse {
-    return components.getApiHelper(Principal.fromActor(this)).getMultiTokenBalanceResponse(user);
+    return c.getRequestHandler(Principal.fromActor(this)).getMultiTokenBalanceResponse(user);
   };
 
   public query func getMultiTokenId() : async Principal {
-    components.getBackingStore().getConfig().multiToken;
+    c.getBackingStore().getConfig().multiToken;
   };
 
   public query func getGovernanceTokenId() : async Principal {
-    components.getBackingStore().getConfig().governanceToken;
+    c.getBackingStore().getConfig().governanceToken;
   };
 
   public query func getSystemInfo() : async Messages.GetSystemInfoResponse {
-    return components.getApiHelper(Principal.fromActor(this)).formatSystemInfoResponse();
+    return c.getRequestHandler(Principal.fromActor(this)).formatSystemInfoResponse();
   };
 };

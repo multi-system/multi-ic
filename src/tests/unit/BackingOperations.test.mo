@@ -35,7 +35,7 @@ suite(
       };
     };
 
-    let createTestEnv = func() : (BackingStore.BackingStore, BackingOperations.BackingOperationsImpl, VirtualAccounts.VirtualAccountManager) {
+    let createTestEnv = func() : (BackingStore.BackingStore, BackingOperations.BackingOperations, VirtualAccounts.VirtualAccounts) {
       let state : BackingTypes.BackingState = {
         var hasInitialized = false;
         var config = {
@@ -49,9 +49,9 @@ suite(
 
       let store = BackingStore.BackingStore(state);
       let initVAState = StableHashMap.init<Principal, AccountTypes.BalanceMap>();
-      let virtualAccounts = VirtualAccounts.VirtualAccountManager(initVAState);
+      let virtualAccounts = VirtualAccounts.VirtualAccounts(initVAState);
 
-      let ops = BackingOperations.BackingOperationsImpl(
+      let ops = BackingOperations.BackingOperations(
         store,
         virtualAccounts,
         systemAccount,
@@ -62,8 +62,8 @@ suite(
 
     let setupSystem = func(
       store : BackingStore.BackingStore,
-      ops : BackingOperations.BackingOperationsImpl,
-      va : VirtualAccounts.VirtualAccountManager,
+      ops : BackingOperations.BackingOperations,
+      va : VirtualAccounts.VirtualAccounts,
       initialAmountA : Nat,
       initialAmountB : Nat,
       redeemToZero : Bool,

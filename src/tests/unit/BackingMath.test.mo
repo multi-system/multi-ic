@@ -1,4 +1,3 @@
-import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
 import Types "../../multi_backend/types/Types";

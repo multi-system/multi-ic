@@ -11,9 +11,9 @@ import BackingStore "./BackingStore";
 import BackingValidation "./BackingValidation";
 
 module {
-  public class BackingOperationsImpl(
+  public class BackingOperations(
     store : BackingStore.BackingStore,
-    virtualAccounts : VirtualAccounts.VirtualAccountManager,
+    virtualAccounts : VirtualAccounts.VirtualAccounts,
     systemAccount : Types.Account,
   ) {
 
