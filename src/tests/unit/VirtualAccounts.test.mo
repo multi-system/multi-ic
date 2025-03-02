@@ -4,7 +4,7 @@ import Array "mo:base/Array";
 import Option "mo:base/Option";
 import { test; suite } "mo:test";
 import Types "../../multi_backend/types/VirtualTypes";
-import VirtualAccounts "../../multi_backend/ledger/VirtualAccounts";
+import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 
 suite(

@@ -1,6 +1,6 @@
 import Types "../types/BackingTypes";
 import Buffer "mo:base/Buffer";
-import VirtualAccounts "../ledger/VirtualAccounts";
+import VirtualAccounts "../custodial/VirtualAccounts";
 import Principal "mo:base/Principal";
 import Debug "mo:base/Debug";
 

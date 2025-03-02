@@ -6,7 +6,7 @@ import Buffer "mo:base/Buffer";
 import Array "mo:base/Array";
 import Types "../types/BackingTypes";
 import Error "../error/Error";
-import VirtualAccounts "../ledger/VirtualAccounts";
+import VirtualAccounts "../custodial/VirtualAccounts";
 import BackingMath "./BackingMath";
 import BackingStore "./BackingStore";
 import BackingValidation "./BackingValidation";

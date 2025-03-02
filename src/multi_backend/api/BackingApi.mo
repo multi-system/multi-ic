@@ -4,11 +4,11 @@ import Result "mo:base/Result";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Debug "mo:base/Debug";
 import Types "../types/BackingTypes";
-import VirtualAccounts "../ledger/VirtualAccounts";
+import VirtualAccounts "../custodial/VirtualAccounts";
 import BackingStore "../backing/BackingStore";
 import BackingOperations "../backing/BackingOperations";
 import TokenRegistry "../token/TokenRegistry";
-import LedgerManager "../ledger/LedgerManager";
+import CustodialManager "../custodial/CustodialManager";
 import Messages "./Messages";
 import Error "../error/Error";
 import ErrorMapping "../error/ErrorMapping";
@@ -63,16 +63,16 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
     };
   };
 
-  private var ledgerManager_ : ?LedgerManager.LedgerManager = null;
-  private func getLedgerManager() : LedgerManager.LedgerManager {
-    switch (ledgerManager_) {
+  private var custodialManager_ : ?CustodialManager.CustodialManager = null;
+  private func getCustodialManager() : CustodialManager.CustodialManager {
+    switch (custodialManager_) {
       case (null) {
-        let instance = LedgerManager.LedgerManager(
+        let instance = CustodialManager.CustodialManager(
           tokenRegistry,
           virtualAccounts,
           Principal.fromActor(this),
         );
-        ledgerManager_ := ?instance;
+        custodialManager_ := ?instance;
         return instance;
       };
       case (?val) {
@@ -110,7 +110,7 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
       owner,
       { canisterId = request.canisterId },
       func(p : Principal) : async* Result.Result<(), Error.ApprovalError> {
-        return await* getLedgerManager().addLedger(p);
+        return await* getCustodialManager().addLedger(p);
       },
     );
 
@@ -147,7 +147,7 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
     };
 
     // Proceed with operation
-    switch (await* getLedgerManager().deposit(caller, request.token, request.amount)) {
+    switch (await* getCustodialManager().deposit(caller, request.token, request.amount)) {
       case (#err(e)) {
         return ErrorMapping.mapToDepositResponse(e);
       };
@@ -165,7 +165,7 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
     };
 
     // Proceed with operation
-    switch (await* getLedgerManager().withdraw(caller, request.token, request.amount)) {
+    switch (await* getCustodialManager().withdraw(caller, request.token, request.amount)) {
       case (#err(e)) {
         return ErrorMapping.mapToWithdrawResponse(e);
       };

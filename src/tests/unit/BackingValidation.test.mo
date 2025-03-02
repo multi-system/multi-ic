@@ -3,7 +3,7 @@ import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
 import Types "../../multi_backend/types/BackingTypes";
 import BackingValidation "../../multi_backend/backing/BackingValidation";
-import VirtualAccounts "../../multi_backend/ledger/VirtualAccounts";
+import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Error "../../multi_backend/error/Error";
 import Result "mo:base/Result";

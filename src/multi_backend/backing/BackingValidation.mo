@@ -2,7 +2,7 @@ import Result "mo:base/Result";
 import Types "../types/BackingTypes";
 import Error "../error/Error";
 import Principal "mo:base/Principal";
-import VirtualAccounts "../ledger/VirtualAccounts";
+import VirtualAccounts "../custodial/VirtualAccounts";
 import BackingMath "./BackingMath";
 import Buffer "mo:base/Buffer";
 import Array "mo:base/Array";

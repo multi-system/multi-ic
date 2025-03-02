@@ -12,7 +12,7 @@ import TokenRegistry "../token/TokenRegistry";
 import ErrorModule "../error/Error";
 
 module {
-  public class LedgerManager(
+  public class CustodialManager(
     tokenRegistry : TokenRegistry.TokenRegistryManager,
     virtualAccounts : VirtualAccounts.VirtualAccountManager,
     owner : Principal,

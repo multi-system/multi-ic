@@ -4,7 +4,7 @@ import { test; suite } "mo:test";
 import Types "../../multi_backend/types/BackingTypes";
 import BackingStore "../../multi_backend/backing/BackingStore";
 import BackingOperations "../../multi_backend/backing/BackingOperations";
-import VirtualAccounts "../../multi_backend/ledger/VirtualAccounts";
+import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
 import BackingMath "../../multi_backend/backing/BackingMath";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Error "../../multi_backend/error/Error";
