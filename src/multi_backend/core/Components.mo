@@ -5,6 +5,7 @@ import BackingOperations "../backing/BackingOperations";
 import TokenRegistry "../token/TokenRegistry";
 import CustodialManager "../custodial/CustodialManager";
 import RequestHandler "../api/RequestHandler";
+import ResponseHandler "../api/ResponseHandler";
 import BackingTypes "../types/BackingTypes";
 import Types "../types/Types";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
@@ -25,6 +26,7 @@ module {
     private var backingOperations_ : ?BackingOperations.BackingOperations = null;
     private var custodialManager_ : ?CustodialManager.CustodialManager = null;
     private var requestHandler_ : ?RequestHandler.RequestHandler = null;
+    private var responseHandler_ : ?ResponseHandler.ResponseHandler = null;
 
     public func getBackingOperations(canisterId : Principal) : BackingOperations.BackingOperations {
       switch (backingOperations_) {
@@ -66,10 +68,25 @@ module {
           let instance = RequestHandler.RequestHandler(
             backingStore,
             tokenRegistry,
+          );
+          requestHandler_ := ?instance;
+          return instance;
+        };
+        case (?val) {
+          return val;
+        };
+      };
+    };
+
+    public func getResponseHandler(canisterId : Principal) : ResponseHandler.ResponseHandler {
+      switch (responseHandler_) {
+        case (null) {
+          let instance = ResponseHandler.ResponseHandler(
+            backingStore,
             virtualAccounts,
             canisterId,
           );
-          requestHandler_ := ?instance;
+          responseHandler_ := ?instance;
           return instance;
         };
         case (?val) {

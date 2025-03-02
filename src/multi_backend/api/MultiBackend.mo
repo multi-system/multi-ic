@@ -157,19 +157,19 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
   };
 
   public query func getBackingTokens() : async Messages.GetTokensResponse {
-    return c.getRequestHandler(Principal.fromActor(this)).formatBackingTokensResponse();
+    return c.getResponseHandler(Principal.fromActor(this)).formatBackingTokensResponse();
   };
 
   public query func getVirtualBalance(user : Principal, token : Principal) : async Messages.GetBalanceResponse {
-    return c.getRequestHandler(Principal.fromActor(this)).getBalanceResponse(user, token);
+    return c.getResponseHandler(Principal.fromActor(this)).getBalanceResponse(user, token);
   };
 
   public query func getTotalSupply() : async Messages.GetBalanceResponse {
-    return c.getRequestHandler(Principal.fromActor(this)).getTotalSupplyResponse();
+    return c.getResponseHandler(Principal.fromActor(this)).getTotalSupplyResponse();
   };
 
   public query func getMultiTokenBalance(user : Principal) : async Messages.GetBalanceResponse {
-    return c.getRequestHandler(Principal.fromActor(this)).getMultiTokenBalanceResponse(user);
+    return c.getResponseHandler(Principal.fromActor(this)).getMultiTokenBalanceResponse(user);
   };
 
   public query func getMultiTokenId() : async Principal {
@@ -181,6 +181,6 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
   };
 
   public query func getSystemInfo() : async Messages.GetSystemInfoResponse {
-    return c.getRequestHandler(Principal.fromActor(this)).formatSystemInfoResponse();
+    return c.getResponseHandler(Principal.fromActor(this)).formatSystemInfoResponse();
   };
 };
