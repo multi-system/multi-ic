@@ -5,7 +5,7 @@ import Option "mo:base/Option";
 import ICRC2 "mo:icrc2-types";
 import Error "mo:base/Error";
 import VirtualAccounts "./VirtualAccounts";
-import TokenRegistry "../token/TokenRegistry";
+import TokenRegistry "../core/TokenRegistry";
 import ErrorModule "../error/Error";
 
 module {

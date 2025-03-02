@@ -2,7 +2,7 @@ import Principal "mo:base/Principal";
 import VirtualAccounts "../custodial/VirtualAccounts";
 import BackingStore "../backing/BackingStore";
 import BackingOperations "../backing/BackingOperations";
-import TokenRegistry "../token/TokenRegistry";
+import TokenRegistry "TokenRegistry";
 import CustodialManager "../custodial/CustodialManager";
 import RequestHandler "../api/RequestHandler";
 import ResponseHandler "../api/ResponseHandler";
