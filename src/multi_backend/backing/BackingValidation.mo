@@ -7,7 +7,6 @@ import VirtualAccounts "../custodial/VirtualAccounts";
 import BackingMath "./BackingMath";
 import Buffer "mo:base/Buffer";
 import Array "mo:base/Array";
-import Option "mo:base/Option";
 
 module {
   public func isTokenApproved(

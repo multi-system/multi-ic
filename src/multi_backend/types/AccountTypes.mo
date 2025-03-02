@@ -1,4 +1,3 @@
-import Principal "mo:base/Principal";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Types "Types";
 

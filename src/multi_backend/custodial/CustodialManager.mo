@@ -1,9 +1,6 @@
-import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import HashMap "mo:base/HashMap";
 import Result "mo:base/Result";
-import Buffer "mo:base/Buffer";
-import Iter "mo:base/Iter";
 import Option "mo:base/Option";
 import ICRC2 "mo:icrc2-types";
 import Error "mo:base/Error";

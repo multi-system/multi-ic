@@ -1,13 +1,11 @@
 import Principal "mo:base/Principal";
 import Array "mo:base/Array";
 import Result "mo:base/Result";
-import Debug "mo:base/Debug";
 import Types "../types/Types";
 import BackingTypes "../types/BackingTypes";
 import Error "../error/Error";
 import BackingValidation "../backing/BackingValidation";
 import Messages "./Messages";
-import ErrorMapping "../error/ErrorMapping";
 
 module {
   public class ApiHelper(
@@ -82,7 +80,6 @@ module {
       owner : Types.Account,
       request : Messages.InitializeRequest,
       processInitialize : (
-        Types.Account,
         [BackingTypes.BackingPair],
         Nat,
         Types.Token,
@@ -106,7 +103,7 @@ module {
         },
       );
 
-      return processInitialize(caller, backingPairs, request.supplyUnit, multiToken, governanceToken);
+      return processInitialize(backingPairs, request.supplyUnit, multiToken, governanceToken);
     };
 
     // USER OPERATIONS HELPERS

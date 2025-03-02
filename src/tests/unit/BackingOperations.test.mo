@@ -1,4 +1,3 @@
-import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
 import Types "../../multi_backend/types/Types";
@@ -7,12 +6,10 @@ import AccountTypes "../../multi_backend/types/AccountTypes";
 import BackingStore "../../multi_backend/backing/BackingStore";
 import BackingOperations "../../multi_backend/backing/BackingOperations";
 import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
-import BackingMath "../../multi_backend/backing/BackingMath";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Error "../../multi_backend/error/Error";
 import Result "mo:base/Result";
 import BackingValidation "../../multi_backend/backing/BackingValidation";
-import TransferTypes "../../multi_backend/types/TransferTypes";
 
 suite(
   "Backing Operations",
@@ -98,7 +95,7 @@ suite(
         },
       ];
 
-      assert (ops.processInitialize(caller, backingPairs, 100, multiTokenLedger, govTokenLedger) == #ok());
+      assert (ops.processInitialize(backingPairs, 100, multiTokenLedger, govTokenLedger) == #ok());
 
       va.transfer({
         from = caller;
@@ -145,7 +142,7 @@ suite(
           backingUnit = 10;
         }];
 
-        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenLedger, govTokenLedger)) {
+        switch (ops.processInitialize(backingPairs, 100, multiTokenLedger, govTokenLedger)) {
           case (#err(e)) { assert false };
           case (#ok()) {
             assert (store.getSupplyUnit() == 100);
@@ -180,9 +177,9 @@ suite(
           backingUnit = 10;
         }];
 
-        assert (ops.processInitialize(caller, backingPairs, 100, multiTokenLedger, govTokenLedger) == #ok());
+        assert (ops.processInitialize(backingPairs, 100, multiTokenLedger, govTokenLedger) == #ok());
 
-        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenLedger, govTokenLedger)) {
+        switch (ops.processInitialize(backingPairs, 100, multiTokenLedger, govTokenLedger)) {
           case (#err(#AlreadyInitialized)) {};
           case _ { assert false };
         };
@@ -202,7 +199,7 @@ suite(
           backingUnit = 10;
         }];
 
-        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenLedger, govTokenLedger)) {
+        switch (ops.processInitialize(backingPairs, 100, multiTokenLedger, govTokenLedger)) {
           case (#err(#TokenNotApproved(token))) {
             assert Principal.equal(token, unauthorizedToken);
           };
@@ -224,7 +221,7 @@ suite(
           backingUnit = 0;
         }];
 
-        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenLedger, govTokenLedger)) {
+        switch (ops.processInitialize(backingPairs, 100, multiTokenLedger, govTokenLedger)) {
           case (#err(#InvalidBackingUnit(token))) {
             assert Principal.equal(token, tokenA);
           };
@@ -246,7 +243,7 @@ suite(
           backingUnit = 10;
         }];
 
-        switch (ops.processInitialize(caller, backingPairs, 0, multiTokenLedger, govTokenLedger)) {
+        switch (ops.processInitialize(backingPairs, 0, multiTokenLedger, govTokenLedger)) {
           case (#err(#InvalidSupplyUnit)) {};
           case _ { assert false };
         };

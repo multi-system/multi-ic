@@ -1,9 +1,7 @@
-import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Time "mo:base/Time";
 import Nat "mo:base/Nat";
-import Int "mo:base/Int";
 import HashMap "mo:base/HashMap";
 import Hash "mo:base/Hash";
 

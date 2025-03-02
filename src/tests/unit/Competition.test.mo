@@ -2,7 +2,6 @@ import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
 import Time "mo:base/Time";
-import Result "mo:base/Result";
 import Competition "../../multi_backend/competition/Competition";
 
 suite(

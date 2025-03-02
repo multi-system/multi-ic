@@ -1,6 +1,4 @@
-import Principal "mo:base/Principal";
 import Result "mo:base/Result";
-import Debug "mo:base/Debug";
 import Nat "mo:base/Nat";
 import Buffer "mo:base/Buffer";
 import Array "mo:base/Array";
@@ -11,7 +9,6 @@ import VirtualAccounts "../custodial/VirtualAccounts";
 import BackingMath "./BackingMath";
 import BackingStore "./BackingStore";
 import BackingValidation "./BackingValidation";
-import TransferTypes "../types/TransferTypes";
 
 module {
   public class BackingOperationsImpl(
@@ -21,7 +18,6 @@ module {
   ) {
 
     public func processInitialize(
-      caller : Types.Account,
       backingTokens : [BackingTypes.BackingPair],
       supplyUnit : Nat,
       multiToken : Types.Token,

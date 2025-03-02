@@ -1,8 +1,6 @@
-import Principal "mo:base/Principal";
 import Array "mo:base/Array";
 import Types "../types/Types";
 import BackingTypes "../types/BackingTypes";
-import Error "../error/Error";
 
 module {
   public class BackingStore(state : BackingTypes.BackingState) {

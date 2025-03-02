@@ -2,7 +2,6 @@ import Types "../types/Types";
 import BackingTypes "../types/BackingTypes";
 import Buffer "mo:base/Buffer";
 import VirtualAccounts "../custodial/VirtualAccounts";
-import Principal "mo:base/Principal";
 import Debug "mo:base/Debug";
 
 module {
