@@ -216,10 +216,8 @@ describe("Multi Token Backing System", () => {
 
       // Check for error for duplicate token
       if (getErrorType(duplicateResult) === "TokenError") {
-        // Updated: Since we're checking the deployed version, we need to match what it currently returns
-        // With the updated error codes, this will be 2103, but the canister might still return 3103
         const code = duplicateResult.err.TokenError.code;
-        expect(code === 2103n || code === 3103n).toBe(true);
+        expect(code === 2103n).toBe(true);
       }
 
       // Test initializing with an unapproved token
@@ -269,10 +267,8 @@ describe("Multi Token Backing System", () => {
 
       // Verify error for invalid backing unit
       if (getErrorType(zeroUnitResult) === "TokenError") {
-        // Updated: Since we're checking the deployed version, we need to match what it currently returns
-        // With the updated error codes, this will be 2102, but the canister might still return 3102
         const code = zeroUnitResult.err.TokenError.code;
-        expect(code === 2102n || code === 3102n).toBe(true);
+        expect(code === 2102n).toBe(true);
       }
 
       // Test initializing with a zero supply unit
