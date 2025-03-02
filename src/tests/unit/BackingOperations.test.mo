@@ -1,7 +1,8 @@
 import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
-import Types "../../multi_backend/types/BackingTypes";
+import Types "../../multi_backend/types/Types";
+import BackingTypes "../../multi_backend/types/BackingTypes";
 import BackingStore "../../multi_backend/backing/BackingStore";
 import BackingOperations "../../multi_backend/backing/BackingOperations";
 import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
@@ -10,45 +11,41 @@ import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Error "../../multi_backend/error/Error";
 import Result "mo:base/Result";
 import BackingValidation "../../multi_backend/backing/BackingValidation";
+import TransferTypes "../../multi_backend/types/TransferTypes";
 
 suite(
   "Backing Operations",
   func() {
-    let tokenA = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
-    let tokenB = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
-    let systemAccount = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
-    let multiTokenLedger = Principal.fromText("qhbym-qaaaa-aaaaa-aaafq-cai");
-    let govTokenLedger = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
-    let caller = Principal.fromText("aaaaa-aa");
-
-    let tokenAInfo : Types.TokenInfo = { canisterId = tokenA };
-    let tokenBInfo : Types.TokenInfo = { canisterId = tokenB };
-    let multiTokenInfo : Types.TokenInfo = { canisterId = multiTokenLedger };
-    let govTokenInfo : Types.TokenInfo = { canisterId = govTokenLedger };
+    let tokenA : Types.Token = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
+    let tokenB : Types.Token = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
+    let systemAccount : Types.Account = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
+    let multiTokenLedger : Types.Token = Principal.fromText("qhbym-qaaaa-aaaaa-aaafq-cai");
+    let govTokenLedger : Types.Token = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
+    let caller : Types.Account = Principal.fromText("aaaaa-aa");
 
     let approveToken = func(
       store : BackingStore.BackingStore,
-      caller : Principal,
-      tokenInfo : Types.TokenInfo,
+      caller : Types.Account,
+      token : Types.Token,
     ) : Result.Result<(), Error.ApprovalError> {
-      switch (BackingValidation.validateTokenApproval(tokenInfo, store)) {
+      switch (BackingValidation.validateTokenApproval(token, store)) {
         case (#err(e)) return #err(e);
         case (#ok()) {
-          store.addBackingToken(tokenInfo);
+          store.addBackingToken(token);
           return #ok(());
         };
       };
     };
 
     let createTestEnv = func() : (BackingStore.BackingStore, BackingOperations.BackingOperationsImpl, VirtualAccounts.VirtualAccountManager) {
-      let state : Types.BackingState = {
+      let state : BackingTypes.BackingState = {
         var hasInitialized = false;
         var config = {
           supplyUnit = 0;
           totalSupply = 0;
           backingPairs = [];
-          multiToken = { canisterId = Principal.fromText("aaaaa-aa") };
-          governanceToken = { canisterId = Principal.fromText("aaaaa-aa") };
+          multiToken = Principal.fromText("aaaaa-aa");
+          governanceToken = Principal.fromText("aaaaa-aa");
         };
       };
 
@@ -86,21 +83,21 @@ suite(
       va.mint(caller, tokenA, initialAmountA);
       va.mint(caller, tokenB, initialAmountB);
 
-      assert (approveToken(store, caller, tokenAInfo) == #ok());
-      assert (approveToken(store, caller, tokenBInfo) == #ok());
+      assert (approveToken(store, caller, tokenA) == #ok());
+      assert (approveToken(store, caller, tokenB) == #ok());
 
       let backingPairs = [
         {
-          tokenInfo = tokenAInfo;
+          token = tokenA;
           backingUnit = initialAmountA / 10;
         },
         {
-          tokenInfo = tokenBInfo;
+          token = tokenB;
           backingUnit = initialAmountB / 10;
         },
       ];
 
-      assert (ops.processInitialize(caller, backingPairs, 100, multiTokenInfo, govTokenInfo) == #ok());
+      assert (ops.processInitialize(caller, backingPairs, 100, multiTokenLedger, govTokenLedger) == #ok());
 
       va.transfer({
         from = caller;
@@ -139,15 +136,15 @@ suite(
       func() {
         let (store, ops, va) = createTestEnv();
 
-        assert (approveToken(store, caller, tokenAInfo) == #ok());
+        assert (approveToken(store, caller, tokenA) == #ok());
         va.mint(caller, tokenA, 1000);
 
         let backingPairs = [{
-          tokenInfo = tokenAInfo;
+          token = tokenA;
           backingUnit = 10;
         }];
 
-        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenInfo, govTokenInfo)) {
+        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenLedger, govTokenLedger)) {
           case (#err(e)) { assert false };
           case (#ok()) {
             assert (store.getSupplyUnit() == 100);
@@ -174,17 +171,17 @@ suite(
       func() {
         let (store, ops, va) = createTestEnv();
 
-        assert (approveToken(store, caller, tokenAInfo) == #ok());
+        assert (approveToken(store, caller, tokenA) == #ok());
         va.mint(caller, tokenA, 1000);
 
         let backingPairs = [{
-          tokenInfo = tokenAInfo;
+          token = tokenA;
           backingUnit = 10;
         }];
 
-        assert (ops.processInitialize(caller, backingPairs, 100, multiTokenInfo, govTokenInfo) == #ok());
+        assert (ops.processInitialize(caller, backingPairs, 100, multiTokenLedger, govTokenLedger) == #ok());
 
-        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenInfo, govTokenInfo)) {
+        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenLedger, govTokenLedger)) {
           case (#err(#AlreadyInitialized)) {};
           case _ { assert false };
         };
@@ -195,16 +192,16 @@ suite(
       "fails to initialize with unapproved token",
       func() {
         let (store, ops, va) = createTestEnv();
-        let unauthorizedToken = Principal.fromText("aaaaa-aa");
+        let unauthorizedToken : Types.Token = Principal.fromText("aaaaa-aa");
 
         va.mint(caller, unauthorizedToken, 1000);
 
         let backingPairs = [{
-          tokenInfo = { canisterId = unauthorizedToken };
+          token = unauthorizedToken;
           backingUnit = 10;
         }];
 
-        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenInfo, govTokenInfo)) {
+        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenLedger, govTokenLedger)) {
           case (#err(#TokenNotApproved(token))) {
             assert Principal.equal(token, unauthorizedToken);
           };
@@ -218,15 +215,15 @@ suite(
       func() {
         let (store, ops, va) = createTestEnv();
 
-        assert (approveToken(store, caller, tokenAInfo) == #ok());
+        assert (approveToken(store, caller, tokenA) == #ok());
         va.mint(caller, tokenA, 500);
 
         let backingPairs = [{
-          tokenInfo = tokenAInfo;
+          token = tokenA;
           backingUnit = 0;
         }];
 
-        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenInfo, govTokenInfo)) {
+        switch (ops.processInitialize(caller, backingPairs, 100, multiTokenLedger, govTokenLedger)) {
           case (#err(#InvalidBackingUnit(token))) {
             assert Principal.equal(token, tokenA);
           };
@@ -240,15 +237,15 @@ suite(
       func() {
         let (store, ops, va) = createTestEnv();
 
-        assert (approveToken(store, caller, tokenAInfo) == #ok());
+        assert (approveToken(store, caller, tokenA) == #ok());
         va.mint(caller, tokenA, 1000);
 
         let backingPairs = [{
-          tokenInfo = tokenAInfo;
+          token = tokenA;
           backingUnit = 10;
         }];
 
-        switch (ops.processInitialize(caller, backingPairs, 0, multiTokenInfo, govTokenInfo)) {
+        switch (ops.processInitialize(caller, backingPairs, 0, multiTokenLedger, govTokenLedger)) {
           case (#err(#InvalidSupplyUnit)) {};
           case _ { assert false };
         };
@@ -271,7 +268,7 @@ suite(
             assert (va.getBalance(systemAccount, tokenA) == backingTokens[0].backingUnit);
             assert (va.getBalance(systemAccount, tokenB) == backingTokens[1].backingUnit);
             let config = store.getConfig();
-            assert (va.getBalance(caller, config.multiToken.canisterId) == 100);
+            assert (va.getBalance(caller, config.multiToken) == 100);
           };
         };
       },

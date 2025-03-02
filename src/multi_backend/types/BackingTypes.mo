@@ -1,19 +1,16 @@
-import Principal "mo:base/Principal";
+import Types "Types";
 
 module {
-  public type TokenInfo = {
-    canisterId : Principal;
-  };
   public type BackingPair = {
-    tokenInfo : TokenInfo;
+    token : Types.Token;
     backingUnit : Nat;
   };
   public type BackingConfig = {
     supplyUnit : Nat;
     totalSupply : Nat;
     backingPairs : [BackingPair];
-    multiToken : TokenInfo;
-    governanceToken : TokenInfo;
+    multiToken : Types.Token;
+    governanceToken : Types.Token;
   };
   public type BackingState = {
     var hasInitialized : Bool;

@@ -4,6 +4,7 @@ import Nat "mo:base/Nat";
 import Text "mo:base/Text";
 import Error "./Error";
 import Messages "../api/Messages";
+import Types "../types/Types";
 
 /**
  * Error Mapping Module

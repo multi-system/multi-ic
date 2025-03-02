@@ -4,26 +4,28 @@ import Debug "mo:base/Debug";
 import Nat "mo:base/Nat";
 import Buffer "mo:base/Buffer";
 import Array "mo:base/Array";
-import Types "../types/BackingTypes";
+import Types "../types/Types";
+import BackingTypes "../types/BackingTypes";
 import Error "../error/Error";
 import VirtualAccounts "../custodial/VirtualAccounts";
 import BackingMath "./BackingMath";
 import BackingStore "./BackingStore";
 import BackingValidation "./BackingValidation";
+import TransferTypes "../types/TransferTypes";
 
 module {
   public class BackingOperationsImpl(
     store : BackingStore.BackingStore,
     virtualAccounts : VirtualAccounts.VirtualAccountManager,
-    systemAccount : Principal,
+    systemAccount : Types.Account,
   ) {
 
     public func processInitialize(
-      caller : Principal,
-      backingTokens : [Types.BackingPair],
+      caller : Types.Account,
+      backingTokens : [BackingTypes.BackingPair],
       supplyUnit : Nat,
-      multiToken : Types.TokenInfo,
-      governanceToken : Types.TokenInfo,
+      multiToken : Types.Token,
+      governanceToken : Types.Token,
     ) : Result.Result<(), Error.InitError> {
       switch (BackingValidation.validateInitialization(supplyUnit, backingTokens, store)) {
         case (#err(e)) return #err(e);
@@ -35,7 +37,7 @@ module {
       };
     };
 
-    public func processIssue(caller : Principal, amount : Nat) : Result.Result<(), Error.OperationError> {
+    public func processIssue(caller : Types.Account, amount : Nat) : Result.Result<(), Error.OperationError> {
       let config = store.getConfig();
 
       switch (
@@ -58,14 +60,14 @@ module {
             });
           };
 
-          virtualAccounts.mint(caller, config.multiToken.canisterId, amount);
+          virtualAccounts.mint(caller, config.multiToken, amount);
           store.updateTotalSupply(store.getTotalSupply() + amount);
           #ok(());
         };
       };
     };
 
-    public func processRedeem(caller : Principal, amount : Nat) : Result.Result<(), Error.OperationError> {
+    public func processRedeem(caller : Types.Account, amount : Nat) : Result.Result<(), Error.OperationError> {
       let config = store.getConfig();
 
       switch (BackingValidation.validateRedeemAmount(amount, store.getTotalSupply(), store.getSupplyUnit())) {
@@ -73,7 +75,7 @@ module {
         case (#ok()) {};
       };
 
-      switch (BackingValidation.validateRedeemBalance(amount, caller, config.multiToken.canisterId, virtualAccounts)) {
+      switch (BackingValidation.validateRedeemBalance(amount, caller, config.multiToken, virtualAccounts)) {
         case (#err(e)) return #err(e);
         case (#ok()) {};
       };
@@ -98,7 +100,7 @@ module {
             });
           };
 
-          virtualAccounts.burn(caller, config.multiToken.canisterId, amount);
+          virtualAccounts.burn(caller, config.multiToken, amount);
           store.updateTotalSupply(store.getTotalSupply() - amount);
           #ok(());
         };
@@ -143,16 +145,16 @@ module {
       let backingUnits = Buffer.Buffer<Nat>(backingTokens.size());
 
       for (pair in backingTokens.vals()) {
-        let reserveQuantity = virtualAccounts.getBalance(systemAccount, pair.tokenInfo.canisterId);
+        let reserveQuantity = virtualAccounts.getBalance(systemAccount, pair.token);
         let unit = BackingMath.calculateBackingUnit(reserveQuantity, eta);
         backingUnits.add(unit);
       };
 
-      let newPairs = Array.mapEntries<Types.BackingPair, Types.BackingPair>(
+      let newPairs = Array.mapEntries<BackingTypes.BackingPair, BackingTypes.BackingPair>(
         backingTokens,
-        func(pair : Types.BackingPair, index : Nat) : Types.BackingPair {
+        func(pair : BackingTypes.BackingPair, index : Nat) : BackingTypes.BackingPair {
           {
-            tokenInfo = pair.tokenInfo;
+            token = pair.token;
             backingUnit = backingUnits.get(index);
           };
         },

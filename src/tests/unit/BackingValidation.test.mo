@@ -1,7 +1,8 @@
 import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
-import Types "../../multi_backend/types/BackingTypes";
+import Types "../../multi_backend/types/Types";
+import BackingTypes "../../multi_backend/types/BackingTypes";
 import BackingValidation "../../multi_backend/backing/BackingValidation";
 import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
@@ -11,25 +12,25 @@ import Result "mo:base/Result";
 suite(
   "Backing Validation",
   func() {
-    let alice = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
-    let tokenA = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
-    let tokenB = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
-    let govToken = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
+    let alice : Types.Account = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
+    let tokenA : Types.Token = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
+    let tokenB : Types.Token = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
+    let govToken : Types.Token = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
 
     var hasInitializedValue = false;
-    var backingTokens : [Types.BackingPair] = [];
-    var configValue : Types.BackingConfig = {
+    var backingTokens : [BackingTypes.BackingPair] = [];
+    var configValue : BackingTypes.BackingConfig = {
       supplyUnit = 0;
       totalSupply = 0;
       backingPairs = [];
-      multiToken = { canisterId = Principal.fromText("aaaaa-aa") };
-      governanceToken = { canisterId = govToken };
+      multiToken = Principal.fromText("aaaaa-aa");
+      governanceToken = govToken;
     };
 
     let mockStore = {
       hasInitialized = func() : Bool { hasInitializedValue };
-      getBackingTokens = func() : [Types.BackingPair] { backingTokens };
-      getConfig = func() : Types.BackingConfig { configValue };
+      getBackingTokens = func() : [BackingTypes.BackingPair] { backingTokens };
+      getConfig = func() : BackingTypes.BackingConfig { configValue };
     };
 
     test(
@@ -63,14 +64,12 @@ suite(
     test(
       "validates token approval",
       func() {
-        let tokenInfo = { canisterId = tokenA };
-
         // Test approval before initialization
-        assert (BackingValidation.validateTokenApproval(tokenInfo, mockStore) == #ok());
+        assert (BackingValidation.validateTokenApproval(tokenA, mockStore) == #ok());
 
         // Test after initialization
         hasInitializedValue := true;
-        switch (BackingValidation.validateTokenApproval(tokenInfo, mockStore)) {
+        switch (BackingValidation.validateTokenApproval(tokenA, mockStore)) {
           case (#ok()) { assert false };
           case (#err(#AlreadyInitialized)) {};
           case (#err(_)) { assert false };
@@ -86,11 +85,11 @@ suite(
         // Add tokens to the backing tokens list so they are "approved"
         backingTokens := [
           {
-            tokenInfo = { canisterId = tokenA };
+            token = tokenA;
             backingUnit = 10; // Some value, not important for approval check
           },
           {
-            tokenInfo = { canisterId = tokenB };
+            token = tokenB;
             backingUnit = 10; // Some value, not important for approval check
           },
         ];
@@ -98,11 +97,11 @@ suite(
         // Test valid initialization
         let validTokens = [
           {
-            tokenInfo = { canisterId = tokenA };
+            token = tokenA;
             backingUnit = 100;
           },
           {
-            tokenInfo = { canisterId = tokenB };
+            token = tokenB;
             backingUnit = 50;
           },
         ];
@@ -112,11 +111,11 @@ suite(
         // Reset backingTokens for other test cases to maintain consistent state
         backingTokens := [
           {
-            tokenInfo = { canisterId = tokenA };
+            token = tokenA;
             backingUnit = 10;
           },
           {
-            tokenInfo = { canisterId = tokenB };
+            token = tokenB;
             backingUnit = 10;
           },
         ];
@@ -131,11 +130,11 @@ suite(
         // Test with zero backing unit
         let invalidTokens = [
           {
-            tokenInfo = { canisterId = tokenA };
+            token = tokenA;
             backingUnit = 0; // Invalid backing unit
           },
           {
-            tokenInfo = { canisterId = tokenB };
+            token = tokenB;
             backingUnit = 50;
           },
         ];
@@ -151,11 +150,11 @@ suite(
         // Test with duplicate tokens
         let duplicateTokens = [
           {
-            tokenInfo = { canisterId = tokenA };
+            token = tokenA;
             backingUnit = 100;
           },
           {
-            tokenInfo = { canisterId = tokenA }; // Duplicate token
+            token = tokenA; // Duplicate token
             backingUnit = 50;
           },
         ];
@@ -169,9 +168,9 @@ suite(
         };
 
         // Add test for unapproved token
-        let unapprovedToken = Principal.fromText("aaaaa-aa");
+        let unapprovedToken : Types.Token = Principal.fromText("aaaaa-aa");
         let unapprovedTokens = [{
-          tokenInfo = { canisterId = unapprovedToken };
+          token = unapprovedToken;
           backingUnit = 100;
         }];
 
@@ -192,7 +191,7 @@ suite(
         let virtualAccounts = VirtualAccounts.VirtualAccountManager(initVAState);
 
         backingTokens := [{
-          tokenInfo = { canisterId = tokenA };
+          token = tokenA;
           backingUnit = 50;
         }];
 

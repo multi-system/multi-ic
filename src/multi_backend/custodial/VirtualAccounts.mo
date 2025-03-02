@@ -5,7 +5,8 @@ import Buffer "mo:base/Buffer";
 import Debug "mo:base/Debug";
 import Iter "mo:base/Iter";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
-import Types "../types/VirtualTypes";
+import Types "../types/Types";
+import TransferTypes "../types/TransferTypes";
 
 module {
   public type BalanceMap = StableHashMap.StableHashMap<Principal, Nat>;
@@ -15,7 +16,7 @@ module {
     private let accounts = initialState;
 
     // Public testable validations that return bools
-    public func hasInsufficientBalance(account : Types.Account, token : Principal, amount : Nat) : Bool {
+    public func hasInsufficientBalance(account : Types.Account, token : Types.Token, amount : Nat) : Bool {
       getBalance(account, token) < amount;
     };
 
@@ -59,12 +60,12 @@ module {
       };
     };
 
-    private func updateBalance(account : Types.Account, token : Principal, amount : Nat) {
+    private func updateBalance(account : Types.Account, token : Types.Token, amount : Nat) {
       let balances = getOrCreateAccount(account);
       StableHashMap.put(balances, Principal.equal, Principal.hash, token, amount);
     };
 
-    public func getBalance(account : Types.Account, token : Principal) : Nat {
+    public func getBalance(account : Types.Account, token : Types.Token) : Nat {
       switch (StableHashMap.get(accounts, Principal.equal, Principal.hash, account)) {
         case (?balances) {
           Option.get(StableHashMap.get(balances, Principal.equal, Principal.hash, token), 0);
@@ -73,7 +74,7 @@ module {
       };
     };
 
-    public func mint(to : Types.Account, token : Principal, amount : Nat) {
+    public func mint(to : Types.Account, token : Types.Token, amount : Nat) {
       validatePrincipals([to, token]);
       validateAmount(amount, "Mint");
 
@@ -81,7 +82,7 @@ module {
       updateBalance(to, token, currentBalance + amount);
     };
 
-    public func burn(from : Types.Account, token : Principal, amount : Nat) {
+    public func burn(from : Types.Account, token : Types.Token, amount : Nat) {
       validatePrincipals([from, token]);
       validateAmount(amount, "Burn");
 
@@ -93,7 +94,7 @@ module {
       updateBalance(from, token, currentBalance - amount);
     };
 
-    public func transfer(args : Types.TransferArgs) {
+    public func transfer(args : TransferTypes.TransferArgs) {
       validatePrincipals([args.from, args.to, args.token]);
       validateAmount(args.amount, "Transfer");
 
@@ -112,10 +113,10 @@ module {
       updateBalance(args.to, args.token, toBalance + args.amount);
     };
 
-    public func getAllBalances(account : Types.Account) : [(Principal, Nat)] {
+    public func getAllBalances(account : Types.Account) : [(Types.Token, Nat)] {
       switch (StableHashMap.get(accounts, Principal.equal, Principal.hash, account)) {
         case (?balances) {
-          let buffer = Buffer.Buffer<(Principal, Nat)>(0);
+          let buffer = Buffer.Buffer<(Types.Token, Nat)>(0);
           for ((token, balance) in StableHashMap.entries(balances)) {
             if (balance > 0) {
               buffer.add((token, balance));

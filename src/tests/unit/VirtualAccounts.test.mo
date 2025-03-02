@@ -3,7 +3,8 @@ import Principal "mo:base/Principal";
 import Array "mo:base/Array";
 import Option "mo:base/Option";
 import { test; suite } "mo:test";
-import Types "../../multi_backend/types/VirtualTypes";
+import Types "../../multi_backend/types/Types";
+import TransferTypes "../../multi_backend/types/TransferTypes";
 import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 
@@ -11,10 +12,10 @@ suite(
   "Virtual Accounts",
   func() {
     // Using valid principal IDs
-    let alice = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
-    let bob = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
-    let tokenA = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
-    let tokenB = Principal.fromText("r7inp-6aaaa-aaaaa-aaabq-cai");
+    let alice : Types.Account = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
+    let bob : Types.Account = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
+    let tokenA : Types.Token = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
+    let tokenB : Types.Token = Principal.fromText("r7inp-6aaaa-aaaaa-aaabq-cai");
     let initState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
     var manager : VirtualAccounts.VirtualAccountManager = VirtualAccounts.VirtualAccountManager(initState);
 
@@ -67,7 +68,7 @@ suite(
       "handles non-existent token balances correctly",
       func() {
         setup();
-        let nonExistentToken = Principal.fromText("r7inp-6aaaa-aaaaa-aaabq-cai");
+        let nonExistentToken : Types.Token = Principal.fromText("r7inp-6aaaa-aaaaa-aaabq-cai");
         assert (manager.getBalance(alice, nonExistentToken) == 0);
       },
     );
@@ -82,12 +83,13 @@ suite(
         assert (manager.getBalance(alice, tokenA) == 100);
         assert (manager.getBalance(bob, tokenA) == 0);
 
-        manager.transfer({
+        let transferArgs : TransferTypes.TransferArgs = {
           from = alice;
           to = bob;
           token = tokenA;
           amount = 40;
-        });
+        };
+        manager.transfer(transferArgs);
 
         assert (manager.getBalance(alice, tokenA) == 60);
         assert (manager.getBalance(bob, tokenA) == 40);
@@ -104,11 +106,11 @@ suite(
         let balances = manager.getAllBalances(alice);
         assert (balances.size() == 2);
 
-        let hasTokenA = Array.find<(Principal, Nat)>(
+        let hasTokenA = Array.find<(Types.Token, Nat)>(
           balances,
           func((token, amount)) = Principal.equal(token, tokenA) and amount == 200,
         );
-        let hasTokenB = Array.find<(Principal, Nat)>(
+        let hasTokenB = Array.find<(Types.Token, Nat)>(
           balances,
           func((token, amount)) = Principal.equal(token, tokenB) and amount == 300,
         );
@@ -152,7 +154,7 @@ suite(
       "maintains correct balances after multiple token operations",
       func() {
         setup();
-        let tokenC = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
+        let tokenC : Types.Token = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
 
         // Setup initial state
         manager.mint(alice, tokenA, 100);
@@ -160,12 +162,13 @@ suite(
         manager.mint(bob, tokenC, 75);
 
         // Perform multiple operations
-        manager.transfer({
+        let transferArgs : TransferTypes.TransferArgs = {
           from = alice;
           to = bob;
           token = tokenA;
           amount = 30;
-        });
+        };
+        manager.transfer(transferArgs);
 
         manager.mint(bob, tokenB, 25);
 
@@ -189,7 +192,7 @@ suite(
       "maintains state consistency in complex transfer patterns",
       func() {
         setup();
-        let charlie = Principal.fromText("rkp4c-7iaaa-aaaaa-aaaca-cai");
+        let charlie : Types.Account = Principal.fromText("rkp4c-7iaaa-aaaaa-aaaca-cai");
 
         // Initial mints
         manager.mint(alice, tokenA, 100);

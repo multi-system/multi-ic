@@ -1,17 +1,14 @@
 import Debug "mo:base/Debug";
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
-import Types "../../multi_backend/types/BackingTypes";
+import Types "../../multi_backend/types/Types";
+import BackingTypes "../../multi_backend/types/BackingTypes";
 import Math "../../multi_backend/backing/BackingMath";
 
 suite(
   "Backing Math",
   func() {
-    let token1Principal = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
-
-    let token1Info : Types.TokenInfo = {
-      canisterId = token1Principal;
-    };
+    let token1 : Types.Token = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
 
     test(
       "calculates eta correctly",
@@ -34,8 +31,8 @@ suite(
     test(
       "calculates required backing for single supply unit (phi = 1)",
       func() {
-        let pair : Types.BackingPair = {
-          tokenInfo = token1Info;
+        let pair : BackingTypes.BackingPair = {
+          token = token1;
           backingUnit = 100;
         };
         assert (Math.calculateRequiredBacking(1000, 1000, pair) == 100);
@@ -45,8 +42,8 @@ suite(
     test(
       "calculates required backing for multiple supply units (phi > 1)",
       func() {
-        let pair : Types.BackingPair = {
-          tokenInfo = token1Info;
+        let pair : BackingTypes.BackingPair = {
+          token = token1;
           backingUnit = 100;
         };
         assert (Math.calculateRequiredBacking(3000, 1000, pair) == 300);
@@ -56,8 +53,8 @@ suite(
     test(
       "calculates required backing with different backing unit sizes",
       func() {
-        let pair : Types.BackingPair = {
-          tokenInfo = token1Info;
+        let pair : BackingTypes.BackingPair = {
+          token = token1;
           backingUnit = 250;
         };
         assert (Math.calculateRequiredBacking(2000, 1000, pair) == 500);

@@ -3,7 +3,8 @@ import Array "mo:base/Array";
 import Result "mo:base/Result";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Debug "mo:base/Debug";
-import Types "../types/BackingTypes";
+import Types "../types/Types";
+import BackingTypes "../types/BackingTypes";
 import VirtualAccounts "../custodial/VirtualAccounts";
 import BackingStore "../backing/BackingStore";
 import BackingOperations "../backing/BackingOperations";
@@ -18,17 +19,17 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
   //
   // STATE VARIABLES
   //
-  private stable let owner : Principal = deployer;
-  private stable var approvedTokens : [Types.TokenInfo] = [];
+  private stable let owner : Types.Account = deployer;
+  private stable var approvedTokens : [Types.Token] = [];
 
-  private stable var backingState : Types.BackingState = {
+  private stable var backingState : BackingTypes.BackingState = {
     var hasInitialized = false;
     var config = {
       supplyUnit = 0;
       totalSupply = 0;
       backingPairs = [];
-      multiToken = { canisterId = Principal.fromText("aaaaa-aa") };
-      governanceToken = { canisterId = Principal.fromText("aaaaa-aa") };
+      multiToken = Principal.fromText("aaaaa-aa");
+      governanceToken = Principal.fromText("aaaaa-aa");
     };
   };
 
@@ -109,7 +110,7 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
       caller,
       owner,
       { canisterId = request.canisterId },
-      func(p : Principal) : async* Result.Result<(), Error.ApprovalError> {
+      func(p : Types.Token) : async* Result.Result<(), Error.ApprovalError> {
         return await* getCustodialManager().addLedger(p);
       },
     );
@@ -235,11 +236,11 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
   };
 
   public query func getMultiTokenId() : async Principal {
-    backingStore.getConfig().multiToken.canisterId;
+    backingStore.getConfig().multiToken;
   };
 
   public query func getGovernanceTokenId() : async Principal {
-    backingStore.getConfig().governanceToken.canisterId;
+    backingStore.getConfig().governanceToken;
   };
 
   public query func getSystemInfo() : async Messages.GetSystemInfoResponse {

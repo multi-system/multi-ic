@@ -1,4 +1,5 @@
-import Types "../types/BackingTypes";
+import Types "../types/Types";
+import BackingTypes "../types/BackingTypes";
 import Buffer "mo:base/Buffer";
 import VirtualAccounts "../custodial/VirtualAccounts";
 import Principal "mo:base/Principal";
@@ -25,15 +26,15 @@ module {
   public func calculateBacking(
     totalSupply : Nat,
     supplyUnit : Nat,
-    backingPairs : [Types.BackingPair],
+    backingPairs : [BackingTypes.BackingPair],
     virtualAccounts : VirtualAccounts.VirtualAccountManager,
-    systemAccount : Principal,
+    systemAccount : Types.Account,
   ) : [Nat] {
     let eta = calculateEta(totalSupply, supplyUnit);
     let units = Buffer.Buffer<Nat>(backingPairs.size());
 
     for (pair in backingPairs.vals()) {
-      let reserveQuantity = virtualAccounts.getBalance(systemAccount, pair.tokenInfo.canisterId);
+      let reserveQuantity = virtualAccounts.getBalance(systemAccount, pair.token);
       let unit = calculateBackingUnit(reserveQuantity, eta);
       units.add(unit);
     };
@@ -41,7 +42,7 @@ module {
     Buffer.toArray(units);
   };
 
-  public func calculateRequiredBacking(amount : Nat, supplyUnit : Nat, pair : Types.BackingPair) : Nat {
+  public func calculateRequiredBacking(amount : Nat, supplyUnit : Nat, pair : BackingTypes.BackingPair) : Nat {
     if (supplyUnit == 0) {
       Debug.trap("Supply unit cannot be zero in backing calculation");
     };

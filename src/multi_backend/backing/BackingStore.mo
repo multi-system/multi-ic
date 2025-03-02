@@ -1,13 +1,14 @@
 import Principal "mo:base/Principal";
 import Array "mo:base/Array";
-import Types "../types/BackingTypes";
+import Types "../types/Types";
+import BackingTypes "../types/BackingTypes";
 import Error "../error/Error";
 
 module {
-  public class BackingStore(state : Types.BackingState) {
-    public func addBackingToken(tokenInfo : Types.TokenInfo) {
+  public class BackingStore(state : BackingTypes.BackingState) {
+    public func addBackingToken(token : Types.Token) {
       let newPair = {
-        tokenInfo = tokenInfo;
+        token = token;
         backingUnit = 0;
       };
       state.config := {
@@ -18,8 +19,8 @@ module {
 
     public func initialize(
       supplyUnit : Nat,
-      multiToken : Types.TokenInfo,
-      governanceToken : Types.TokenInfo,
+      multiToken : Types.Token,
+      governanceToken : Types.Token,
     ) {
       state.config := {
         state.config with
@@ -37,16 +38,16 @@ module {
       };
     };
 
-    public func updateBackingTokens(newTokens : [Types.BackingPair]) {
+    public func updateBackingTokens(newTokens : [BackingTypes.BackingPair]) {
       state.config := {
         state.config with backingPairs = newTokens;
       };
     };
 
     // Query functions
-    public func getConfig() : Types.BackingConfig { state.config };
+    public func getConfig() : BackingTypes.BackingConfig { state.config };
     public func hasInitialized() : Bool { state.hasInitialized };
-    public func getBackingTokens() : [Types.BackingPair] {
+    public func getBackingTokens() : [BackingTypes.BackingPair] {
       state.config.backingPairs;
     };
     public func getSupplyUnit() : Nat { state.config.supplyUnit };

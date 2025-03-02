@@ -2,7 +2,8 @@ import Principal "mo:base/Principal";
 import Array "mo:base/Array";
 import Result "mo:base/Result";
 import Debug "mo:base/Debug";
-import Types "../types/BackingTypes";
+import Types "../types/Types";
+import BackingTypes "../types/BackingTypes";
 import Error "../error/Error";
 import BackingValidation "../backing/BackingValidation";
 import Messages "./Messages";
@@ -12,33 +13,35 @@ module {
   public class ApiHelper(
     backingStore : {
       hasInitialized : () -> Bool;
-      getConfig : () -> Types.BackingConfig;
-      addBackingToken : (Types.TokenInfo) -> ();
-      getBackingTokens : () -> [Types.BackingPair];
-      initialize : (Nat, Types.TokenInfo, Types.TokenInfo) -> ();
-      updateBackingTokens : ([Types.BackingPair]) -> ();
+      getConfig : () -> BackingTypes.BackingConfig;
+      addBackingToken : (Types.Token) -> ();
+      getBackingTokens : () -> [BackingTypes.BackingPair];
+      initialize : (Nat, Types.Token, Types.Token) -> ();
+      updateBackingTokens : ([BackingTypes.BackingPair]) -> ();
       getTotalSupply : () -> Nat;
       getSupplyUnit : () -> Nat;
     },
     tokenRegistry : {
-      approve : (Types.TokenInfo) -> Result.Result<(), Error.ApprovalError>;
-      isApproved : (Principal) -> Bool;
-      getApproved : () -> [Types.TokenInfo];
+      approve : (Types.Token) -> Result.Result<(), Error.ApprovalError>;
+      isApproved : (Types.Token) -> Bool;
+      getApproved : () -> [Types.Token];
       size : () -> Nat;
     },
     virtualAccounts : {
-      getBalance : (Principal, Principal) -> Nat;
+      getBalance : (Types.Account, Types.Token) -> Nat;
     },
-    systemAccount : Principal,
+    systemAccount : Types.Account,
   ) {
     // ADMINISTRATIVE OPERATIONS
 
     public func approveToken(
-      caller : Principal,
-      owner : Principal,
-      tokenInfo : Types.TokenInfo,
-      addLedger : (Principal) -> async* Result.Result<(), Error.ApprovalError>,
+      caller : Types.Account,
+      owner : Types.Account,
+      tokenRequest : Messages.TokenRequest,
+      addLedger : (Types.Token) -> async* Result.Result<(), Error.ApprovalError>,
     ) : async* Result.Result<(), Error.ApprovalError> {
+      let token : Types.Token = tokenRequest.canisterId;
+
       if (caller != owner) {
         return #err(#Unauthorized);
       };
@@ -47,24 +50,24 @@ module {
         return #err(#AlreadyInitialized);
       };
 
-      switch (BackingValidation.validateTokenApproval(tokenInfo, backingStore)) {
+      switch (BackingValidation.validateTokenApproval(token, backingStore)) {
         case (#err(e)) return #err(e);
         case (#ok()) {
-          if (tokenRegistry.isApproved(tokenInfo.canisterId)) {
-            return #err(#TokenAlreadyApproved(tokenInfo.canisterId));
+          if (tokenRegistry.isApproved(token)) {
+            return #err(#TokenAlreadyApproved(token));
           };
 
-          switch (tokenRegistry.approve(tokenInfo)) {
+          switch (tokenRegistry.approve(token)) {
             case (#err(e)) {
               return #err(e);
             };
             case (#ok()) {
-              let ledgerResult = await* addLedger(tokenInfo.canisterId);
+              let ledgerResult = await* addLedger(token);
 
               switch (ledgerResult) {
                 case (#err(e)) return #err(e);
                 case (#ok()) {
-                  backingStore.addBackingToken(tokenInfo);
+                  backingStore.addBackingToken(token);
                   return #ok(());
                 };
               };
@@ -75,66 +78,61 @@ module {
     };
 
     public func initialize(
-      caller : Principal,
-      owner : Principal,
+      caller : Types.Account,
+      owner : Types.Account,
       request : Messages.InitializeRequest,
       processInitialize : (
-        Principal,
-        [Types.BackingPair],
+        Types.Account,
+        [BackingTypes.BackingPair],
         Nat,
-        Types.TokenInfo,
-        Types.TokenInfo,
+        Types.Token,
+        Types.Token,
       ) -> Result.Result<(), Error.InitError>,
     ) : Result.Result<(), Error.InitError> {
       if (caller != owner) {
         return #err(#Unauthorized);
       };
 
-      let multiTokenInfo : Types.TokenInfo = {
-        canisterId = request.multiToken.canisterId;
-      };
+      let multiToken : Types.Token = request.multiToken.canisterId;
+      let governanceToken : Types.Token = request.governanceToken.canisterId;
 
-      let governanceTokenInfo : Types.TokenInfo = {
-        canisterId = request.governanceToken.canisterId;
-      };
-
-      let backingPairs = Array.map<{ canisterId : Principal; backingUnit : Nat }, Types.BackingPair>(
+      let backingPairs = Array.map<{ canisterId : Principal; backingUnit : Nat }, BackingTypes.BackingPair>(
         request.backingTokens,
-        func(token) : Types.BackingPair {
+        func(tokenInfo) : BackingTypes.BackingPair {
           {
-            tokenInfo = { canisterId = token.canisterId };
-            backingUnit = token.backingUnit;
+            token = tokenInfo.canisterId;
+            backingUnit = tokenInfo.backingUnit;
           };
         },
       );
 
-      return processInitialize(caller, backingPairs, request.supplyUnit, multiTokenInfo, governanceTokenInfo);
+      return processInitialize(caller, backingPairs, request.supplyUnit, multiToken, governanceToken);
     };
 
     // USER OPERATIONS HELPERS
 
-    public func validateDepositPreconditions(_ : Principal) : ?Messages.CommonError {
+    public func validateDepositPreconditions(_ : Types.Account) : ?Messages.CommonError {
       if (not backingStore.hasInitialized()) {
         return ? #NotInitialized;
       };
       return null;
     };
 
-    public func validateWithdrawPreconditions(_ : Principal) : ?Messages.CommonError {
+    public func validateWithdrawPreconditions(_ : Types.Account) : ?Messages.CommonError {
       if (not backingStore.hasInitialized()) {
         return ? #NotInitialized;
       };
       return null;
     };
 
-    public func validateIssuePreconditions(_ : Principal) : ?Messages.CommonError {
+    public func validateIssuePreconditions(_ : Types.Account) : ?Messages.CommonError {
       if (not backingStore.hasInitialized()) {
         return ? #NotInitialized;
       };
       return null;
     };
 
-    public func validateRedeemPreconditions(_ : Principal) : ?Messages.CommonError {
+    public func validateRedeemPreconditions(_ : Types.Account) : ?Messages.CommonError {
       if (not backingStore.hasInitialized()) {
         return ? #NotInitialized;
       };
@@ -144,15 +142,13 @@ module {
     // QUERY FORMATTING
 
     public func formatBackingTokensResponse() : Messages.GetTokensResponse {
-      let tokens = Array.map<Types.BackingPair, Messages.BackingTokenInfo>(
+      let tokens = Array.map<BackingTypes.BackingPair, Messages.BackingTokenInfo>(
         backingStore.getBackingTokens(),
-        func(pair : Types.BackingPair) : Messages.BackingTokenInfo {
+        func(pair : BackingTypes.BackingPair) : Messages.BackingTokenInfo {
           {
-            tokenInfo = {
-              canisterId = pair.tokenInfo.canisterId;
-            };
+            tokenInfo = { canisterId = pair.token };
             backingUnit = pair.backingUnit;
-            reserveQuantity = virtualAccounts.getBalance(systemAccount, pair.tokenInfo.canisterId);
+            reserveQuantity = virtualAccounts.getBalance(systemAccount, pair.token);
           };
         },
       );
@@ -165,18 +161,14 @@ module {
       };
 
       let config = backingStore.getConfig();
-      let multiTokenId = config.multiToken.canisterId;
-      let governanceTokenId = config.governanceToken.canisterId;
 
-      let backingTokensInfo = Array.map<Types.BackingPair, Messages.BackingTokenInfo>(
+      let backingTokensInfo = Array.map<BackingTypes.BackingPair, Messages.BackingTokenInfo>(
         backingStore.getBackingTokens(),
-        func(pair : Types.BackingPair) : Messages.BackingTokenInfo {
+        func(pair : BackingTypes.BackingPair) : Messages.BackingTokenInfo {
           {
-            tokenInfo = {
-              canisterId = pair.tokenInfo.canisterId;
-            };
+            tokenInfo = { canisterId = pair.token };
             backingUnit = pair.backingUnit;
-            reserveQuantity = virtualAccounts.getBalance(systemAccount, pair.tokenInfo.canisterId);
+            reserveQuantity = virtualAccounts.getBalance(systemAccount, pair.token);
           };
         },
       );
@@ -185,17 +177,17 @@ module {
         initialized = true;
         totalSupply = config.totalSupply;
         supplyUnit = config.supplyUnit;
-        multiToken = { canisterId = multiTokenId };
-        governanceToken = { canisterId = governanceTokenId };
+        multiToken = { canisterId = config.multiToken };
+        governanceToken = { canisterId = config.governanceToken };
         backingTokens = backingTokensInfo;
       });
     };
 
     public func getGovernanceTokenIdResponse() : Principal {
-      backingStore.getConfig().governanceToken.canisterId;
+      backingStore.getConfig().governanceToken;
     };
 
-    public func getBalanceResponse(user : Principal, token : Principal) : Messages.GetBalanceResponse {
+    public func getBalanceResponse(user : Types.Account, token : Types.Token) : Messages.GetBalanceResponse {
       return #ok(virtualAccounts.getBalance(user, token));
     };
 
@@ -203,9 +195,9 @@ module {
       return #ok(backingStore.getTotalSupply());
     };
 
-    public func getMultiTokenBalanceResponse(user : Principal) : Messages.GetBalanceResponse {
+    public func getMultiTokenBalanceResponse(user : Types.Account) : Messages.GetBalanceResponse {
       let multiToken = backingStore.getConfig().multiToken;
-      return #ok(virtualAccounts.getBalance(user, multiToken.canisterId));
+      return #ok(virtualAccounts.getBalance(user, multiToken));
     };
   };
 };

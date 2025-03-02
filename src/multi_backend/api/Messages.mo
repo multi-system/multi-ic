@@ -2,6 +2,10 @@ import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 
 module {
+  public type TokenRequest = {
+    canisterId : Principal;
+  };
+
   // Request types (with descriptive names ending in "Request")
   public type ApproveTokenRequest = {
     canisterId : Principal;
@@ -9,8 +13,8 @@ module {
 
   public type InitializeRequest = {
     supplyUnit : Nat;
-    multiToken : { canisterId : Principal };
-    governanceToken : { canisterId : Principal };
+    multiToken : TokenRequest;
+    governanceToken : TokenRequest;
     backingTokens : [{
       canisterId : Principal;
       backingUnit : Nat;
@@ -76,7 +80,7 @@ module {
 
   // Success response types
   public type BackingTokenInfo = {
-    tokenInfo : { canisterId : Principal };
+    tokenInfo : TokenRequest;
     backingUnit : Nat;
     reserveQuantity : Nat;
   };
@@ -91,8 +95,8 @@ module {
     initialized : Bool;
     totalSupply : Nat;
     supplyUnit : Nat;
-    multiToken : { canisterId : Principal };
-    governanceToken : { canisterId : Principal };
+    multiToken : TokenRequest;
+    governanceToken : TokenRequest;
     backingTokens : [BackingTokenInfo];
   };
 

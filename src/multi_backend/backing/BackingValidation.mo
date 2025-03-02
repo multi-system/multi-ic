@@ -1,5 +1,6 @@
 import Result "mo:base/Result";
-import Types "../types/BackingTypes";
+import BackingTypes "../types/BackingTypes";
+import Types "../types/Types";
 import Error "../error/Error";
 import Principal "mo:base/Principal";
 import VirtualAccounts "../custodial/VirtualAccounts";
@@ -10,26 +11,26 @@ import Option "mo:base/Option";
 
 module {
   public func isTokenApproved(
-    tokenId : Principal,
-    backingTokens : [Types.BackingPair],
-  ) : Result.Result<Types.BackingPair, Error.InitError> {
-    let foundToken = Array.find<Types.BackingPair>(
+    token : Types.Token,
+    backingTokens : [BackingTypes.BackingPair],
+  ) : Result.Result<BackingTypes.BackingPair, Error.InitError> {
+    let foundToken = Array.find<BackingTypes.BackingPair>(
       backingTokens,
-      func(pair) = Principal.equal(pair.tokenInfo.canisterId, tokenId),
+      func(pair) = Principal.equal(pair.token, token),
     );
 
     switch (foundToken) {
-      case (null) { #err(#TokenNotApproved(tokenId)) };
+      case (null) { #err(#TokenNotApproved(token)) };
       case (?token) { #ok(token) };
     };
   };
 
   public func isTokenAlreadyInBackingPairs(
-    tokenInfo : Types.TokenInfo,
-    backingPairs : [Types.BackingPair],
+    token : Types.Token,
+    backingPairs : [BackingTypes.BackingPair],
   ) : Bool {
     for (pair in backingPairs.vals()) {
-      if (Principal.equal(pair.tokenInfo.canisterId, tokenInfo.canisterId)) {
+      if (Principal.equal(pair.token, token)) {
         return true;
       };
     };
@@ -37,7 +38,7 @@ module {
   };
 
   public func createInsufficientBalanceError(
-    token : Principal,
+    token : Types.Token,
     required : Nat,
     balance : Nat,
   ) : Error.InsufficientBalanceError {
@@ -49,15 +50,15 @@ module {
   };
 
   public func checkSufficientBalance<E>(
-    principal : Principal,
-    tokenId : Principal,
+    principal : Types.Account,
+    token : Types.Token,
     requiredAmount : Nat,
     virtualAccounts : VirtualAccounts.VirtualAccountManager,
     makeError : (Error.InsufficientBalanceError) -> E,
   ) : Result.Result<Nat, E> {
-    let balance = virtualAccounts.getBalance(principal, tokenId);
+    let balance = virtualAccounts.getBalance(principal, token);
     if (balance < requiredAmount) {
-      let error = createInsufficientBalanceError(tokenId, requiredAmount, balance);
+      let error = createInsufficientBalanceError(token, requiredAmount, balance);
       return #err(makeError(error));
     };
     #ok(balance);
@@ -74,34 +75,34 @@ module {
   };
 
   public func validateTokenApproval(
-    tokenInfo : Types.TokenInfo,
+    token : Types.Token,
     store : {
       hasInitialized : () -> Bool;
-      getConfig : () -> Types.BackingConfig;
+      getConfig : () -> BackingTypes.BackingConfig;
     },
   ) : Result.Result<(), Error.ApprovalError> {
     if (store.hasInitialized()) {
       return #err(#AlreadyInitialized);
     };
 
-    if (isTokenAlreadyInBackingPairs(tokenInfo, store.getConfig().backingPairs)) {
-      return #err(#TokenAlreadyApproved(tokenInfo.canisterId));
+    if (isTokenAlreadyInBackingPairs(token, store.getConfig().backingPairs)) {
+      return #err(#TokenAlreadyApproved(token));
     };
     #ok(());
   };
 
   public func validateNoTokenDuplicates(
-    tokens : [Types.TokenInfo]
+    tokens : [Types.Token]
   ) : Result.Result<(), Error.InitError> {
-    let seen = Buffer.Buffer<Principal>(tokens.size());
+    let seen = Buffer.Buffer<Types.Token>(tokens.size());
 
     for (token in tokens.vals()) {
       for (seenToken in seen.vals()) {
-        if (Principal.equal(seenToken, token.canisterId)) {
-          return #err(#DuplicateToken(token.canisterId));
+        if (Principal.equal(seenToken, token)) {
+          return #err(#DuplicateToken(token));
         };
       };
-      seen.add(token.canisterId);
+      seen.add(token);
     };
 
     #ok(());
@@ -109,10 +110,10 @@ module {
 
   public func validateInitialization(
     supplyUnit : Nat,
-    initialTokens : [Types.BackingPair],
+    initialTokens : [BackingTypes.BackingPair],
     store : {
       hasInitialized : () -> Bool;
-      getBackingTokens : () -> [Types.BackingPair];
+      getBackingTokens : () -> [BackingTypes.BackingPair];
     },
   ) : Result.Result<(), Error.InitError> {
     if (store.hasInitialized()) {
@@ -123,22 +124,22 @@ module {
       return #err(#InvalidSupplyUnit);
     };
 
-    let tokenInfos = Array.map<Types.BackingPair, Types.TokenInfo>(
+    let tokens = Array.map<BackingTypes.BackingPair, Types.Token>(
       initialTokens,
-      func(pair) : Types.TokenInfo = pair.tokenInfo,
+      func(pair) : Types.Token = pair.token,
     );
 
-    switch (validateNoTokenDuplicates(tokenInfos)) {
+    switch (validateNoTokenDuplicates(tokens)) {
       case (#err(e)) return #err(e);
       case (#ok()) {};
     };
 
     for (pair in initialTokens.vals()) {
       if (pair.backingUnit == 0) {
-        return #err(#InvalidBackingUnit(pair.tokenInfo.canisterId));
+        return #err(#InvalidBackingUnit(pair.token));
       };
 
-      switch (isTokenApproved(pair.tokenInfo.canisterId, store.getBackingTokens())) {
+      switch (isTokenApproved(pair.token, store.getBackingTokens())) {
         case (#err(e)) return #err(e);
         case (#ok(_)) {};
       };
@@ -149,17 +150,17 @@ module {
 
   public func validateBackingTokenTransfer(
     amount : Nat,
-    from : Principal,
+    from : Types.Account,
     supplyUnit : Nat,
-    backingTokens : [Types.BackingPair],
+    backingTokens : [BackingTypes.BackingPair],
     virtualAccounts : VirtualAccounts.VirtualAccountManager,
-  ) : Result.Result<[(Principal, Nat)], Error.OperationError> {
+  ) : Result.Result<[(Types.Token, Nat)], Error.OperationError> {
     switch (validateSupplyUnitDivisible(amount, supplyUnit)) {
       case (#err(e)) return #err(e);
       case (#ok()) {};
     };
 
-    let transfers = Buffer.Buffer<(Principal, Nat)>(backingTokens.size());
+    let transfers = Buffer.Buffer<(Types.Token, Nat)>(backingTokens.size());
     let eta = BackingMath.calculateEta(amount, supplyUnit);
 
     for (pair in backingTokens.vals()) {
@@ -168,7 +169,7 @@ module {
       switch (
         checkSufficientBalance<Error.OperationError>(
           from,
-          pair.tokenInfo.canisterId,
+          pair.token,
           requiredAmount,
           virtualAccounts,
           func(e) { #InsufficientBalance(e) },
@@ -178,7 +179,7 @@ module {
         case (#ok(_)) {};
       };
 
-      transfers.add((pair.tokenInfo.canisterId, requiredAmount));
+      transfers.add((pair.token, requiredAmount));
     };
     #ok(Buffer.toArray(transfers));
   };
@@ -202,8 +203,8 @@ module {
 
   public func validateRedeemBalance(
     amount : Nat,
-    caller : Principal,
-    multiToken : Principal,
+    caller : Types.Account,
+    multiToken : Types.Token,
     virtualAccounts : VirtualAccounts.VirtualAccountManager,
   ) : Result.Result<(), Error.OperationError> {
     switch (

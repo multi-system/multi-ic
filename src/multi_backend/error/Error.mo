@@ -1,10 +1,11 @@
 import Principal "mo:base/Principal";
 import Int "mo:base/Int";
+import Types "../types/Types";
 
 module {
   // Common error structures
   public type InsufficientBalanceError = {
-    token : Principal;
+    token : Types.Token;
     required : Nat;
     balance : Nat;
   };
@@ -14,9 +15,9 @@ module {
     #AlreadyInitialized;
     #InvalidSupplyUnit;
     #Unauthorized;
-    #DuplicateToken : Principal;
-    #InvalidBackingUnit : Principal;
-    #TokenNotApproved : Principal;
+    #DuplicateToken : Types.Token;
+    #InvalidBackingUnit : Types.Token;
+    #TokenNotApproved : Types.Token;
     #InvalidPrincipal : { principal : Principal; reason : Text };
   };
 
@@ -41,7 +42,7 @@ module {
       amount : Nat;
     };
     #BackingUnitBecameZero : {
-      token : Principal;
+      token : Types.Token;
       reserveQuantity : Nat;
       eta : Nat;
     };
@@ -50,7 +51,7 @@ module {
       requestedChange : Nat;
       reason : Text;
     };
-    #TokenNotApproved : Principal;
+    #TokenNotApproved : Types.Token;
     #InvalidPrincipal : { principal : Principal; reason : Text };
   };
 
@@ -75,10 +76,10 @@ module {
   // Error type specific to token approval process
   public type ApprovalError = {
     #AlreadyInitialized;
-    #TokenAlreadyApproved : Principal;
+    #TokenAlreadyApproved : Types.Token;
     #Unauthorized;
     #LedgerError : Text;
-    #TokenNotApproved : Principal;
+    #TokenNotApproved : Types.Token;
     #InvalidPrincipal : { principal : Principal; reason : Text };
   };
 
@@ -96,9 +97,9 @@ module {
   // Error type for virtual account operations
   public type TransferError = {
     #InsufficientBalance : InsufficientBalanceError;
-    #TokenNotSupported : Principal;
+    #TokenNotSupported : Types.Token;
     #TransferFailed : {
-      token : Principal;
+      token : Types.Token;
       error : Text;
     };
     #InvalidPrincipal : { principal : Principal; reason : Text };
