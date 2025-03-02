@@ -10,31 +10,22 @@ module {
     var approvedTokens : [Types.TokenInfo];
   };
 
-  public func validatePrincipal(id : Principal) : Result.Result<(), { principal : Principal; reason : Text }> {
+  public func validatePrincipal(id : Principal) : Result.Result<(), Error.ApprovalError> {
     let principalText = Principal.toText(id);
-
     if (Principal.equal(id, Principal.fromText("aaaaa-aa"))) {
-      return #err({
-        principal = id;
-        reason = "Cannot use default/empty principal ID";
-      });
+      return #err(#InvalidPrincipal({ principal = id; reason = "Cannot use default/empty principal ID" }));
     };
-
     if (Text.size(principalText) < 10) {
-      return #err({
-        principal = id;
-        reason = "Principal ID is too short or malformed";
-      });
+      return #err(#InvalidPrincipal({ principal = id; reason = "Principal ID is too short or malformed" }));
     };
-
     return #ok();
   };
 
   public class TokenRegistryManager(state : TokenRegistry) {
     public func approve(token : Types.TokenInfo) : Result.Result<(), Error.ApprovalError> {
       switch (validatePrincipal(token.canisterId)) {
-        case (#err(details)) {
-          return #err(#InvalidPrincipal(details));
+        case (#err(error)) {
+          return #err(error);
         };
         case (#ok()) {};
       };
