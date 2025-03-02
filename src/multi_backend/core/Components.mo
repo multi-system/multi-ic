@@ -8,11 +8,12 @@ import BackingApiHelper "../api/BackingApiHelper";
 import BackingTypes "../types/BackingTypes";
 import Types "../types/Types";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
+import AccountTypes "../types/AccountTypes";
 
 module {
   public class ComponentManager(
     tokenRegistryState : { var approvedTokens : [Types.Token] },
-    accountsState : StableHashMap.StableHashMap<Principal, VirtualAccounts.BalanceMap>,
+    accountsState : StableHashMap.StableHashMap<Principal, AccountTypes.BalanceMap>,
     backingState : BackingTypes.BackingState,
   ) {
     // Initialize core components that don't need the canister ID

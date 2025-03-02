@@ -6,13 +6,11 @@ import Debug "mo:base/Debug";
 import Iter "mo:base/Iter";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Types "../types/Types";
+import AccountTypes "../types/AccountTypes";
 import TransferTypes "../types/TransferTypes";
 
 module {
-  public type BalanceMap = StableHashMap.StableHashMap<Principal, Nat>;
-  public type AccountMap = StableHashMap.StableHashMap<Principal, BalanceMap>;
-
-  public class VirtualAccountManager(initialState : AccountMap) {
+  public class VirtualAccountManager(initialState : AccountTypes.AccountMap) {
     private let accounts = initialState;
 
     // Public testable validations that return bools
@@ -49,7 +47,7 @@ module {
       };
     };
 
-    private func getOrCreateAccount(account : Types.Account) : BalanceMap {
+    private func getOrCreateAccount(account : Types.Account) : AccountTypes.BalanceMap {
       switch (StableHashMap.get(accounts, Principal.equal, Principal.hash, account)) {
         case (?balances) { balances };
         case null {

@@ -3,6 +3,7 @@ import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
 import Types "../../multi_backend/types/Types";
 import BackingTypes "../../multi_backend/types/BackingTypes";
+import AccountTypes "../../multi_backend/types/AccountTypes";
 import BackingStore "../../multi_backend/backing/BackingStore";
 import BackingOperations "../../multi_backend/backing/BackingOperations";
 import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
@@ -50,7 +51,7 @@ suite(
       };
 
       let store = BackingStore.BackingStore(state);
-      let initVAState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
+      let initVAState = StableHashMap.init<Principal, AccountTypes.BalanceMap>();
       let virtualAccounts = VirtualAccounts.VirtualAccountManager(initVAState);
 
       let ops = BackingOperations.BackingOperationsImpl(

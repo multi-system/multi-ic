@@ -3,6 +3,7 @@ import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
 import Types "../../multi_backend/types/Types";
 import BackingTypes "../../multi_backend/types/BackingTypes";
+import AccountTypes "../../multi_backend/types/AccountTypes";
 import BackingValidation "../../multi_backend/backing/BackingValidation";
 import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
@@ -187,7 +188,7 @@ suite(
     test(
       "validates backing token transfer",
       func() {
-        let initVAState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
+        let initVAState = StableHashMap.init<Principal, AccountTypes.BalanceMap>();
         let virtualAccounts = VirtualAccounts.VirtualAccountManager(initVAState);
 
         backingTokens := [{
@@ -240,7 +241,7 @@ suite(
     test(
       "validates redeem balance",
       func() {
-        let initVAState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
+        let initVAState = StableHashMap.init<Principal, AccountTypes.BalanceMap>();
         let virtualAccounts = VirtualAccounts.VirtualAccountManager(initVAState);
 
         // Test with insufficient balance

@@ -3,11 +3,11 @@ import Result "mo:base/Result";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Types "../types/Types";
 import BackingTypes "../types/BackingTypes";
-import VirtualAccounts "../custodial/VirtualAccounts";
 import Messages "./Messages";
 import Error "../error/Error";
 import ErrorMapping "../error/ErrorMapping";
 import Components "../core/Components";
+import AccountTypes "../types/AccountTypes";
 
 shared ({ caller = deployer }) actor class BackingApi() = this {
   //
@@ -27,7 +27,7 @@ shared ({ caller = deployer }) actor class BackingApi() = this {
     };
   };
 
-  private stable var accountsState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
+  private stable var accountsState = StableHashMap.init<Principal, AccountTypes.BalanceMap>();
 
   //
   // COMPONENT INITIALIZATION

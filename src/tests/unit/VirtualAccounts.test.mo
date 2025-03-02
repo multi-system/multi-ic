@@ -5,6 +5,7 @@ import Option "mo:base/Option";
 import { test; suite } "mo:test";
 import Types "../../multi_backend/types/Types";
 import TransferTypes "../../multi_backend/types/TransferTypes";
+import AccountTypes "../../multi_backend/types/AccountTypes";
 import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 
@@ -16,12 +17,12 @@ suite(
     let bob : Types.Account = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
     let tokenA : Types.Token = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
     let tokenB : Types.Token = Principal.fromText("r7inp-6aaaa-aaaaa-aaabq-cai");
-    let initState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
+    let initState = StableHashMap.init<Principal, AccountTypes.BalanceMap>();
     var manager : VirtualAccounts.VirtualAccountManager = VirtualAccounts.VirtualAccountManager(initState);
 
     // Reset state before each test
     let setup = func() {
-      let freshState = StableHashMap.init<Principal, VirtualAccounts.BalanceMap>();
+      let freshState = StableHashMap.init<Principal, AccountTypes.BalanceMap>();
       manager := VirtualAccounts.VirtualAccountManager(freshState);
     };
 
