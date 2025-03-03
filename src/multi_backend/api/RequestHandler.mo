@@ -14,18 +14,18 @@ module {
       getConfig : () -> BackingTypes.BackingConfig;
       addBackingToken : (Types.Token) -> ();
       getBackingTokens : () -> [BackingTypes.BackingPair];
-      initialize : (Nat, Types.Token, Types.Token) -> ();
+      initialize : (Nat, Types.Token) -> ();
       updateBackingTokens : ([BackingTypes.BackingPair]) -> ();
     },
-    tokenRegistry : {
-      approve : (Types.Token) -> Result.Result<(), Error.ApprovalError>;
-      isApproved : (Types.Token) -> Bool;
-      getApproved : () -> [Types.Token];
-      size : () -> Nat;
+    settings : {
+      approveToken : (Types.Token) -> Result.Result<(), Error.ApprovalError>;
+      isTokenApproved : (Types.Token) -> Bool;
+      getApprovedTokens : () -> [Types.Token];
+      getApprovedTokensCount : () -> Nat;
+      getGovernanceToken : () -> ?Types.Token;
+      setGovernanceToken : (Types.Token) -> Result.Result<(), Error.ApprovalError>;
     },
   ) {
-    // ADMINISTRATIVE OPERATIONS
-
     public func approveToken(
       caller : Types.Account,
       owner : Types.Account,
@@ -45,11 +45,11 @@ module {
       switch (BackingValidation.validateTokenApproval(token, backingStore)) {
         case (#err(e)) return #err(e);
         case (#ok()) {
-          if (tokenRegistry.isApproved(token)) {
+          if (settings.isTokenApproved(token)) {
             return #err(#TokenAlreadyApproved(token));
           };
 
-          switch (tokenRegistry.approve(token)) {
+          switch (settings.approveToken(token)) {
             case (#err(e)) {
               return #err(e);
             };
@@ -77,7 +77,6 @@ module {
         [BackingTypes.BackingPair],
         Nat,
         Types.Token,
-        Types.Token,
       ) -> Result.Result<(), Error.InitError>,
     ) : Result.Result<(), Error.InitError> {
       if (caller != owner) {
@@ -86,6 +85,12 @@ module {
 
       let multiToken : Types.Token = request.multiToken.canisterId;
       let governanceToken : Types.Token = request.governanceToken.canisterId;
+
+      // Set governance token in settings
+      switch (settings.setGovernanceToken(governanceToken)) {
+        case (#err(e)) return #err(#Unauthorized);
+        case (#ok()) {};
+      };
 
       let backingPairs = Array.map<{ canisterId : Principal; backingUnit : Nat }, BackingTypes.BackingPair>(
         request.backingTokens,
@@ -97,10 +102,8 @@ module {
         },
       );
 
-      return processInitialize(backingPairs, request.supplyUnit, multiToken, governanceToken);
+      return processInitialize(backingPairs, request.supplyUnit, multiToken);
     };
-
-    // USER OPERATIONS HELPERS
 
     public func validateDepositPreconditions(_ : Types.Account) : ?Messages.CommonError {
       if (not backingStore.hasInitialized()) {

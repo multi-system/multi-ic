@@ -5,12 +5,12 @@ import Option "mo:base/Option";
 import ICRC2 "mo:icrc2-types";
 import Error "mo:base/Error";
 import VirtualAccounts "./VirtualAccounts";
-import TokenRegistry "../core/TokenRegistry";
+import Settings "../core/Settings";
 import ErrorModule "../error/Error";
 
 module {
   public class CustodialManager(
-    tokenRegistry : TokenRegistry.TokenRegistryManager,
+    settings : Settings.Settings,
     virtualAccounts : VirtualAccounts.VirtualAccounts,
     owner : Principal,
   ) {
@@ -35,7 +35,7 @@ module {
     };
 
     public func getLedger(tokenId : Principal) : Result.Result<ICRC2.Service, ErrorModule.OperationError> {
-      if (not tokenRegistry.isApproved(tokenId)) {
+      if (not settings.isTokenApproved(tokenId)) {
         return #err(#TokenNotApproved(tokenId));
       };
 

@@ -18,7 +18,6 @@ suite(
     let tokenB : Types.Token = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
     let systemAccount : Types.Account = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
     let multiTokenLedger : Types.Token = Principal.fromText("qhbym-qaaaa-aaaaa-aaafq-cai");
-    let govTokenLedger : Types.Token = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
     let caller : Types.Account = Principal.fromText("aaaaa-aa");
 
     let approveToken = func(
@@ -43,7 +42,6 @@ suite(
           totalSupply = 0;
           backingPairs = [];
           multiToken = Principal.fromText("aaaaa-aa");
-          governanceToken = Principal.fromText("aaaaa-aa");
         };
       };
 
@@ -95,7 +93,7 @@ suite(
         },
       ];
 
-      assert (ops.processInitialize(backingPairs, 100, multiTokenLedger, govTokenLedger) == #ok());
+      assert (ops.processInitialize(backingPairs, 100, multiTokenLedger) == #ok());
 
       va.transfer({
         from = caller;
@@ -142,7 +140,7 @@ suite(
           backingUnit = 10;
         }];
 
-        switch (ops.processInitialize(backingPairs, 100, multiTokenLedger, govTokenLedger)) {
+        switch (ops.processInitialize(backingPairs, 100, multiTokenLedger)) {
           case (#err(e)) { assert false };
           case (#ok()) {
             assert (store.getSupplyUnit() == 100);
@@ -177,9 +175,9 @@ suite(
           backingUnit = 10;
         }];
 
-        assert (ops.processInitialize(backingPairs, 100, multiTokenLedger, govTokenLedger) == #ok());
+        assert (ops.processInitialize(backingPairs, 100, multiTokenLedger) == #ok());
 
-        switch (ops.processInitialize(backingPairs, 100, multiTokenLedger, govTokenLedger)) {
+        switch (ops.processInitialize(backingPairs, 100, multiTokenLedger)) {
           case (#err(#AlreadyInitialized)) {};
           case _ { assert false };
         };
@@ -199,7 +197,7 @@ suite(
           backingUnit = 10;
         }];
 
-        switch (ops.processInitialize(backingPairs, 100, multiTokenLedger, govTokenLedger)) {
+        switch (ops.processInitialize(backingPairs, 100, multiTokenLedger)) {
           case (#err(#TokenNotApproved(token))) {
             assert Principal.equal(token, unauthorizedToken);
           };
@@ -221,7 +219,7 @@ suite(
           backingUnit = 0;
         }];
 
-        switch (ops.processInitialize(backingPairs, 100, multiTokenLedger, govTokenLedger)) {
+        switch (ops.processInitialize(backingPairs, 100, multiTokenLedger)) {
           case (#err(#InvalidBackingUnit(token))) {
             assert Principal.equal(token, tokenA);
           };
@@ -243,7 +241,7 @@ suite(
           backingUnit = 10;
         }];
 
-        switch (ops.processInitialize(backingPairs, 0, multiTokenLedger, govTokenLedger)) {
+        switch (ops.processInitialize(backingPairs, 0, multiTokenLedger)) {
           case (#err(#InvalidSupplyUnit)) {};
           case _ { assert false };
         };

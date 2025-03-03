@@ -13,7 +13,6 @@ suite(
     let alice : Types.Account = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
     let tokenA : Types.Token = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
     let tokenB : Types.Token = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
-    let govToken : Types.Token = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
 
     var hasInitializedValue = false;
     var backingTokens : [BackingTypes.BackingPair] = [];
@@ -22,7 +21,6 @@ suite(
       totalSupply = 0;
       backingPairs = [];
       multiToken = Principal.fromText("aaaaa-aa");
-      governanceToken = govToken;
     };
 
     let mockStore = {

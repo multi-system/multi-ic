@@ -21,12 +21,11 @@ module {
       backingTokens : [BackingTypes.BackingPair],
       supplyUnit : Nat,
       multiToken : Types.Token,
-      governanceToken : Types.Token,
     ) : Result.Result<(), Error.InitError> {
       switch (BackingValidation.validateInitialization(supplyUnit, backingTokens, store)) {
         case (#err(e)) return #err(e);
         case (#ok()) {
-          store.initialize(supplyUnit, multiToken, governanceToken);
+          store.initialize(supplyUnit, multiToken);
           store.updateBackingTokens(backingTokens);
           #ok(());
         };

@@ -2,27 +2,26 @@ import Principal "mo:base/Principal";
 import VirtualAccounts "../custodial/VirtualAccounts";
 import BackingStore "../backing/BackingStore";
 import BackingOperations "../backing/BackingOperations";
-import TokenRegistry "TokenRegistry";
+import Settings "../core/Settings";
 import CustodialManager "../custodial/CustodialManager";
 import RequestHandler "../api/RequestHandler";
 import ResponseHandler "../api/ResponseHandler";
 import BackingTypes "../types/BackingTypes";
+import SettingsTypes "../types/SettingsTypes";
 import Types "../types/Types";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import AccountTypes "../types/AccountTypes";
 
 module {
   public class Components(
-    tokenRegistryState : { var approvedTokens : [Types.Token] },
+    settingsState : SettingsTypes.SettingsState,
     accountsState : StableHashMap.StableHashMap<Principal, AccountTypes.BalanceMap>,
     backingState : BackingTypes.BackingState,
   ) {
-    // Initialize core components that don't need the canister ID
-    private let tokenRegistry = TokenRegistry.TokenRegistryManager(tokenRegistryState);
+    private let settings = Settings.Settings(settingsState);
     private let virtualAccounts = VirtualAccounts.VirtualAccounts(accountsState);
     private let backingStore = BackingStore.BackingStore(backingState);
 
-    // Lazy component initialization
     private var backingOperations_ : ?BackingOperations.BackingOperations = null;
     private var custodialManager_ : ?CustodialManager.CustodialManager = null;
     private var requestHandler_ : ?RequestHandler.RequestHandler = null;
@@ -49,7 +48,7 @@ module {
       switch (custodialManager_) {
         case (null) {
           let instance = CustodialManager.CustodialManager(
-            tokenRegistry,
+            settings,
             virtualAccounts,
             canisterId,
           );
@@ -67,7 +66,7 @@ module {
         case (null) {
           let instance = RequestHandler.RequestHandler(
             backingStore,
-            tokenRegistry,
+            settings,
           );
           requestHandler_ := ?instance;
           return instance;
@@ -85,6 +84,7 @@ module {
             backingStore,
             virtualAccounts,
             canisterId,
+            settings,
           );
           responseHandler_ := ?instance;
           return instance;
@@ -95,9 +95,8 @@ module {
       };
     };
 
-    // Expose internal component getters
-    public func getTokenRegistry() : TokenRegistry.TokenRegistryManager {
-      tokenRegistry;
+    public func getSettings() : Settings.Settings {
+      settings;
     };
 
     public func getVirtualAccounts() : VirtualAccounts.VirtualAccounts {

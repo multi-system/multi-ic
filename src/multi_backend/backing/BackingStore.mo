@@ -18,14 +18,12 @@ module {
     public func initialize(
       supplyUnit : Nat,
       multiToken : Types.Token,
-      governanceToken : Types.Token,
     ) {
       state.config := {
         state.config with
         supplyUnit = supplyUnit;
         totalSupply = 0;
         multiToken = multiToken;
-        governanceToken = governanceToken;
       };
       state.hasInitialized := true;
     };
@@ -50,5 +48,6 @@ module {
     };
     public func getSupplyUnit() : Nat { state.config.supplyUnit };
     public func getTotalSupply() : Nat { state.config.totalSupply };
+    public func getMultiToken() : Types.Token { state.config.multiToken };
   };
 };

@@ -10,7 +10,6 @@ module {
     totalSupply : Nat;
     backingPairs : [BackingPair];
     multiToken : Types.Token;
-    governanceToken : Types.Token;
   };
   public type BackingState = {
     var hasInitialized : Bool;

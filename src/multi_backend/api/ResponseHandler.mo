@@ -13,14 +13,16 @@ module {
       getBackingTokens : () -> [BackingTypes.BackingPair];
       getTotalSupply : () -> Nat;
       getSupplyUnit : () -> Nat;
+      getMultiToken : () -> Types.Token;
     },
     virtualAccounts : {
       getBalance : (Types.Account, Types.Token) -> Nat;
     },
     systemAccount : Types.Account,
+    settings : {
+      getGovernanceToken : () -> ?Types.Token;
+    },
   ) {
-    // QUERY RESPONSE FORMATTERS
-
     public func formatBackingTokensResponse() : Messages.GetTokensResponse {
       let tokens = Array.map<BackingTypes.BackingPair, Messages.BackingTokenInfo>(
         backingStore.getBackingTokens(),
@@ -41,6 +43,10 @@ module {
       };
 
       let config = backingStore.getConfig();
+      let governanceToken = switch (settings.getGovernanceToken()) {
+        case (?token) token;
+        case (null) Principal.fromText("aaaaa-aa");
+      };
 
       let backingTokensInfo = Array.map<BackingTypes.BackingPair, Messages.BackingTokenInfo>(
         backingStore.getBackingTokens(),
@@ -58,13 +64,16 @@ module {
         totalSupply = config.totalSupply;
         supplyUnit = config.supplyUnit;
         multiToken = { canisterId = config.multiToken };
-        governanceToken = { canisterId = config.governanceToken };
+        governanceToken = { canisterId = governanceToken };
         backingTokens = backingTokensInfo;
       });
     };
 
     public func getGovernanceTokenIdResponse() : Principal {
-      backingStore.getConfig().governanceToken;
+      switch (settings.getGovernanceToken()) {
+        case (?token) token;
+        case (null) Principal.fromText("aaaaa-aa");
+      };
     };
 
     public func getBalanceResponse(user : Types.Account, token : Types.Token) : Messages.GetBalanceResponse {

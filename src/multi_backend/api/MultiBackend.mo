@@ -3,6 +3,7 @@ import Result "mo:base/Result";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Types "../types/Types";
 import BackingTypes "../types/BackingTypes";
+import SettingsTypes "../types/SettingsTypes";
 import Messages "./Messages";
 import Error "../error/Error";
 import ErrorMapping "../error/ErrorMapping";
@@ -10,11 +11,12 @@ import Components "../core/Components";
 import AccountTypes "../types/AccountTypes";
 
 shared ({ caller = deployer }) actor class MultiBackend() = this {
-  //
-  // STATE VARIABLES
-  //
   private stable let owner : Types.Account = deployer;
-  private stable var approvedTokens : [Types.Token] = [];
+
+  private stable var settingsState : SettingsTypes.SettingsState = {
+    var approvedTokens = [];
+    var governanceToken = null;
+  };
 
   private stable var backingState : BackingTypes.BackingState = {
     var hasInitialized = false;
@@ -23,26 +25,18 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
       totalSupply = 0;
       backingPairs = [];
       multiToken = Principal.fromText("aaaaa-aa");
-      governanceToken = Principal.fromText("aaaaa-aa");
     };
   };
 
   private stable var accountsState = StableHashMap.init<Principal, AccountTypes.BalanceMap>();
 
-  //
-  // COMPONENT INITIALIZATION
-  //
   private let c = Components.Components(
-    { var approvedTokens = approvedTokens },
+    settingsState,
     accountsState,
     backingState,
   );
 
-  //
-  // SYSTEM MANAGEMENT (ADMIN FUNCTIONS)
-  //
   public shared ({ caller }) func approveToken(request : Messages.ApproveTokenRequest) : async Messages.ApproveTokenResponse {
-    // Use the API helper for token approval with explicit type annotation
     let result : Result.Result<(), Error.ApprovalError> = await* c.getRequestHandler(Principal.fromActor(this)).approveToken(
       caller,
       owner,
@@ -56,13 +50,14 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
   };
 
   public shared ({ caller }) func initialize(request : Messages.InitializeRequest) : async Messages.InitializeResponse {
-    // Use the API helper for initialization
     switch (
       c.getRequestHandler(Principal.fromActor(this)).initialize(
         caller,
         owner,
         request,
-        c.getBackingOperations(Principal.fromActor(this)).processInitialize,
+        func(backingPairs : [BackingTypes.BackingPair], supplyUnit : Nat, multiToken : Types.Token) : Result.Result<(), Error.InitError> {
+          return c.getBackingOperations(Principal.fromActor(this)).processInitialize(backingPairs, supplyUnit, multiToken);
+        },
       )
     ) {
       case (#err(e)) {
@@ -74,17 +69,12 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
     };
   };
 
-  //
-  // USER OPERATIONS (UPDATE METHODS)
-  //
   public shared ({ caller }) func deposit(request : Messages.DepositRequest) : async Messages.DepositResponse {
-    // Validate preconditions
     switch (c.getRequestHandler(Principal.fromActor(this)).validateDepositPreconditions(caller)) {
       case (?error) return #err(error);
       case (null) {};
     };
 
-    // Proceed with operation
     switch (await* c.getCustodialManager(Principal.fromActor(this)).deposit(caller, request.token, request.amount)) {
       case (#err(e)) {
         return ErrorMapping.mapToDepositResponse(e);
@@ -96,13 +86,11 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
   };
 
   public shared ({ caller }) func withdraw(request : Messages.WithdrawRequest) : async Messages.WithdrawResponse {
-    // Validate preconditions
     switch (c.getRequestHandler(Principal.fromActor(this)).validateWithdrawPreconditions(caller)) {
       case (?error) return #err(error);
       case (null) {};
     };
 
-    // Proceed with operation
     switch (await* c.getCustodialManager(Principal.fromActor(this)).withdraw(caller, request.token, request.amount)) {
       case (#err(e)) {
         return ErrorMapping.mapToWithdrawResponse(e);
@@ -114,13 +102,11 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
   };
 
   public shared ({ caller }) func issue(request : Messages.IssueRequest) : async Messages.IssueResponse {
-    // Validate preconditions
     switch (c.getRequestHandler(Principal.fromActor(this)).validateIssuePreconditions(caller)) {
       case (?error) return #err(error);
       case (null) {};
     };
 
-    // Proceed with operation
     switch (c.getBackingOperations(Principal.fromActor(this)).processIssue(caller, request.amount)) {
       case (#err(e)) {
         return #err(ErrorMapping.mapOperationError(e));
@@ -132,13 +118,11 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
   };
 
   public shared ({ caller }) func redeem(request : Messages.RedeemRequest) : async Messages.RedeemResponse {
-    // Validate preconditions
     switch (c.getRequestHandler(Principal.fromActor(this)).validateRedeemPreconditions(caller)) {
       case (?error) return #err(error);
       case (null) {};
     };
 
-    // Proceed with operation
     switch (c.getBackingOperations(Principal.fromActor(this)).processRedeem(caller, request.amount)) {
       case (#err(e)) {
         return #err(ErrorMapping.mapOperationError(e));
@@ -149,9 +133,6 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
     };
   };
 
-  //
-  // QUERY METHODS (READ-ONLY)
-  //
   public query func isInitialized() : async Bool {
     c.getBackingStore().hasInitialized();
   };
@@ -173,11 +154,14 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
   };
 
   public query func getMultiTokenId() : async Principal {
-    c.getBackingStore().getConfig().multiToken;
+    c.getBackingStore().getMultiToken();
   };
 
   public query func getGovernanceTokenId() : async Principal {
-    c.getBackingStore().getConfig().governanceToken;
+    switch (c.getSettings().getGovernanceToken()) {
+      case (?token) { token };
+      case (null) { Principal.fromText("aaaaa-aa") };
+    };
   };
 
   public query func getSystemInfo() : async Messages.GetSystemInfoResponse {

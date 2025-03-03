@@ -9,7 +9,6 @@ suite(
   func() {
     let token1 : Types.Token = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
     let multiToken : Types.Token = Principal.fromText("qhbym-qaaaa-aaaaa-aaafq-cai");
-    let govToken : Types.Token = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
 
     let createStore = func() : BackingStore.BackingStore {
       let state : BackingTypes.BackingState = {
@@ -19,7 +18,6 @@ suite(
           totalSupply = 0;
           backingPairs = [];
           multiToken = Principal.fromText("aaaaa-aa");
-          governanceToken = Principal.fromText("aaaaa-aa");
         };
       };
       BackingStore.BackingStore(state);
@@ -41,12 +39,11 @@ suite(
       "initializes state correctly",
       func() {
         let store = createStore();
-        store.initialize(100, multiToken, govToken);
+        store.initialize(100, multiToken);
         assert store.hasInitialized();
         assert store.getSupplyUnit() == 100;
         assert store.getTotalSupply() == 0;
         assert Principal.equal(store.getConfig().multiToken, multiToken);
-        assert Principal.equal(store.getConfig().governanceToken, govToken);
       },
     );
 

@@ -4,12 +4,11 @@ import Result "mo:base/Result";
 import Types "../types/Types";
 import Error "../error/Error";
 import Text "mo:base/Text";
+import SettingsTypes "../types/SettingsTypes";
 
 module {
-  public type TokenRegistry = {
-    var approvedTokens : [Types.Token];
-  };
 
+  // Validation helper function
   public func validatePrincipal(id : Principal) : Result.Result<(), Error.ApprovalError> {
     let principalText = Principal.toText(id);
     if (Principal.equal(id, Principal.fromText("aaaaa-aa"))) {
@@ -21,8 +20,9 @@ module {
     return #ok();
   };
 
-  public class TokenRegistryManager(state : TokenRegistry) {
-    public func approve(token : Types.Token) : Result.Result<(), Error.ApprovalError> {
+  public class Settings(state : SettingsTypes.SettingsState) {
+    // Token approval methods
+    public func approveToken(token : Types.Token) : Result.Result<(), Error.ApprovalError> {
       switch (validatePrincipal(token)) {
         case (#err(error)) {
           return #err(error);
@@ -46,7 +46,7 @@ module {
       };
     };
 
-    public func isApproved(token : Types.Token) : Bool {
+    public func isTokenApproved(token : Types.Token) : Bool {
       switch (validatePrincipal(token)) {
         case (#err(_)) {
           return false;
@@ -60,12 +60,39 @@ module {
       ) != null;
     };
 
-    public func getApproved() : [Types.Token] {
+    public func getApprovedTokens() : [Types.Token] {
       return state.approvedTokens;
     };
 
-    public func size() : Nat {
+    public func getApprovedTokensCount() : Nat {
       return state.approvedTokens.size();
+    };
+
+    // Governance token methods
+    public func setGovernanceToken(token : Types.Token) : Result.Result<(), Error.ApprovalError> {
+      switch (validatePrincipal(token)) {
+        case (#err(error)) {
+          return #err(error);
+        };
+        case (#ok()) {};
+      };
+
+      state.governanceToken := ?token;
+      return #ok(());
+    };
+
+    public func getGovernanceToken() : ?Types.Token {
+      return state.governanceToken;
+    };
+
+    public func hasGovernanceToken() : Bool {
+      return state.governanceToken != null;
+    };
+
+    // Use during system initialization
+    public func clearSettings() {
+      state.approvedTokens := [];
+      state.governanceToken := null;
     };
   };
 };
