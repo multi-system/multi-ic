@@ -4,6 +4,7 @@ import Result "mo:base/Result";
 import Types "../types/Types";
 import BackingTypes "../types/BackingTypes";
 import Messages "./Messages";
+import Debug "mo:base/Debug";
 
 module {
   public class ResponseHandler(
@@ -11,12 +12,12 @@ module {
       hasInitialized : () -> Bool;
       getConfig : () -> BackingTypes.BackingConfig;
       getBackingTokens : () -> [BackingTypes.BackingPair];
-      getTotalSupply : () -> Nat;
+      getTotalSupply : () -> Types.Amount;
       getSupplyUnit : () -> Nat;
       getMultiToken : () -> Types.Token;
     },
     virtualAccounts : {
-      getBalance : (Types.Account, Types.Token) -> Nat;
+      getBalance : (Types.Account, Types.Token) -> Types.Amount;
     },
     systemAccount : Types.Account,
     settings : {
@@ -27,10 +28,11 @@ module {
       let tokens = Array.map<BackingTypes.BackingPair, Messages.BackingTokenInfo>(
         backingStore.getBackingTokens(),
         func(pair : BackingTypes.BackingPair) : Messages.BackingTokenInfo {
+          let balance = virtualAccounts.getBalance(systemAccount, pair.token);
           {
             tokenInfo = { canisterId = pair.token };
             backingUnit = pair.backingUnit;
-            reserveQuantity = virtualAccounts.getBalance(systemAccount, pair.token);
+            reserveQuantity = balance.value;
           };
         },
       );
@@ -51,17 +53,20 @@ module {
       let backingTokensInfo = Array.map<BackingTypes.BackingPair, Messages.BackingTokenInfo>(
         backingStore.getBackingTokens(),
         func(pair : BackingTypes.BackingPair) : Messages.BackingTokenInfo {
+          let balance = virtualAccounts.getBalance(systemAccount, pair.token);
           {
             tokenInfo = { canisterId = pair.token };
             backingUnit = pair.backingUnit;
-            reserveQuantity = virtualAccounts.getBalance(systemAccount, pair.token);
+            reserveQuantity = balance.value;
           };
         },
       );
 
+      let totalSupply = backingStore.getTotalSupply();
+
       return #ok({
         initialized = true;
-        totalSupply = config.totalSupply;
+        totalSupply = totalSupply.value;
         supplyUnit = config.supplyUnit;
         multiToken = { canisterId = config.multiToken };
         governanceToken = { canisterId = governanceToken };
@@ -77,16 +82,19 @@ module {
     };
 
     public func getBalanceResponse(user : Types.Account, token : Types.Token) : Messages.GetBalanceResponse {
-      return #ok(virtualAccounts.getBalance(user, token));
+      let balance = virtualAccounts.getBalance(user, token);
+      return #ok(balance.value);
     };
 
     public func getTotalSupplyResponse() : Messages.GetBalanceResponse {
-      return #ok(backingStore.getTotalSupply());
+      let supply = backingStore.getTotalSupply();
+      return #ok(supply.value);
     };
 
     public func getMultiTokenBalanceResponse(user : Types.Account) : Messages.GetBalanceResponse {
-      let multiToken = backingStore.getConfig().multiToken;
-      return #ok(virtualAccounts.getBalance(user, multiToken));
+      let multiToken = backingStore.getMultiToken();
+      let balance = virtualAccounts.getBalance(user, multiToken);
+      return #ok(balance.value);
     };
   };
 };

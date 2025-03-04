@@ -6,18 +6,22 @@ import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Types "../types/Types";
 import AccountTypes "../types/AccountTypes";
 import TransferTypes "../types/TransferTypes";
+import AmountOperations "../financial/AmountOperations";
+import Result "mo:base/Result";
+import Error "../error/Error";
 
 module {
   public class VirtualAccounts(initialState : AccountTypes.AccountMap) {
     private let accounts = initialState;
 
     // Public testable validations that return bools
-    public func hasInsufficientBalance(account : Types.Account, token : Types.Token, amount : Nat) : Bool {
-      getBalance(account, token) < amount;
+    public func hasInsufficientBalance(account : Types.Account, amount : Types.Amount) : Bool {
+      let balanceAmount = getBalance(account, amount.token);
+      balanceAmount.value < amount.value;
     };
 
-    public func isValidAmount(amount : Nat) : Bool {
-      amount > 0;
+    public func isValidAmount(amount : Types.Amount) : Bool {
+      amount.value > 0;
     };
 
     public func isSelfTransfer(from : Types.Account, to : Types.Account) : Bool {
@@ -39,7 +43,7 @@ module {
       };
     };
 
-    private func validateAmount(amount : Nat, operation : Text) {
+    private func validateAmount(amount : Types.Amount, operation : Text) {
       if (not isValidAmount(amount)) {
         Debug.trap(operation # " amount cannot be zero");
       };
@@ -56,12 +60,12 @@ module {
       };
     };
 
-    private func updateBalance(account : Types.Account, token : Types.Token, amount : Nat) {
+    private func updateBalance(account : Types.Account, amount : Types.Amount) {
       let balances = getOrCreateAccount(account);
-      StableHashMap.put(balances, Principal.equal, Principal.hash, token, amount);
+      StableHashMap.put(balances, Principal.equal, Principal.hash, amount.token, amount.value);
     };
 
-    public func getBalance(account : Types.Account, token : Types.Token) : Nat {
+    private func getBalanceValue(account : Types.Account, token : Types.Token) : Nat {
       switch (StableHashMap.get(accounts, Principal.equal, Principal.hash, account)) {
         case (?balances) {
           Option.get(StableHashMap.get(balances, Principal.equal, Principal.hash, token), 0);
@@ -70,52 +74,78 @@ module {
       };
     };
 
-    public func mint(to : Types.Account, token : Types.Token, amount : Nat) {
-      validatePrincipals([to, token]);
-      validateAmount(amount, "Mint");
-
-      let currentBalance = getBalance(to, token);
-      updateBalance(to, token, currentBalance + amount);
+    public func getBalance(account : Types.Account, token : Types.Token) : Types.Amount {
+      let value = getBalanceValue(account, token);
+      { token; value };
     };
 
-    public func burn(from : Types.Account, token : Types.Token, amount : Nat) {
-      validatePrincipals([from, token]);
+    public func mint(to : Types.Account, amount : Types.Amount) {
+      validatePrincipals([to, amount.token]);
+      validateAmount(amount, "Mint");
+
+      let currentBalance = getBalance(to, amount.token);
+      let updatedAmount = AmountOperations.add(currentBalance, amount);
+      updateBalance(to, updatedAmount);
+    };
+
+    public func burn(from : Types.Account, amount : Types.Amount) {
+      validatePrincipals([from, amount.token]);
       validateAmount(amount, "Burn");
 
-      if (hasInsufficientBalance(from, token, amount)) {
+      if (hasInsufficientBalance(from, amount)) {
         Debug.trap("Insufficient balance for burn");
       };
 
-      let currentBalance = getBalance(from, token);
-      updateBalance(from, token, currentBalance - amount);
+      let currentBalance = getBalance(from, amount.token);
+      let result = AmountOperations.subtract(currentBalance, amount);
+
+      switch (result) {
+        case (#ok(updatedAmount)) {
+          updateBalance(from, updatedAmount);
+        };
+        case (#err(error)) {
+          Debug.trap("Error during burn: " # debug_show (error));
+        };
+      };
     };
 
     public func transfer(args : TransferTypes.TransferArgs) {
-      validatePrincipals([args.from, args.to, args.token]);
+      validatePrincipals([args.from, args.to, args.amount.token]);
       validateAmount(args.amount, "Transfer");
 
       if (isSelfTransfer(args.from, args.to)) {
         Debug.trap("Self-transfers are not allowed");
       };
 
-      if (hasInsufficientBalance(args.from, args.token, args.amount)) {
+      if (hasInsufficientBalance(args.from, args.amount)) {
         Debug.trap("Insufficient balance");
       };
 
-      let toBalance = getBalance(args.to, args.token);
-      let fromBalance = getBalance(args.from, args.token);
+      let toBalance = getBalance(args.to, args.amount.token);
+      let fromBalance = getBalance(args.from, args.amount.token);
 
-      updateBalance(args.from, args.token, fromBalance - args.amount);
-      updateBalance(args.to, args.token, toBalance + args.amount);
+      let subtractResult = AmountOperations.subtract(fromBalance, args.amount);
+
+      switch (subtractResult) {
+        case (#ok(updatedFromAmount)) {
+          let updatedToAmount = AmountOperations.add(toBalance, args.amount);
+
+          updateBalance(args.from, updatedFromAmount);
+          updateBalance(args.to, updatedToAmount);
+        };
+        case (#err(error)) {
+          Debug.trap("Error during transfer: " # debug_show (error));
+        };
+      };
     };
 
-    public func getAllBalances(account : Types.Account) : [(Types.Token, Nat)] {
+    public func getAllBalances(account : Types.Account) : [Types.Amount] {
       switch (StableHashMap.get(accounts, Principal.equal, Principal.hash, account)) {
         case (?balances) {
-          let buffer = Buffer.Buffer<(Types.Token, Nat)>(0);
+          let buffer = Buffer.Buffer<Types.Amount>(0);
           for ((token, balance) in StableHashMap.entries(balances)) {
             if (balance > 0) {
-              buffer.add((token, balance));
+              buffer.add({ token; value = balance });
             };
           };
           Buffer.toArray(buffer);

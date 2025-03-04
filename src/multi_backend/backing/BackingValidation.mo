@@ -5,6 +5,7 @@ import Error "../error/Error";
 import Principal "mo:base/Principal";
 import VirtualAccounts "../custodial/VirtualAccounts";
 import BackingMath "./BackingMath";
+import AmountOperations "../financial/AmountOperations";
 import Buffer "mo:base/Buffer";
 import Array "mo:base/Array";
 
@@ -37,38 +38,36 @@ module {
   };
 
   public func createInsufficientBalanceError(
-    token : Types.Token,
-    required : Nat,
-    balance : Nat,
+    amount : Types.Amount,
+    balance : Types.Amount,
   ) : Error.InsufficientBalanceError {
     {
-      token = token;
-      required = required;
-      balance = balance;
+      token = amount.token;
+      required = amount.value;
+      balance = balance.value;
     };
   };
 
   public func checkSufficientBalance<E>(
     principal : Types.Account,
-    token : Types.Token,
-    requiredAmount : Nat,
+    amount : Types.Amount,
     virtualAccounts : VirtualAccounts.VirtualAccounts,
     makeError : (Error.InsufficientBalanceError) -> E,
-  ) : Result.Result<Nat, E> {
-    let balance = virtualAccounts.getBalance(principal, token);
-    if (balance < requiredAmount) {
-      let error = createInsufficientBalanceError(token, requiredAmount, balance);
+  ) : Result.Result<Types.Amount, E> {
+    let balance = virtualAccounts.getBalance(principal, amount.token);
+    if (balance.value < amount.value) {
+      let error = createInsufficientBalanceError(amount, balance);
       return #err(makeError(error));
     };
     #ok(balance);
   };
 
-  public func validateSupplyUnitDivisible(amount : Nat, supplyUnit : Nat) : Result.Result<(), Error.OperationError> {
+  public func validateSupplyUnitDivisible(amount : Types.Amount, supplyUnit : Nat) : Result.Result<(), Error.OperationError> {
     if (supplyUnit == 0) {
       return #err(#InvalidAmount({ reason = "Supply unit cannot be zero"; amount = supplyUnit }));
     };
-    if (amount % supplyUnit != 0) {
-      return #err(#InvalidAmount({ reason = "Amount must be divisible by supply unit"; amount = amount }));
+    if (amount.value % supplyUnit != 0) {
+      return #err(#InvalidAmount({ reason = "Amount must be divisible by supply unit"; amount = amount.value }));
     };
     #ok(());
   };
@@ -148,27 +147,29 @@ module {
   };
 
   public func validateBackingTokenTransfer(
-    amount : Nat,
+    multiAmount : Types.Amount,
     from : Types.Account,
     supplyUnit : Nat,
     backingTokens : [BackingTypes.BackingPair],
     virtualAccounts : VirtualAccounts.VirtualAccounts,
-  ) : Result.Result<[(Types.Token, Nat)], Error.OperationError> {
-    switch (validateSupplyUnitDivisible(amount, supplyUnit)) {
+  ) : Result.Result<[Types.Amount], Error.OperationError> {
+    switch (validateSupplyUnitDivisible(multiAmount, supplyUnit)) {
       case (#err(e)) return #err(e);
       case (#ok()) {};
     };
 
-    let transfers = Buffer.Buffer<(Types.Token, Nat)>(backingTokens.size());
-    let eta = BackingMath.calculateEta(amount, supplyUnit);
+    let transfers = Buffer.Buffer<Types.Amount>(backingTokens.size());
+    let eta = BackingMath.calculateEta(multiAmount, supplyUnit);
 
     for (pair in backingTokens.vals()) {
-      let requiredAmount = pair.backingUnit * eta;
+      let requiredAmount = {
+        token = pair.token;
+        value = pair.backingUnit * eta;
+      };
 
       switch (
         checkSufficientBalance<Error.OperationError>(
           from,
-          pair.token,
           requiredAmount,
           virtualAccounts,
           func(e) { #InsufficientBalance(e) },
@@ -178,39 +179,37 @@ module {
         case (#ok(_)) {};
       };
 
-      transfers.add((pair.token, requiredAmount));
+      transfers.add(requiredAmount);
     };
     #ok(Buffer.toArray(transfers));
   };
 
   public func validateRedeemAmount(
-    amount : Nat,
-    totalSupply : Nat,
+    multiAmount : Types.Amount,
+    totalSupplyAmount : Types.Amount,
     supplyUnit : Nat,
   ) : Result.Result<(), Error.OperationError> {
-    switch (validateSupplyUnitDivisible(amount, supplyUnit)) {
+    switch (validateSupplyUnitDivisible(multiAmount, supplyUnit)) {
       case (#err(e)) return #err(e);
       case (#ok()) {};
     };
 
-    if (amount > totalSupply) {
-      return #err(#InvalidAmount({ reason = "Cannot redeem more than total supply"; amount = amount }));
+    if (multiAmount.value > totalSupplyAmount.value) {
+      return #err(#InvalidAmount({ reason = "Cannot redeem more than total supply"; amount = multiAmount.value }));
     };
 
     #ok(());
   };
 
   public func validateRedeemBalance(
-    amount : Nat,
+    multiAmount : Types.Amount,
     caller : Types.Account,
-    multiToken : Types.Token,
     virtualAccounts : VirtualAccounts.VirtualAccounts,
   ) : Result.Result<(), Error.OperationError> {
     switch (
       checkSufficientBalance<Error.OperationError>(
         caller,
-        multiToken,
-        amount,
+        multiAmount,
         virtualAccounts,
         func(e) { #InsufficientBalance(e) },
       )
@@ -223,18 +222,18 @@ module {
   };
 
   public func validateSupplyChange(
-    amount : Nat,
+    changeAmount : Types.Amount,
     isIncrease : Bool,
-    currentSupply : Nat,
+    currentSupplyAmount : Types.Amount,
     supplyUnit : Nat,
   ) : Result.Result<(), Error.OperationError> {
-    switch (validateSupplyUnitDivisible(amount, supplyUnit)) {
+    switch (validateSupplyUnitDivisible(changeAmount, supplyUnit)) {
       case (#err(e)) return #err(e);
       case (#ok()) {};
     };
 
-    if (not isIncrease and currentSupply < amount) {
-      return #err(#InvalidSupplyChange({ currentSupply = currentSupply; requestedChange = amount; reason = "Cannot decrease supply by more than current supply" }));
+    if (not isIncrease and currentSupplyAmount.value < changeAmount.value) {
+      return #err(#InvalidSupplyChange({ currentSupply = currentSupplyAmount.value; requestedChange = changeAmount.value; reason = "Cannot decrease supply by more than current supply" }));
     };
     #ok(());
   };

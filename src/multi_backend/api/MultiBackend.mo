@@ -9,6 +9,7 @@ import Error "../error/Error";
 import ErrorMapping "../error/ErrorMapping";
 import Components "../core/Components";
 import AccountTypes "../types/AccountTypes";
+import AmountOperations "../financial/AmountOperations";
 
 shared ({ caller = deployer }) actor class MultiBackend() = this {
   private stable let owner : Types.Account = deployer;
@@ -75,7 +76,9 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
       case (null) {};
     };
 
-    switch (await* c.getCustodialManager(Principal.fromActor(this)).deposit(caller, request.token, request.amount)) {
+    let amount = AmountOperations.new(request.token, request.amount);
+
+    switch (await* c.getCustodialManager(Principal.fromActor(this)).deposit(caller, amount)) {
       case (#err(e)) {
         return ErrorMapping.mapToDepositResponse(e);
       };
@@ -91,7 +94,9 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
       case (null) {};
     };
 
-    switch (await* c.getCustodialManager(Principal.fromActor(this)).withdraw(caller, request.token, request.amount)) {
+    let amount = AmountOperations.new(request.token, request.amount);
+
+    switch (await* c.getCustodialManager(Principal.fromActor(this)).withdraw(caller, amount)) {
       case (#err(e)) {
         return ErrorMapping.mapToWithdrawResponse(e);
       };
@@ -107,7 +112,10 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
       case (null) {};
     };
 
-    switch (c.getBackingOperations(Principal.fromActor(this)).processIssue(caller, request.amount)) {
+    let multiToken = c.getBackingStore().getMultiToken();
+    let amount = AmountOperations.new(multiToken, request.amount);
+
+    switch (c.getBackingOperations(Principal.fromActor(this)).processIssue(caller, amount)) {
       case (#err(e)) {
         return #err(ErrorMapping.mapOperationError(e));
       };
@@ -123,7 +131,10 @@ shared ({ caller = deployer }) actor class MultiBackend() = this {
       case (null) {};
     };
 
-    switch (c.getBackingOperations(Principal.fromActor(this)).processRedeem(caller, request.amount)) {
+    let multiToken = c.getBackingStore().getMultiToken();
+    let amount = AmountOperations.new(multiToken, request.amount);
+
+    switch (c.getBackingOperations(Principal.fromActor(this)).processRedeem(caller, amount)) {
       case (#err(e)) {
         return #err(ErrorMapping.mapOperationError(e));
       };

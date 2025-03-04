@@ -2,54 +2,55 @@ import Types "../types/Types";
 import BackingTypes "../types/BackingTypes";
 import Buffer "mo:base/Buffer";
 import VirtualAccounts "../custodial/VirtualAccounts";
+import AmountOperations "../financial/AmountOperations";
 import Debug "mo:base/Debug";
 
 module {
-  public func calculateEta(totalSupply : Nat, supplyUnit : Nat) : Nat {
+  public func calculateEta(multiAmount : Types.Amount, supplyUnit : Nat) : Nat {
     if (supplyUnit == 0) {
       Debug.trap("Supply unit cannot be zero in eta calculation");
     };
-    if (totalSupply % supplyUnit != 0) {
-      Debug.trap("Total supply must be divisible by supply unit in eta calculation");
+    if (multiAmount.value % supplyUnit != 0) {
+      Debug.trap("Amount must be divisible by supply unit in eta calculation");
     };
-    totalSupply / supplyUnit;
+    multiAmount.value / supplyUnit;
   };
 
-  public func calculateBackingUnit(reserveQuantity : Nat, eta : Nat) : Nat {
+  public func calculateBackingUnit(reserveAmount : Types.Amount, eta : Nat) : Nat {
     if (eta == 0) {
       Debug.trap("Eta cannot be zero in backing unit calculation");
     };
-    reserveQuantity / eta;
+    AmountOperations.divideByScalar(reserveAmount, eta).value;
   };
 
   public func calculateBacking(
-    totalSupply : Nat,
+    multiAmount : Types.Amount,
     supplyUnit : Nat,
     backingPairs : [BackingTypes.BackingPair],
     virtualAccounts : VirtualAccounts.VirtualAccounts,
     systemAccount : Types.Account,
   ) : [Nat] {
-    let eta = calculateEta(totalSupply, supplyUnit);
+    let eta = calculateEta(multiAmount, supplyUnit);
     let units = Buffer.Buffer<Nat>(backingPairs.size());
 
     for (pair in backingPairs.vals()) {
-      let reserveQuantity = virtualAccounts.getBalance(systemAccount, pair.token);
-      let unit = calculateBackingUnit(reserveQuantity, eta);
+      let reserveAmount = virtualAccounts.getBalance(systemAccount, pair.token);
+      let unit = calculateBackingUnit(reserveAmount, eta);
       units.add(unit);
     };
 
     Buffer.toArray(units);
   };
 
-  public func calculateRequiredBacking(amount : Nat, supplyUnit : Nat, pair : BackingTypes.BackingPair) : Nat {
+  public func calculateRequiredBacking(multiAmount : Types.Amount, supplyUnit : Nat, pair : BackingTypes.BackingPair) : Types.Amount {
     if (supplyUnit == 0) {
       Debug.trap("Supply unit cannot be zero in backing calculation");
     };
-    if (amount % supplyUnit != 0) {
+    if (multiAmount.value % supplyUnit != 0) {
       Debug.trap("Amount must be divisible by supply unit in backing calculation");
     };
 
-    let supplyUnits = amount / supplyUnit;
-    supplyUnits * pair.backingUnit;
+    let supplyUnits = multiAmount.value / supplyUnit;
+    AmountOperations.new(pair.token, supplyUnits * pair.backingUnit);
   };
 };
