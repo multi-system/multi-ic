@@ -14,7 +14,6 @@ module {
   public class VirtualAccounts(initialState : AccountTypes.AccountMap) {
     private let accounts = initialState;
 
-    // Public testable validations that return bools
     public func hasInsufficientBalance(account : Types.Account, amount : Types.Amount) : Bool {
       let balanceAmount = getBalance(account, amount.token);
       balanceAmount.value < amount.value;
@@ -77,6 +76,17 @@ module {
     public func getBalance(account : Types.Account, token : Types.Token) : Types.Amount {
       let value = getBalanceValue(account, token);
       { token; value };
+    };
+
+    public func getTotalBalance(token : Types.Token) : Types.Amount {
+      var total = 0;
+
+      for ((account, balances) in StableHashMap.entries(accounts)) {
+        let balance = Option.get(StableHashMap.get(balances, Principal.equal, Principal.hash, token), 0);
+        total += balance;
+      };
+
+      { token; value = total };
     };
 
     public func mint(to : Types.Account, amount : Types.Amount) {

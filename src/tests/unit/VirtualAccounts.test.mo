@@ -155,6 +155,45 @@ suite(
       },
     );
 
+    test(
+      "calculates total balance correctly across multiple accounts",
+      func() {
+        setup();
+        // Initially no balances
+        assert (manager.getTotalBalance(tokenA).value == 0);
+
+        // Add some balances across different accounts
+        manager.mint(alice, amount(tokenA, 100));
+        manager.mint(bob, amount(tokenA, 150));
+
+        // Check total balance
+        assert (manager.getTotalBalance(tokenA).value == 250);
+
+        // Add more to an existing account
+        manager.mint(alice, amount(tokenA, 50));
+        assert (manager.getTotalBalance(tokenA).value == 300);
+
+        // Transfer between accounts should not change total
+        let transferArgs : TransferTypes.TransferArgs = {
+          from = alice;
+          to = bob;
+          amount = amount(tokenA, 75);
+        };
+        manager.transfer(transferArgs);
+        assert (manager.getTotalBalance(tokenA).value == 300);
+
+        // Burn some tokens and verify total decreases
+        manager.burn(bob, amount(tokenA, 100));
+        assert (manager.getTotalBalance(tokenA).value == 200);
+
+        // Different token should have different total
+        assert (manager.getTotalBalance(tokenB).value == 0);
+        manager.mint(alice, amount(tokenB, 500));
+        assert (manager.getTotalBalance(tokenB).value == 500);
+        assert (manager.getTotalBalance(tokenA).value == 200);
+      },
+    );
+
     // Complex operation tests
     test(
       "maintains correct balances after multiple token operations",
