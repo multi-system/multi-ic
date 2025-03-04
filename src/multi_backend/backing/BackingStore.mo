@@ -1,6 +1,9 @@
 import Array "mo:base/Array";
 import Types "../types/Types";
 import BackingTypes "../types/BackingTypes";
+import AmountOperations "../financial/AmountOperations";
+import Debug "mo:base/Debug";
+import Principal "mo:base/Principal";
 
 module {
   public class BackingStore(state : BackingTypes.BackingState) {
@@ -28,9 +31,12 @@ module {
       state.hasInitialized := true;
     };
 
-    public func updateTotalSupply(newSupply : Nat) {
+    public func updateTotalSupply(amount : Types.Amount) {
+      if (amount.token != state.config.multiToken) {
+        Debug.trap("Token mismatch: expected " # Principal.toText(state.config.multiToken) # " but got " # Principal.toText(amount.token));
+      };
       state.config := {
-        state.config with totalSupply = newSupply;
+        state.config with totalSupply = amount.value;
       };
     };
 
@@ -47,7 +53,12 @@ module {
       state.config.backingPairs;
     };
     public func getSupplyUnit() : Nat { state.config.supplyUnit };
-    public func getTotalSupply() : Nat { state.config.totalSupply };
+    public func getTotalSupply() : Types.Amount {
+      {
+        token = state.config.multiToken;
+        value = state.config.totalSupply;
+      };
+    };
     public func getMultiToken() : Types.Token { state.config.multiToken };
   };
 };

@@ -4,7 +4,6 @@ module {
   public type TransferArgs = {
     from : Types.Account;
     to : Types.Account;
-    token : Types.Token;
-    amount : Nat;
+    amount : Types.Amount;
   };
 };

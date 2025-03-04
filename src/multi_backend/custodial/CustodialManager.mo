@@ -7,6 +7,8 @@ import Error "mo:base/Error";
 import VirtualAccounts "./VirtualAccounts";
 import Settings "../core/Settings";
 import ErrorModule "../error/Error";
+import Types "../types/Types";
+import AmountOperations "../financial/AmountOperations";
 
 module {
   public class CustodialManager(
@@ -48,76 +50,77 @@ module {
       return #ok(ledger);
     };
 
-    public func withdraw(caller : Principal, token : Principal, amount : Nat) : async* Result.Result<(), ErrorModule.TransferError> {
-      let ledgerResult = getLedger(token);
+    public func withdraw(caller : Principal, amount : Types.Amount) : async* Result.Result<(), ErrorModule.TransferError> {
+      let ledgerResult = getLedger(amount.token);
 
       switch (ledgerResult) {
         case (#err(#TokenNotApproved(token))) {
           return #err(#TokenNotSupported(token));
         };
         case (#err(_)) {
-          return #err(#TransferFailed({ token; error = "Unexpected error retrieving ledger" }));
+          return #err(#TransferFailed({ token = amount.token; error = "Unexpected error retrieving ledger" }));
         };
         case (#ok(ledger)) {
           let fee = await ledger.icrc1_fee();
-          if (amount <= fee) {
-            return #err(#TransferFailed({ token; error = "Amount must be greater than fee" }));
+          if (amount.value <= fee) {
+            return #err(#TransferFailed({ token = amount.token; error = "Amount must be greater than fee" }));
           };
 
-          let balance = virtualAccounts.getBalance(caller, token);
-          if (balance < amount) {
-            return #err(#InsufficientBalance({ token = token; required = amount; balance = balance }));
+          let balance = virtualAccounts.getBalance(caller, amount.token);
+          if (balance.value < amount.value) {
+            return #err(#InsufficientBalance({ token = amount.token; required = amount.value; balance = balance.value }));
           };
 
-          virtualAccounts.burn(caller, token, amount);
+          virtualAccounts.burn(caller, amount);
           try {
-            switch (await ledger.icrc1_transfer({ from_subaccount = null; to = { owner = caller; subaccount = null }; amount = amount - fee; fee = ?fee; memo = null; created_at_time = null })) {
+            switch (await ledger.icrc1_transfer({ from_subaccount = null; to = { owner = caller; subaccount = null }; amount = amount.value - fee; fee = ?fee; memo = null; created_at_time = null })) {
               case (#Ok(_)) {
                 return #ok(());
               };
               case (#Err(e)) {
-                virtualAccounts.mint(caller, token, amount);
-                return #err(#TransferFailed({ token; error = debug_show (e) }));
+                virtualAccounts.mint(caller, amount);
+                return #err(#TransferFailed({ token = amount.token; error = debug_show (e) }));
               };
             };
           } catch (e) {
-            virtualAccounts.mint(caller, token, amount);
-            return #err(#TransferFailed({ token; error = Error.message(e) }));
+            virtualAccounts.mint(caller, amount);
+            return #err(#TransferFailed({ token = amount.token; error = Error.message(e) }));
           };
         };
       };
     };
 
-    public func deposit(caller : Principal, token : Principal, amount : Nat) : async* Result.Result<(), ErrorModule.TransferError> {
-      let ledgerResult = getLedger(token);
+    public func deposit(caller : Principal, amount : Types.Amount) : async* Result.Result<(), ErrorModule.TransferError> {
+      let ledgerResult = getLedger(amount.token);
 
       switch (ledgerResult) {
         case (#err(#TokenNotApproved(token))) {
           return #err(#TokenNotSupported(token));
         };
         case (#err(_)) {
-          return #err(#TransferFailed({ token; error = "Unexpected error retrieving ledger" }));
+          return #err(#TransferFailed({ token = amount.token; error = "Unexpected error retrieving ledger" }));
         };
         case (#ok(ledger)) {
           let fee = await ledger.icrc1_fee();
-          if (amount <= fee) {
-            return #err(#TransferFailed({ token; error = "Amount must be greater than fee" }));
+          if (amount.value <= fee) {
+            return #err(#TransferFailed({ token = amount.token; error = "Amount must be greater than fee" }));
           };
 
-          switch (await ledger.icrc2_transfer_from({ from = { owner = caller; subaccount = null }; to = { owner = owner; subaccount = null }; amount = amount; fee = ?fee; memo = null; created_at_time = null; spender_subaccount = null })) {
+          switch (await ledger.icrc2_transfer_from({ from = { owner = caller; subaccount = null }; to = { owner = owner; subaccount = null }; amount = amount.value; fee = ?fee; memo = null; created_at_time = null; spender_subaccount = null })) {
             case (#Ok(_)) {
-              virtualAccounts.mint(caller, token, amount - fee);
+              let amountMinusFee = AmountOperations.new(amount.token, amount.value - fee);
+              virtualAccounts.mint(caller, amountMinusFee);
               return #ok(());
             };
             case (#Err(e)) {
-              return #err(#TransferFailed({ token; error = debug_show (e) }));
+              return #err(#TransferFailed({ token = amount.token; error = debug_show (e) }));
             };
           };
         };
       };
     };
 
-    public func getLedgerFee(tokenId : Principal) : async* Result.Result<Nat, ErrorModule.OperationError> {
+    public func getLedgerFee(tokenId : Principal) : async* Result.Result<Types.Amount, ErrorModule.OperationError> {
       let ledgerResult = getLedger(tokenId);
 
       switch (ledgerResult) {
@@ -126,7 +129,8 @@ module {
         };
         case (#ok(ledger)) {
           try {
-            return #ok(await ledger.icrc1_fee());
+            let fee = await ledger.icrc1_fee();
+            return #ok(AmountOperations.new(tokenId, fee));
           } catch (e) {
             return #err(#InvalidAmount({ reason = "Failed to get fee: " # Error.message(e); amount = 0 }));
           };

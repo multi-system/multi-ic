@@ -6,6 +6,7 @@ import AccountTypes "../../multi_backend/types/AccountTypes";
 import BackingValidation "../../multi_backend/backing/BackingValidation";
 import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
+import AmountOperations "../../multi_backend/financial/AmountOperations";
 
 suite(
   "Backing Validation",
@@ -13,6 +14,12 @@ suite(
     let alice : Types.Account = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
     let tokenA : Types.Token = Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
     let tokenB : Types.Token = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
+    let multiToken : Types.Token = Principal.fromText("aaaaa-aa");
+
+    // Helper to create amount objects
+    let amount = func(token : Types.Token, value : Nat) : Types.Amount {
+      { token; value };
+    };
 
     var hasInitializedValue = false;
     var backingTokens : [BackingTypes.BackingPair] = [];
@@ -20,7 +27,7 @@ suite(
       supplyUnit = 0;
       totalSupply = 0;
       backingPairs = [];
-      multiToken = Principal.fromText("aaaaa-aa");
+      multiToken = multiToken;
     };
 
     let mockStore = {
@@ -33,10 +40,10 @@ suite(
       "validates supply unit divisibility",
       func() {
         // Test valid case
-        assert (BackingValidation.validateSupplyUnitDivisible(100, 10) == #ok());
+        assert (BackingValidation.validateSupplyUnitDivisible(amount(multiToken, 100), 10) == #ok());
 
         // Test zero supply unit
-        switch (BackingValidation.validateSupplyUnitDivisible(100, 0)) {
+        switch (BackingValidation.validateSupplyUnitDivisible(amount(multiToken, 100), 0)) {
           case (#ok()) { assert false };
           case (#err(#InvalidAmount({ reason; amount }))) {
             assert reason == "Supply unit cannot be zero";
@@ -46,7 +53,7 @@ suite(
         };
 
         // Test indivisible amount
-        switch (BackingValidation.validateSupplyUnitDivisible(105, 10)) {
+        switch (BackingValidation.validateSupplyUnitDivisible(amount(multiToken, 105), 10)) {
           case (#ok()) { assert false };
           case (#err(#InvalidAmount({ reason; amount }))) {
             assert reason == "Amount must be divisible by supply unit";
@@ -192,11 +199,11 @@ suite(
         }];
 
         // Test with sufficient balance
-        virtualAccounts.mint(alice, tokenA, 1000);
+        virtualAccounts.mint(alice, amount(tokenA, 1000));
 
         switch (
           BackingValidation.validateBackingTokenTransfer(
-            1000,
+            amount(multiToken, 1000),
             alice,
             100,
             backingTokens,
@@ -205,17 +212,17 @@ suite(
         ) {
           case (#ok(transfers)) {
             assert transfers.size() == 1;
-            assert Principal.equal(transfers[0].0, tokenA);
-            assert transfers[0].1 == 500; // 50 * (1000/100)
+            assert Principal.equal(transfers[0].token, tokenA);
+            assert transfers[0].value == 500; // 50 * (1000/100)
           };
           case (#err(_)) { assert false };
         };
 
         // Test with insufficient balance
-        virtualAccounts.burn(alice, tokenA, 600);
+        virtualAccounts.burn(alice, amount(tokenA, 600));
         switch (
           BackingValidation.validateBackingTokenTransfer(
-            1000,
+            amount(multiToken, 1000),
             alice,
             100,
             backingTokens,
@@ -240,7 +247,13 @@ suite(
         let virtualAccounts = VirtualAccounts.VirtualAccounts(initVAState);
 
         // Test with insufficient balance
-        switch (BackingValidation.validateRedeemBalance(100, alice, tokenA, virtualAccounts)) {
+        switch (
+          BackingValidation.validateRedeemBalance(
+            amount(tokenA, 100),
+            alice,
+            virtualAccounts,
+          )
+        ) {
           case (#ok()) { assert false };
           case (#err(#InsufficientBalance({ token; required; balance }))) {
             assert Principal.equal(token, tokenA);
@@ -251,22 +264,51 @@ suite(
         };
 
         // Test with sufficient balance
-        virtualAccounts.mint(alice, tokenA, 100);
-        assert (BackingValidation.validateRedeemBalance(100, alice, tokenA, virtualAccounts) == #ok());
+        virtualAccounts.mint(alice, amount(tokenA, 100));
+        assert (
+          BackingValidation.validateRedeemBalance(
+            amount(tokenA, 100),
+            alice,
+            virtualAccounts,
+          ) == #ok()
+        );
       },
     );
 
     test(
       "validates supply change",
       func() {
+        let currentSupply = amount(multiToken, 1000);
+
         // Test valid increase
-        assert (BackingValidation.validateSupplyChange(100, true, 1000, 100) == #ok());
+        assert (
+          BackingValidation.validateSupplyChange(
+            amount(multiToken, 100),
+            true,
+            currentSupply,
+            100,
+          ) == #ok()
+        );
 
         // Test valid decrease
-        assert (BackingValidation.validateSupplyChange(500, false, 1000, 100) == #ok());
+        assert (
+          BackingValidation.validateSupplyChange(
+            amount(multiToken, 500),
+            false,
+            currentSupply,
+            100,
+          ) == #ok()
+        );
 
         // Test invalid decrease (more than current supply)
-        switch (BackingValidation.validateSupplyChange(1500, false, 1000, 100)) {
+        switch (
+          BackingValidation.validateSupplyChange(
+            amount(multiToken, 1500),
+            false,
+            currentSupply,
+            100,
+          )
+        ) {
           case (#ok()) { assert false };
           case (#err(#InvalidSupplyChange({ currentSupply; requestedChange; reason }))) {
             assert currentSupply == 1000;
@@ -277,7 +319,62 @@ suite(
         };
 
         // Test indivisible amount
-        switch (BackingValidation.validateSupplyChange(155, true, 1000, 100)) {
+        switch (
+          BackingValidation.validateSupplyChange(
+            amount(multiToken, 155),
+            true,
+            currentSupply,
+            100,
+          )
+        ) {
+          case (#ok()) { assert false };
+          case (#err(#InvalidAmount({ reason; amount }))) {
+            assert reason == "Amount must be divisible by supply unit";
+            assert amount == 155;
+          };
+          case (#err(_)) { assert false };
+        };
+      },
+    );
+
+    test(
+      "validates redeem amount",
+      func() {
+        let totalSupply = amount(multiToken, 1000);
+
+        // Test valid redeem amount
+        assert (
+          BackingValidation.validateRedeemAmount(
+            amount(multiToken, 500),
+            totalSupply,
+            100,
+          ) == #ok()
+        );
+
+        // Test redeem amount greater than total supply
+        switch (
+          BackingValidation.validateRedeemAmount(
+            amount(multiToken, 1500),
+            totalSupply,
+            100,
+          )
+        ) {
+          case (#ok()) { assert false };
+          case (#err(#InvalidAmount({ reason; amount }))) {
+            assert reason == "Cannot redeem more than total supply";
+            assert amount == 1500;
+          };
+          case (#err(_)) { assert false };
+        };
+
+        // Test indivisible redeem amount
+        switch (
+          BackingValidation.validateRedeemAmount(
+            amount(multiToken, 155),
+            totalSupply,
+            100,
+          )
+        ) {
           case (#ok()) { assert false };
           case (#err(#InvalidAmount({ reason; amount }))) {
             assert reason == "Amount must be divisible by supply unit";

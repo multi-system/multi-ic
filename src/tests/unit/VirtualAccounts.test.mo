@@ -7,6 +7,7 @@ import TransferTypes "../../multi_backend/types/TransferTypes";
 import AccountTypes "../../multi_backend/types/AccountTypes";
 import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
+import AmountOperations "../../multi_backend/financial/AmountOperations";
 
 suite(
   "Virtual Accounts",
@@ -18,6 +19,11 @@ suite(
     let tokenB : Types.Token = Principal.fromText("r7inp-6aaaa-aaaaa-aaabq-cai");
     let initState = StableHashMap.init<Principal, AccountTypes.BalanceMap>();
     var manager : VirtualAccounts.VirtualAccounts = VirtualAccounts.VirtualAccounts(initState);
+
+    // Helper to create amount objects
+    let amount = func(token : Types.Token, value : Nat) : Types.Amount {
+      { token; value };
+    };
 
     // Reset state before each test
     let setup = func() {
@@ -39,9 +45,9 @@ suite(
       "validates insufficient balance correctly",
       func() {
         setup();
-        manager.mint(bob, tokenA, 10);
-        assert (manager.hasInsufficientBalance(bob, tokenA, 20));
-        assert (not manager.hasInsufficientBalance(bob, tokenA, 5));
+        manager.mint(bob, amount(tokenA, 10));
+        assert (manager.hasInsufficientBalance(bob, amount(tokenA, 20)));
+        assert (not manager.hasInsufficientBalance(bob, amount(tokenA, 5)));
       },
     );
 
@@ -49,9 +55,9 @@ suite(
       "validates zero amount correctly",
       func() {
         setup();
-        assert (not manager.isValidAmount(0));
-        assert (manager.isValidAmount(1));
-        assert (manager.isValidAmount(100));
+        assert (not manager.isValidAmount(amount(tokenA, 0)));
+        assert (manager.isValidAmount(amount(tokenA, 1)));
+        assert (manager.isValidAmount(amount(tokenA, 100)));
       },
     );
 
@@ -69,7 +75,8 @@ suite(
       func() {
         setup();
         let nonExistentToken : Types.Token = Principal.fromText("r7inp-6aaaa-aaaaa-aaabq-cai");
-        assert (manager.getBalance(alice, nonExistentToken) == 0);
+        let balance = manager.getBalance(alice, nonExistentToken);
+        assert (balance.value == 0);
       },
     );
 
@@ -78,21 +85,20 @@ suite(
       "handles simple transfer",
       func() {
         setup();
-        manager.mint(alice, tokenA, 100);
+        manager.mint(alice, amount(tokenA, 100));
 
-        assert (manager.getBalance(alice, tokenA) == 100);
-        assert (manager.getBalance(bob, tokenA) == 0);
+        assert (manager.getBalance(alice, tokenA).value == 100);
+        assert (manager.getBalance(bob, tokenA).value == 0);
 
         let transferArgs : TransferTypes.TransferArgs = {
           from = alice;
           to = bob;
-          token = tokenA;
-          amount = 40;
+          amount = amount(tokenA, 40);
         };
         manager.transfer(transferArgs);
 
-        assert (manager.getBalance(alice, tokenA) == 60);
-        assert (manager.getBalance(bob, tokenA) == 40);
+        assert (manager.getBalance(alice, tokenA).value == 60);
+        assert (manager.getBalance(bob, tokenA).value == 40);
       },
     );
 
@@ -100,19 +106,19 @@ suite(
       "can get all balances",
       func() {
         setup();
-        manager.mint(alice, tokenA, 200);
-        manager.mint(alice, tokenB, 300);
+        manager.mint(alice, amount(tokenA, 200));
+        manager.mint(alice, amount(tokenB, 300));
 
         let balances = manager.getAllBalances(alice);
         assert (balances.size() == 2);
 
-        let hasTokenA = Array.find<(Types.Token, Nat)>(
+        let hasTokenA = Array.find<Types.Amount>(
           balances,
-          func((token, amount)) = Principal.equal(token, tokenA) and amount == 200,
+          func(amt) = Principal.equal(amt.token, tokenA) and amt.value == 200,
         );
-        let hasTokenB = Array.find<(Types.Token, Nat)>(
+        let hasTokenB = Array.find<Types.Amount>(
           balances,
-          func((token, amount)) = Principal.equal(token, tokenB) and amount == 300,
+          func(amt) = Principal.equal(amt.token, tokenB) and amt.value == 300,
         );
 
         assert (Option.isSome(hasTokenA));
@@ -133,9 +139,9 @@ suite(
       "can burn exact balance",
       func() {
         setup();
-        manager.mint(alice, tokenA, 100);
-        manager.burn(alice, tokenA, 100);
-        assert (manager.getBalance(alice, tokenA) == 0);
+        manager.mint(alice, amount(tokenA, 100));
+        manager.burn(alice, amount(tokenA, 100));
+        assert (manager.getBalance(alice, tokenA).value == 0);
       },
     );
 
@@ -144,8 +150,8 @@ suite(
       func() {
         setup();
         let maxNat : Nat = 0xFFFFFFFFFFFFFFFF;
-        manager.mint(alice, tokenA, maxNat);
-        assert (manager.getBalance(alice, tokenA) == maxNat);
+        manager.mint(alice, amount(tokenA, maxNat));
+        assert (manager.getBalance(alice, tokenA).value == maxNat);
       },
     );
 
@@ -157,27 +163,26 @@ suite(
         let tokenC : Types.Token = Principal.fromText("ryjl3-tyaaa-aaaaa-aaaba-cai");
 
         // Setup initial state
-        manager.mint(alice, tokenA, 100);
-        manager.mint(alice, tokenB, 50);
-        manager.mint(bob, tokenC, 75);
+        manager.mint(alice, amount(tokenA, 100));
+        manager.mint(alice, amount(tokenB, 50));
+        manager.mint(bob, amount(tokenC, 75));
 
         // Perform multiple operations
         let transferArgs : TransferTypes.TransferArgs = {
           from = alice;
           to = bob;
-          token = tokenA;
-          amount = 30;
+          amount = amount(tokenA, 30);
         };
         manager.transfer(transferArgs);
 
-        manager.mint(bob, tokenB, 25);
+        manager.mint(bob, amount(tokenB, 25));
 
         // Verify multiple token balances
-        assert (manager.getBalance(alice, tokenA) == 70);
-        assert (manager.getBalance(alice, tokenB) == 50);
-        assert (manager.getBalance(bob, tokenA) == 30);
-        assert (manager.getBalance(bob, tokenB) == 25);
-        assert (manager.getBalance(bob, tokenC) == 75);
+        assert (manager.getBalance(alice, tokenA).value == 70);
+        assert (manager.getBalance(alice, tokenB).value == 50);
+        assert (manager.getBalance(bob, tokenA).value == 30);
+        assert (manager.getBalance(bob, tokenB).value == 25);
+        assert (manager.getBalance(bob, tokenC).value == 75);
 
         // Verify getAllBalances consistency
         let aliceBalances = manager.getAllBalances(alice);
@@ -195,37 +200,34 @@ suite(
         let charlie : Types.Account = Principal.fromText("rkp4c-7iaaa-aaaaa-aaaca-cai");
 
         // Initial mints
-        manager.mint(alice, tokenA, 100);
-        manager.mint(bob, tokenB, 100);
+        manager.mint(alice, amount(tokenA, 100));
+        manager.mint(bob, amount(tokenB, 100));
 
         // Create circular transfer pattern
         manager.transfer({
           from = alice;
           to = bob;
-          token = tokenA;
-          amount = 50;
+          amount = amount(tokenA, 50);
         });
 
         manager.transfer({
           from = bob;
           to = charlie;
-          token = tokenA;
-          amount = 20;
+          amount = amount(tokenA, 20);
         });
 
         manager.transfer({
           from = bob;
           to = charlie;
-          token = tokenB;
-          amount = 40;
+          amount = amount(tokenB, 40);
         });
 
         // Verify final state
-        assert (manager.getBalance(alice, tokenA) == 50);
-        assert (manager.getBalance(bob, tokenA) == 30);
-        assert (manager.getBalance(bob, tokenB) == 60);
-        assert (manager.getBalance(charlie, tokenA) == 20);
-        assert (manager.getBalance(charlie, tokenB) == 40);
+        assert (manager.getBalance(alice, tokenA).value == 50);
+        assert (manager.getBalance(bob, tokenA).value == 30);
+        assert (manager.getBalance(bob, tokenB).value == 60);
+        assert (manager.getBalance(charlie, tokenA).value == 20);
+        assert (manager.getBalance(charlie, tokenB).value == 40);
       },
     );
   },

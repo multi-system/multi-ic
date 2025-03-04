@@ -9,6 +9,7 @@ import VirtualAccounts "../custodial/VirtualAccounts";
 import BackingMath "./BackingMath";
 import BackingStore "./BackingStore";
 import BackingValidation "./BackingValidation";
+import AmountOperations "../financial/AmountOperations";
 
 module {
   public class BackingOperations(
@@ -32,12 +33,12 @@ module {
       };
     };
 
-    public func processIssue(caller : Types.Account, amount : Nat) : Result.Result<(), Error.OperationError> {
+    public func processIssue(caller : Types.Account, multiAmount : Types.Amount) : Result.Result<(), Error.OperationError> {
       let config = store.getConfig();
 
       switch (
         BackingValidation.validateBackingTokenTransfer(
-          amount,
+          multiAmount,
           caller,
           store.getSupplyUnit(),
           store.getBackingTokens(),
@@ -46,38 +47,54 @@ module {
       ) {
         case (#err(e)) return #err(e);
         case (#ok(transfers)) {
-          for ((tokenId, amount) in transfers.vals()) {
+          for (amount in transfers.vals()) {
             virtualAccounts.transfer({
               from = caller;
               to = systemAccount;
-              token = tokenId;
               amount = amount;
             });
           };
 
-          virtualAccounts.mint(caller, config.multiToken, amount);
-          store.updateTotalSupply(store.getTotalSupply() + amount);
+          virtualAccounts.mint(caller, multiAmount);
+
+          let currentSupply = store.getTotalSupply();
+          let newSupply = AmountOperations.add(currentSupply, multiAmount);
+          store.updateTotalSupply(newSupply);
+
           #ok(());
         };
       };
     };
 
-    public func processRedeem(caller : Types.Account, amount : Nat) : Result.Result<(), Error.OperationError> {
+    public func processRedeem(caller : Types.Account, multiAmount : Types.Amount) : Result.Result<(), Error.OperationError> {
       let config = store.getConfig();
+      let currentSupply = store.getTotalSupply();
 
-      switch (BackingValidation.validateRedeemAmount(amount, store.getTotalSupply(), store.getSupplyUnit())) {
+      switch (
+        BackingValidation.validateRedeemAmount(
+          multiAmount,
+          currentSupply,
+          store.getSupplyUnit(),
+        )
+      ) {
         case (#err(e)) return #err(e);
         case (#ok()) {};
       };
 
-      switch (BackingValidation.validateRedeemBalance(amount, caller, config.multiToken, virtualAccounts)) {
+      switch (
+        BackingValidation.validateRedeemBalance(
+          multiAmount,
+          caller,
+          virtualAccounts,
+        )
+      ) {
         case (#err(e)) return #err(e);
         case (#ok()) {};
       };
 
       switch (
         BackingValidation.validateBackingTokenTransfer(
-          amount,
+          multiAmount,
           systemAccount,
           store.getSupplyUnit(),
           store.getBackingTokens(),
@@ -86,47 +103,67 @@ module {
       ) {
         case (#err(e)) return #err(e);
         case (#ok(transfers)) {
-          for ((tokenId, amount) in transfers.vals()) {
+          for (amount in transfers.vals()) {
             virtualAccounts.transfer({
               from = systemAccount;
               to = caller;
-              token = tokenId;
               amount = amount;
             });
           };
 
-          virtualAccounts.burn(caller, config.multiToken, amount);
-          store.updateTotalSupply(store.getTotalSupply() - amount);
+          virtualAccounts.burn(caller, multiAmount);
+
+          let subtractResult = AmountOperations.subtract(currentSupply, multiAmount);
+
+          switch (subtractResult) {
+            case (#ok(newSupply)) {
+              store.updateTotalSupply(newSupply);
+            };
+            case (#err(e)) {
+              return #err(#InvalidAmount({ reason = "Failed to update total supply"; amount = multiAmount.value }));
+            };
+          };
+
           #ok(());
         };
       };
     };
 
-    public func processSupplyIncrease(amount : Nat) : Result.Result<(), Error.OperationError> {
+    public func processSupplyIncrease(changeAmount : Types.Amount) : Result.Result<(), Error.OperationError> {
       let currentSupply = store.getTotalSupply();
 
-      switch (BackingValidation.validateSupplyChange(amount, true, currentSupply, store.getSupplyUnit())) {
+      switch (BackingValidation.validateSupplyChange(changeAmount, true, currentSupply, store.getSupplyUnit())) {
         case (#err(e)) return #err(e);
         case (#ok()) {
-          updateSupply(currentSupply + amount);
+          let newSupply = AmountOperations.add(currentSupply, changeAmount);
+          updateSupply(newSupply);
           #ok(());
         };
       };
     };
 
-    public func processSupplyDecrease(amount : Nat) : Result.Result<(), Error.OperationError> {
+    public func processSupplyDecrease(changeAmount : Types.Amount) : Result.Result<(), Error.OperationError> {
       let currentSupply = store.getTotalSupply();
 
-      switch (BackingValidation.validateSupplyChange(amount, false, currentSupply, store.getSupplyUnit())) {
+      switch (BackingValidation.validateSupplyChange(changeAmount, false, currentSupply, store.getSupplyUnit())) {
         case (#err(e)) return #err(e);
         case (#ok()) {
-          updateSupply(currentSupply - amount);
-          #ok(());
+          let subtractResult = AmountOperations.subtract(currentSupply, changeAmount);
+
+          switch (subtractResult) {
+            case (#ok(newSupply)) {
+              updateSupply(newSupply);
+              #ok(());
+            };
+            case (#err(e)) {
+              #err(#InvalidAmount({ reason = "Failed to update supply"; amount = changeAmount.value }));
+            };
+          };
         };
       };
     };
 
-    private func updateSupply(newSupply : Nat) {
+    private func updateSupply(newSupply : Types.Amount) {
       store.updateTotalSupply(newSupply);
       updateBackingRatios();
     };
@@ -140,8 +177,8 @@ module {
       let backingUnits = Buffer.Buffer<Nat>(backingTokens.size());
 
       for (pair in backingTokens.vals()) {
-        let reserveQuantity = virtualAccounts.getBalance(systemAccount, pair.token);
-        let unit = BackingMath.calculateBackingUnit(reserveQuantity, eta);
+        let reserveAmount = virtualAccounts.getBalance(systemAccount, pair.token);
+        let unit = BackingMath.calculateBackingUnit(reserveAmount, eta);
         backingUnits.add(unit);
       };
 

@@ -10,6 +10,7 @@ import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Error "../../multi_backend/error/Error";
 import Result "mo:base/Result";
 import BackingValidation "../../multi_backend/backing/BackingValidation";
+import AmountOperations "../../multi_backend/financial/AmountOperations";
 
 suite(
   "Backing Operations",
@@ -19,6 +20,11 @@ suite(
     let systemAccount : Types.Account = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
     let multiTokenLedger : Types.Token = Principal.fromText("qhbym-qaaaa-aaaaa-aaafq-cai");
     let caller : Types.Account = Principal.fromText("aaaaa-aa");
+
+    // Helper to create amount objects
+    let amount = func(token : Types.Token, value : Nat) : Types.Amount {
+      { token; value };
+    };
 
     let approveToken = func(
       store : BackingStore.BackingStore,
@@ -69,15 +75,15 @@ suite(
       let existingBalanceA = va.getBalance(caller, tokenA);
       let existingBalanceB = va.getBalance(caller, tokenB);
 
-      if (existingBalanceA > 0) {
-        va.burn(caller, tokenA, existingBalanceA);
+      if (existingBalanceA.value > 0) {
+        va.burn(caller, existingBalanceA);
       };
-      if (existingBalanceB > 0) {
-        va.burn(caller, tokenB, existingBalanceB);
+      if (existingBalanceB.value > 0) {
+        va.burn(caller, existingBalanceB);
       };
 
-      va.mint(caller, tokenA, initialAmountA);
-      va.mint(caller, tokenB, initialAmountB);
+      va.mint(caller, amount(tokenA, initialAmountA));
+      va.mint(caller, amount(tokenB, initialAmountB));
 
       assert (approveToken(store, caller, tokenA) == #ok());
       assert (approveToken(store, caller, tokenB) == #ok());
@@ -98,31 +104,29 @@ suite(
       va.transfer({
         from = caller;
         to = systemAccount;
-        token = tokenA;
-        amount = initialAmountA;
+        amount = amount(tokenA, initialAmountA);
       });
       va.transfer({
         from = caller;
         to = systemAccount;
-        token = tokenB;
-        amount = initialAmountB;
+        amount = amount(tokenB, initialAmountB);
       });
-      va.mint(caller, multiTokenLedger, 1000);
-      store.updateTotalSupply(1000);
+      va.mint(caller, amount(multiTokenLedger, 1000));
+      store.updateTotalSupply(amount(multiTokenLedger, 1000));
 
       if (redeemToZero) {
-        assert (va.getBalance(caller, multiTokenLedger) == 1000);
-        assert (ops.processRedeem(caller, 1000) == #ok());
-        assert (store.getTotalSupply() == 0);
+        assert (va.getBalance(caller, multiTokenLedger).value == 1000);
+        assert (ops.processRedeem(caller, amount(multiTokenLedger, 1000)) == #ok());
+        assert (store.getTotalSupply().value == 0);
 
         let remainingBalanceA = va.getBalance(caller, tokenA);
         let remainingBalanceB = va.getBalance(caller, tokenB);
 
-        if (remainingBalanceA > 0) {
-          va.burn(caller, tokenA, remainingBalanceA);
+        if (remainingBalanceA.value > 0) {
+          va.burn(caller, remainingBalanceA);
         };
-        if (remainingBalanceB > 0) {
-          va.burn(caller, tokenB, remainingBalanceB);
+        if (remainingBalanceB.value > 0) {
+          va.burn(caller, remainingBalanceB);
         };
       };
     };
@@ -133,7 +137,7 @@ suite(
         let (store, ops, va) = createTestEnv();
 
         assert (approveToken(store, caller, tokenA) == #ok());
-        va.mint(caller, tokenA, 1000);
+        va.mint(caller, amount(tokenA, 1000));
 
         let backingPairs = [{
           token = tokenA;
@@ -144,19 +148,18 @@ suite(
           case (#err(e)) { assert false };
           case (#ok()) {
             assert (store.getSupplyUnit() == 100);
-            assert (store.getTotalSupply() == 0);
+            assert (store.getTotalSupply().value == 0);
 
             va.transfer({
               from = caller;
               to = systemAccount;
-              token = tokenA;
-              amount = 1000;
+              amount = amount(tokenA, 1000);
             });
-            va.mint(caller, multiTokenLedger, 1000);
-            store.updateTotalSupply(1000);
+            va.mint(caller, amount(multiTokenLedger, 1000));
+            store.updateTotalSupply(amount(multiTokenLedger, 1000));
 
-            assert (va.getBalance(systemAccount, tokenA) == 1000);
-            assert (va.getBalance(caller, multiTokenLedger) == 1000);
+            assert (va.getBalance(systemAccount, tokenA).value == 1000);
+            assert (va.getBalance(caller, multiTokenLedger).value == 1000);
           };
         };
       },
@@ -168,7 +171,7 @@ suite(
         let (store, ops, va) = createTestEnv();
 
         assert (approveToken(store, caller, tokenA) == #ok());
-        va.mint(caller, tokenA, 1000);
+        va.mint(caller, amount(tokenA, 1000));
 
         let backingPairs = [{
           token = tokenA;
@@ -190,7 +193,7 @@ suite(
         let (store, ops, va) = createTestEnv();
         let unauthorizedToken : Types.Token = Principal.fromText("aaaaa-aa");
 
-        va.mint(caller, unauthorizedToken, 1000);
+        va.mint(caller, amount(unauthorizedToken, 1000));
 
         let backingPairs = [{
           token = unauthorizedToken;
@@ -212,7 +215,7 @@ suite(
         let (store, ops, va) = createTestEnv();
 
         assert (approveToken(store, caller, tokenA) == #ok());
-        va.mint(caller, tokenA, 500);
+        va.mint(caller, amount(tokenA, 500));
 
         let backingPairs = [{
           token = tokenA;
@@ -234,7 +237,7 @@ suite(
         let (store, ops, va) = createTestEnv();
 
         assert (approveToken(store, caller, tokenA) == #ok());
-        va.mint(caller, tokenA, 1000);
+        va.mint(caller, amount(tokenA, 1000));
 
         let backingPairs = [{
           token = tokenA;
@@ -254,17 +257,17 @@ suite(
         let (store, ops, va) = createTestEnv();
         setupSystem(store, ops, va, 1000, 500, true);
 
-        va.mint(caller, tokenA, 200);
-        va.mint(caller, tokenB, 100);
+        va.mint(caller, amount(tokenA, 200));
+        va.mint(caller, amount(tokenB, 100));
 
-        switch (ops.processIssue(caller, 100)) {
+        switch (ops.processIssue(caller, amount(multiTokenLedger, 100))) {
           case (#err(e)) { assert false };
           case (#ok()) {
             let backingTokens = store.getBackingTokens();
-            assert (va.getBalance(systemAccount, tokenA) == backingTokens[0].backingUnit);
-            assert (va.getBalance(systemAccount, tokenB) == backingTokens[1].backingUnit);
+            assert (va.getBalance(systemAccount, tokenA).value == backingTokens[0].backingUnit);
+            assert (va.getBalance(systemAccount, tokenB).value == backingTokens[1].backingUnit);
             let config = store.getConfig();
-            assert (va.getBalance(caller, config.multiToken) == 100);
+            assert (va.getBalance(caller, config.multiToken).value == 100);
           };
         };
       },
@@ -278,15 +281,15 @@ suite(
 
         let backingTokens = store.getBackingTokens();
 
-        va.mint(caller, tokenA, 50);
-        va.mint(caller, tokenB, 50);
+        va.mint(caller, amount(tokenA, 50));
+        va.mint(caller, amount(tokenB, 50));
 
-        switch (ops.processIssue(caller, 100)) {
+        switch (ops.processIssue(caller, amount(multiTokenLedger, 100))) {
           case (#err(#InsufficientBalance({ token; required; balance }))) {
             assert Principal.equal(token, tokenA);
-            assert (store.getTotalSupply() == 0);
-            assert (va.getBalance(systemAccount, tokenA) == 0);
-            assert (va.getBalance(systemAccount, tokenB) == 0);
+            assert (store.getTotalSupply().value == 0);
+            assert (va.getBalance(systemAccount, tokenA).value == 0);
+            assert (va.getBalance(systemAccount, tokenB).value == 0);
           };
           case _ { assert false };
         };
@@ -299,10 +302,10 @@ suite(
         let (store, ops, va) = createTestEnv();
         setupSystem(store, ops, va, 1000, 500, true);
 
-        va.mint(caller, tokenA, 200);
-        va.mint(caller, tokenB, 100);
+        va.mint(caller, amount(tokenA, 200));
+        va.mint(caller, amount(tokenB, 100));
 
-        switch (ops.processIssue(caller, 150)) {
+        switch (ops.processIssue(caller, amount(multiTokenLedger, 150))) {
           case (#err(#InvalidAmount({ reason; amount }))) {
             assert reason == "Amount must be divisible by supply unit";
             assert amount == 150;
@@ -321,20 +324,20 @@ suite(
         let initialCallerA = va.getBalance(caller, tokenA);
         let initialCallerB = va.getBalance(caller, tokenB);
 
-        va.mint(caller, tokenA, 200);
-        va.mint(caller, tokenB, 100);
-        assert (ops.processIssue(caller, 100) == #ok());
+        va.mint(caller, amount(tokenA, 200));
+        va.mint(caller, amount(tokenB, 100));
+        assert (ops.processIssue(caller, amount(multiTokenLedger, 100)) == #ok());
 
-        let issuedSystemA = va.getBalance(systemAccount, tokenA);
-        let issuedSystemB = va.getBalance(systemAccount, tokenB);
+        let issuedSystemA = va.getBalance(systemAccount, tokenA).value;
+        let issuedSystemB = va.getBalance(systemAccount, tokenB).value;
 
-        assert (ops.processRedeem(caller, 100) == #ok());
+        assert (ops.processRedeem(caller, amount(multiTokenLedger, 100)) == #ok());
 
-        assert (va.getBalance(systemAccount, tokenA) == 0);
-        assert (va.getBalance(systemAccount, tokenB) == 0);
-        assert (va.getBalance(caller, tokenA) == initialCallerA + 200);
-        assert (va.getBalance(caller, tokenB) == initialCallerB + 100);
-        assert (store.getTotalSupply() == 0);
+        assert (va.getBalance(systemAccount, tokenA).value == 0);
+        assert (va.getBalance(systemAccount, tokenB).value == 0);
+        assert (va.getBalance(caller, tokenA).value == initialCallerA.value + 200);
+        assert (va.getBalance(caller, tokenB).value == initialCallerB.value + 100);
+        assert (store.getTotalSupply().value == 0);
       },
     );
 
@@ -344,18 +347,18 @@ suite(
         let (store, ops, va) = createTestEnv();
         setupSystem(store, ops, va, 1000, 500, true);
 
-        va.mint(caller, tokenA, 400);
-        va.mint(caller, tokenB, 200);
+        va.mint(caller, amount(tokenA, 400));
+        va.mint(caller, amount(tokenB, 200));
 
-        assert (ops.processIssue(caller, 200) == #ok());
+        assert (ops.processIssue(caller, amount(multiTokenLedger, 200)) == #ok());
 
         let initialTokens = store.getBackingTokens();
         assert initialTokens[0].backingUnit == 100;
         assert initialTokens[1].backingUnit == 50;
-        assert (va.getBalance(systemAccount, tokenA) == 200);
-        assert (va.getBalance(systemAccount, tokenB) == 100);
+        assert (va.getBalance(systemAccount, tokenA).value == 200);
+        assert (va.getBalance(systemAccount, tokenB).value == 100);
 
-        switch (ops.processSupplyIncrease(400)) {
+        switch (ops.processSupplyIncrease(amount(multiTokenLedger, 400))) {
           case (#err(e)) { assert false };
           case (#ok()) {
             let backingTokens = store.getBackingTokens();
@@ -364,14 +367,14 @@ suite(
           };
         };
 
-        assert (ops.processIssue(caller, 100) == #ok());
+        assert (ops.processIssue(caller, amount(multiTokenLedger, 100)) == #ok());
 
-        assert va.getBalance(caller, tokenA) == 167;
-        assert va.getBalance(caller, tokenB) == 84;
-        assert va.getBalance(systemAccount, tokenA) == 233;
-        assert va.getBalance(systemAccount, tokenB) == 116;
+        assert va.getBalance(caller, tokenA).value == 167;
+        assert va.getBalance(caller, tokenB).value == 84;
+        assert va.getBalance(systemAccount, tokenA).value == 233;
+        assert va.getBalance(systemAccount, tokenB).value == 116;
 
-        switch (ops.processSupplyDecrease(300)) {
+        switch (ops.processSupplyDecrease(amount(multiTokenLedger, 300))) {
           case (#err(e)) { assert false };
           case (#ok()) {
             let backingTokens = store.getBackingTokens();
@@ -380,12 +383,12 @@ suite(
           };
         };
 
-        assert (ops.processRedeem(caller, 100) == #ok());
+        assert (ops.processRedeem(caller, amount(multiTokenLedger, 100)) == #ok());
 
-        assert va.getBalance(caller, tokenA) == 225;
-        assert va.getBalance(caller, tokenB) == 113;
-        assert va.getBalance(systemAccount, tokenA) == 175;
-        assert va.getBalance(systemAccount, tokenB) == 87;
+        assert va.getBalance(caller, tokenA).value == 225;
+        assert va.getBalance(caller, tokenB).value == 113;
+        assert va.getBalance(systemAccount, tokenA).value == 175;
+        assert va.getBalance(systemAccount, tokenB).value == 87;
 
         let finalTokens = store.getBackingTokens();
         assert (finalTokens[0].backingUnit / finalTokens[1].backingUnit == 2);
@@ -398,7 +401,7 @@ suite(
         let (store, ops, va) = createTestEnv();
         setupSystem(store, ops, va, 1000, 500, true);
 
-        switch (ops.processSupplyDecrease(100)) {
+        switch (ops.processSupplyDecrease(amount(multiTokenLedger, 100))) {
           case (#err(#InvalidSupplyChange({ currentSupply; requestedChange; reason }))) {
             assert currentSupply == 0;
             assert requestedChange == 100;
@@ -407,16 +410,16 @@ suite(
           case _ { assert false };
         };
 
-        va.mint(caller, tokenA, 400);
-        va.mint(caller, tokenB, 200);
+        va.mint(caller, amount(tokenA, 400));
+        va.mint(caller, amount(tokenB, 200));
 
-        assert (ops.processIssue(caller, 200) == #ok());
+        assert (ops.processIssue(caller, amount(multiTokenLedger, 200)) == #ok());
 
         let initialTokens = store.getBackingTokens();
         assert initialTokens[0].backingUnit == 100;
         assert initialTokens[1].backingUnit == 50;
 
-        switch (ops.processSupplyDecrease(150)) {
+        switch (ops.processSupplyDecrease(amount(multiTokenLedger, 150))) {
           case (#err(#InvalidAmount({ reason; amount }))) {
             assert reason == "Amount must be divisible by supply unit";
             assert amount == 150;
@@ -424,15 +427,15 @@ suite(
           case _ { assert false };
         };
 
-        assert (ops.processSupplyIncrease(1000) == #ok());
+        assert (ops.processSupplyIncrease(amount(multiTokenLedger, 1000)) == #ok());
         let afterIncreaseTokens = store.getBackingTokens();
         assert afterIncreaseTokens[0].backingUnit == 16;
         assert afterIncreaseTokens[1].backingUnit == 8;
 
         assert (afterIncreaseTokens[0].backingUnit / afterIncreaseTokens[1].backingUnit == 2);
 
-        assert (va.getBalance(systemAccount, tokenA) == 200);
-        assert (va.getBalance(systemAccount, tokenB) == 100);
+        assert (va.getBalance(systemAccount, tokenA).value == 200);
+        assert (va.getBalance(systemAccount, tokenB).value == 100);
       },
     );
   },
