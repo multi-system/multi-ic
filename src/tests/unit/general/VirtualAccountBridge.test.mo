@@ -1,9 +1,9 @@
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
-import Types "../../multi_backend/types/Types";
-import AccountTypes "../../multi_backend/types/AccountTypes";
-import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
-import VirtualAccountBridge "../../multi_backend/custodial/VirtualAccountBridge";
+import Types "../../../multi_backend/types/Types";
+import AccountTypes "../../../multi_backend/types/AccountTypes";
+import VirtualAccounts "../../../multi_backend/custodial/VirtualAccounts";
+import VirtualAccountBridge "../../../multi_backend/custodial/VirtualAccountBridge";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 
 suite(

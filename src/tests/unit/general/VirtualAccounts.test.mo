@@ -2,12 +2,12 @@ import Principal "mo:base/Principal";
 import Array "mo:base/Array";
 import Option "mo:base/Option";
 import { test; suite } "mo:test";
-import Types "../../multi_backend/types/Types";
-import TransferTypes "../../multi_backend/types/TransferTypes";
-import AccountTypes "../../multi_backend/types/AccountTypes";
-import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
+import Types "../../../multi_backend/types/Types";
+import TransferTypes "../../../multi_backend/types/TransferTypes";
+import AccountTypes "../../../multi_backend/types/AccountTypes";
+import VirtualAccounts "../../../multi_backend/custodial/VirtualAccounts";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
-import AmountOperations "../../multi_backend/financial/AmountOperations";
+import AmountOperations "../../../multi_backend/financial/AmountOperations";
 
 suite(
   "Virtual Accounts",

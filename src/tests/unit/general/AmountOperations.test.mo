@@ -1,7 +1,7 @@
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
-import Types "../../multi_backend/types/Types";
-import AmountOperations "../../multi_backend/financial/AmountOperations";
+import Types "../../../multi_backend/types/Types";
+import AmountOperations "../../../multi_backend/financial/AmountOperations";
 import Result "mo:base/Result";
 
 suite(

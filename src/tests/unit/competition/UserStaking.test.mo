@@ -3,13 +3,13 @@ import { test; suite } "mo:test";
 import Result "mo:base/Result";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 
-import Types "../../multi_backend/types/Types";
-import Error "../../multi_backend/error/Error";
-import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
-import UserStaking "../../multi_backend/competition/UserStaking";
-import AmountOperations "../../multi_backend/financial/AmountOperations";
-import StakeSubmissionTypes "../../multi_backend/competition/StakeSubmissionTypes";
-import AccountTypes "../../multi_backend/types/AccountTypes";
+import Types "../../../multi_backend/types/Types";
+import Error "../../../multi_backend/error/Error";
+import VirtualAccounts "../../../multi_backend/custodial/VirtualAccounts";
+import UserStaking "../../../multi_backend/competition/UserStaking";
+import AmountOperations "../../../multi_backend/financial/AmountOperations";
+import StakeSubmissionTypes "../../../multi_backend/competition/StakeSubmissionTypes";
+import AccountTypes "../../../multi_backend/types/AccountTypes";
 
 suite(
   "User Staking",

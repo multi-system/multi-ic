@@ -1,8 +1,8 @@
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
-import Types "../../multi_backend/types/Types";
-import PriceOperations "../../multi_backend/financial/PriceOperations";
-import AmountOperations "../../multi_backend/financial/AmountOperations";
+import Types "../../../multi_backend/types/Types";
+import PriceOperations "../../../multi_backend/financial/PriceOperations";
+import AmountOperations "../../../multi_backend/financial/AmountOperations";
 import Result "mo:base/Result";
 import Debug "mo:base/Debug";
 
