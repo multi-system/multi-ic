@@ -115,4 +115,46 @@ module {
       case (#InvalidPrincipal({ principal; reason })) "Invalid principal " # Principal.toText(principal) # ": " # reason;
     };
   };
+
+  // Error type for competition-related operations
+  public type CompetitionError = {
+    #InsufficientStake : {
+      token : Types.Token;
+      required : Nat;
+      available : Nat;
+    };
+    #TokenNotApproved : Types.Token;
+    #InvalidSubmission : { reason : Text };
+    #VolumeLimitExceeded : {
+      limit : Nat;
+      requested : Nat;
+    };
+    #CompetitionNotActive;
+    #InvalidPhase : { current : Text; required : Text };
+    #Unauthorized;
+    #OperationFailed : Text;
+  };
+
+  public func competitionErrorMessage(error : CompetitionError) : Text {
+    switch (error) {
+      case (#InsufficientStake({ token; required; available })) "Insufficient stake for token " # Principal.toText(token) # ": required " #
+      Int.toText(required) # " but only have " # Int.toText(available);
+      case (#TokenNotApproved(token)) "Token " # Principal.toText(token) # " is not approved for this competition";
+      case (#InvalidSubmission({ reason })) "Invalid submission: " # reason;
+      case (#VolumeLimitExceeded({ limit; requested })) "Volume limit exceeded: limit " # Int.toText(limit) # ", requested " # Int.toText(requested);
+      case (#CompetitionNotActive) "Competition is not currently active";
+      case (#InvalidPhase({ current; required })) "Invalid competition phase: current phase is " # current # ", required phase is " # required;
+      case (#Unauthorized) "Caller is not authorized to perform this action";
+      case (#OperationFailed(msg)) "Operation failed: " # msg;
+    };
+  };
+
+  // General error type that can be any of the above
+  public type ErrorType = {
+    #Init : InitError;
+    #Operation : OperationError;
+    #Approval : ApprovalError;
+    #Transfer : TransferError;
+    #Competition : CompetitionError;
+  };
 };
