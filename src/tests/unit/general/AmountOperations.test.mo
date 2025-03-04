@@ -116,17 +116,6 @@ suite(
     );
 
     test(
-      "calculates ratio between amounts",
-      func() {
-        let a = amount(token1, 100);
-        let b = amount(token1, 25);
-        let ratio = AmountOperations.ratio(a, b);
-
-        assert (ratio == 4);
-      },
-    );
-
-    test(
       "checks if amounts are equal",
       func() {
         let a = amount(token1, 100);

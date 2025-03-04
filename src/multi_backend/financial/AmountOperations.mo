@@ -49,18 +49,6 @@ module {
     { token = a.token; value = Nat.div(a.value, scalar) };
   };
 
-  public func ratio(a : Amount, b : Amount) : Nat {
-    if (not sameToken(a, b)) {
-      Debug.trap("Cannot calculate ratio of amounts with different tokens");
-    };
-
-    if (b.value == 0) {
-      Debug.trap("Division by zero in Amount.ratio");
-    };
-
-    Nat.div(a.value, b.value);
-  };
-
   public func equal(a : Amount, b : Amount) : Bool {
     sameToken(a, b) and Nat.equal(a.value, b.value);
   };
