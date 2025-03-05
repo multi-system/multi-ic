@@ -1,8 +1,6 @@
 import Types "../types/Types";
 import Principal "mo:base/Principal";
 import Nat "mo:base/Nat";
-import Result "mo:base/Result";
-import Error "../error/Error";
 import Iter "mo:base/Iter";
 import Debug "mo:base/Debug";
 
@@ -25,16 +23,21 @@ module {
     { token = a.token; value = Nat.add(a.value, b.value) };
   };
 
-  public func subtract(a : Amount, b : Amount) : Result.Result<Amount, Error.OperationError> {
+  /// Checks if subtraction can be performed without underflow
+  public func canSubtract(a : Amount, b : Amount) : Bool {
+    sameToken(a, b) and a.value >= b.value;
+  };
+
+  public func subtract(a : Amount, b : Amount) : Amount {
     if (not sameToken(a, b)) {
       Debug.trap("Cannot subtract amounts of different tokens");
     };
 
     if (Nat.less(a.value, b.value)) {
-      return #err(#InsufficientBalance({ token = a.token; required = b.value; balance = a.value }));
+      Debug.trap("Insufficient balance for subtraction");
     };
 
-    #ok({ token = a.token; value = Nat.sub(a.value, b.value) });
+    { token = a.token; value = Nat.sub(a.value, b.value) };
   };
 
   public func multiplyByScalar(a : Amount, scalar : Nat) : Amount {

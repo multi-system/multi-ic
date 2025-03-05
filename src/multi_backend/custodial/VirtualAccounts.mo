@@ -7,8 +7,6 @@ import Types "../types/Types";
 import AccountTypes "../types/AccountTypes";
 import TransferTypes "../types/TransferTypes";
 import AmountOperations "../financial/AmountOperations";
-import Result "mo:base/Result";
-import Error "../error/Error";
 
 module {
   public class VirtualAccounts(initialState : AccountTypes.AccountMap) {
@@ -107,16 +105,8 @@ module {
       };
 
       let currentBalance = getBalance(from, amount.token);
-      let result = AmountOperations.subtract(currentBalance, amount);
-
-      switch (result) {
-        case (#ok(updatedAmount)) {
-          updateBalance(from, updatedAmount);
-        };
-        case (#err(error)) {
-          Debug.trap("Error during burn: " # debug_show (error));
-        };
-      };
+      let updatedAmount = AmountOperations.subtract(currentBalance, amount);
+      updateBalance(from, updatedAmount);
     };
 
     public func transfer(args : TransferTypes.TransferArgs) {
@@ -134,19 +124,11 @@ module {
       let toBalance = getBalance(args.to, args.amount.token);
       let fromBalance = getBalance(args.from, args.amount.token);
 
-      let subtractResult = AmountOperations.subtract(fromBalance, args.amount);
+      let updatedFromAmount = AmountOperations.subtract(fromBalance, args.amount);
+      let updatedToAmount = AmountOperations.add(toBalance, args.amount);
 
-      switch (subtractResult) {
-        case (#ok(updatedFromAmount)) {
-          let updatedToAmount = AmountOperations.add(toBalance, args.amount);
-
-          updateBalance(args.from, updatedFromAmount);
-          updateBalance(args.to, updatedToAmount);
-        };
-        case (#err(error)) {
-          Debug.trap("Error during transfer: " # debug_show (error));
-        };
-      };
+      updateBalance(args.from, updatedFromAmount);
+      updateBalance(args.to, updatedToAmount);
     };
 
     public func getAllBalances(account : Types.Account) : [Types.Amount] {
