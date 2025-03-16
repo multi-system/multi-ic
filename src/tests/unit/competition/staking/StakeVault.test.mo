@@ -3,16 +3,16 @@ import { test; suite } "mo:test";
 import Result "mo:base/Result";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 
-import Types "../../../multi_backend/types/Types";
-import Error "../../../multi_backend/error/Error";
-import VirtualAccounts "../../../multi_backend/custodial/VirtualAccounts";
-import UserStaking "../../../multi_backend/competition/UserStaking";
-import AmountOperations "../../../multi_backend/financial/AmountOperations";
-import StakeSubmissionTypes "../../../multi_backend/competition/StakeSubmissionTypes";
-import AccountTypes "../../../multi_backend/types/AccountTypes";
+import Types "../../../../multi_backend/types/Types";
+import Error "../../../../multi_backend/error/Error";
+import VirtualAccounts "../../../../multi_backend/custodial/VirtualAccounts";
+import StakeVault "../../../../multi_backend/competition/staking/StakeVault";
+import AmountOperations "../../../../multi_backend/financial/AmountOperations";
+import SubmissionTypes "../../../../multi_backend/types/SubmissionTypes";
+import AccountTypes "../../../../multi_backend/types/AccountTypes";
 
 suite(
-  "User Staking",
+  "Stake Vault",
   func() {
     // Setup test tokens
     let govToken : Types.Token = Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
@@ -29,7 +29,7 @@ suite(
     };
 
     // Helper to setup fresh accounts and staking for each test
-    let setupTest = func() : (VirtualAccounts.VirtualAccounts, UserStaking.UserStaking) {
+    let setupTest = func() : (VirtualAccounts.VirtualAccounts, StakeVault.StakeVault) {
       let initVAState = StableHashMap.init<Types.Account, AccountTypes.BalanceMap>();
       let userAccounts = VirtualAccounts.VirtualAccounts(initVAState);
 
@@ -42,7 +42,7 @@ suite(
       userAccounts.mint(user2, amount(multiToken, 700));
       userAccounts.mint(user2, amount(proposedToken, 900));
 
-      let staking = UserStaking.UserStaking(
+      let staking = StakeVault.StakeVault(
         userAccounts,
         multiToken,
         govToken,
@@ -71,7 +71,7 @@ suite(
     );
 
     test(
-      "recordSubmission stakes governance tokens, multi tokens, and proposed quantity",
+      "executeStakeTransfers transfers tokens from user account to stake account",
       func() {
         let (userAccounts, staking) = setupTest();
         let stakeAccounts = staking.getStakeAccounts();
@@ -81,25 +81,25 @@ suite(
         assert (userAccounts.getBalance(user1, multiToken).value == 2000);
         assert (userAccounts.getBalance(user1, proposedToken).value == 3000);
 
-        // Record submission
-        let result = staking.recordSubmission(
+        // Perform executeStakeTransfers
+        let result = staking.executeStakeTransfers(
           user1,
           amount(proposedToken, 1000),
           amount(govToken, 200),
           amount(multiToken, 300),
         );
 
-        // Submission should succeed
+        // Staking should succeed
         switch (result) {
-          case (#ok(submissionId)) {
-            assert (submissionId == 0);
+          case (#ok(_)) {
+            // Expected success case
           };
           case (#err(_)) {
             assert (false); // Should not error
           };
         };
 
-        // Check balances after submission
+        // Check balances after staking
         assert (userAccounts.getBalance(user1, govToken).value == 800);
         assert (userAccounts.getBalance(user1, multiToken).value == 1700);
         assert (userAccounts.getBalance(user1, proposedToken).value == 2000);
@@ -111,13 +111,13 @@ suite(
     );
 
     test(
-      "recordSubmission fails with insufficient governance token balance",
+      "executeStakeTransfers fails with insufficient governance token balance",
       func() {
         let (userAccounts, staking) = setupTest();
         let stakeAccounts = staking.getStakeAccounts();
 
         // Try to stake more governance tokens than available
-        let result = staking.recordSubmission(
+        let result = staking.executeStakeTransfers(
           user1,
           amount(proposedToken, 100),
           amount(govToken, 2000), // User only has 1000
@@ -155,13 +155,13 @@ suite(
     );
 
     test(
-      "recordSubmission fails with insufficient multi token balance",
+      "executeStakeTransfers fails with insufficient multi token balance",
       func() {
         let (userAccounts, staking) = setupTest();
         let stakeAccounts = staking.getStakeAccounts();
 
         // Try to stake more multi tokens than available
-        let result = staking.recordSubmission(
+        let result = staking.executeStakeTransfers(
           user1,
           amount(proposedToken, 100),
           amount(govToken, 100),
@@ -199,13 +199,13 @@ suite(
     );
 
     test(
-      "recordSubmission fails with insufficient proposed token balance",
+      "executeStakeTransfers fails with insufficient proposed token balance",
       func() {
         let (userAccounts, staking) = setupTest();
         let stakeAccounts = staking.getStakeAccounts();
 
         // Try to stake more proposed tokens than available
-        let result = staking.recordSubmission(
+        let result = staking.executeStakeTransfers(
           user1,
           amount(proposedToken, 4000), // User only has 3000
           amount(govToken, 100),
@@ -243,116 +243,38 @@ suite(
     );
 
     test(
-      "getSubmission returns null for non-existent submission ID",
+      "returnExcessTokens transfers tokens back to user account",
       func() {
-        let (_, staking) = setupTest();
+        let (userAccounts, staking) = setupTest();
+        let stakeAccounts = staking.getStakeAccounts();
 
-        let submission = staking.getSubmission(100);
-        assert (submission == null);
-      },
-    );
+        // First stake some tokens
+        staking.stake(user1, amount(proposedToken, 1000));
 
-    test(
-      "getSubmission returns correct submission",
-      func() {
-        let (_, staking) = setupTest();
+        // Initial balances after staking
+        assert (userAccounts.getBalance(user1, proposedToken).value == 2000);
+        assert (stakeAccounts.getBalance(user1, proposedToken).value == 1000);
 
-        // Record a submission
-        let govStakeAmount = amount(govToken, 200);
-        let multiStakeAmount = amount(multiToken, 300);
-        let proposedAmount = amount(proposedToken, 1000);
+        // Return some excess tokens
+        staking.returnExcessTokens(user1, amount(proposedToken, 300));
 
-        let result = staking.recordSubmission(
-          user1,
-          proposedAmount,
-          govStakeAmount,
-          multiStakeAmount,
-        );
-
-        // Get submission ID
-        var submissionId : StakeSubmissionTypes.SubmissionId = 0;
-        switch (result) {
-          case (#ok(id)) { submissionId := id };
-          case (#err(_)) { assert (false) };
-        };
-
-        // Get submission and verify details
-        let submissionOpt = staking.getSubmission(submissionId);
-        switch (submissionOpt) {
-          case (null) {
-            assert (false); // Should exist
-          };
-          case (?submission) {
-            assert (submission.id == submissionId);
-            assert (Principal.equal(submission.participant, user1));
-            assert (AmountOperations.equal(submission.proposedQuantity, proposedAmount));
-            assert (AmountOperations.equal(submission.govStake, govStakeAmount));
-            assert (AmountOperations.equal(submission.multiStake, multiStakeAmount));
-            assert (submission.finalQuantity == null);
-          };
-        };
-      },
-    );
-
-    test(
-      "getAllSubmissions returns all recorded submissions",
-      func() {
-        let (_, staking) = setupTest();
-
-        // Initial submissions array should be empty
-        assert (staking.getAllSubmissions().size() == 0);
-
-        // Record submissions for user1 and user2
-        let _ = staking.recordSubmission(
-          user1,
-          amount(proposedToken, 1000),
-          amount(govToken, 200),
-          amount(multiToken, 300),
-        );
-
-        let _ = staking.recordSubmission(
-          user2,
-          amount(proposedToken, 500),
-          amount(govToken, 100),
-          amount(multiToken, 200),
-        );
-
-        // Check submissions
-        let submissions = staking.getAllSubmissions();
-        assert (submissions.size() == 2);
-
-        // Check first submission
-        assert (submissions[0].id == 0);
-        assert (Principal.equal(submissions[0].participant, user1));
-
-        // Check second submission
-        assert (submissions[1].id == 1);
-        assert (Principal.equal(submissions[1].participant, user2));
+        // Check balances after returning
+        assert (userAccounts.getBalance(user1, proposedToken).value == 2300);
+        assert (stakeAccounts.getBalance(user1, proposedToken).value == 700);
       },
     );
 
     test(
       "getTotalGovernanceStake returns sum of all governance stakes",
       func() {
-        let (_, staking) = setupTest();
+        let (userAccounts, staking) = setupTest();
 
         // Initially zero
         assert (staking.getTotalGovernanceStake() == 0);
 
-        // Record submissions for user1 and user2
-        let _ = staking.recordSubmission(
-          user1,
-          amount(proposedToken, 1000),
-          amount(govToken, 200),
-          amount(multiToken, 300),
-        );
-
-        let _ = staking.recordSubmission(
-          user2,
-          amount(proposedToken, 500),
-          amount(govToken, 100),
-          amount(multiToken, 200),
-        );
+        // Stake for user1 and user2
+        staking.stake(user1, amount(govToken, 200));
+        staking.stake(user2, amount(govToken, 100));
 
         // Check total governance stake: 200 + 100 = 300
         assert (staking.getTotalGovernanceStake() == 300);
@@ -362,25 +284,14 @@ suite(
     test(
       "getTotalMultiStake returns sum of all multi stakes",
       func() {
-        let (_, staking) = setupTest();
+        let (userAccounts, staking) = setupTest();
 
         // Initially zero
         assert (staking.getTotalMultiStake() == 0);
 
-        // Record submissions for user1 and user2
-        let _ = staking.recordSubmission(
-          user1,
-          amount(proposedToken, 1000),
-          amount(govToken, 200),
-          amount(multiToken, 300),
-        );
-
-        let _ = staking.recordSubmission(
-          user2,
-          amount(proposedToken, 500),
-          amount(govToken, 100),
-          amount(multiToken, 200),
-        );
+        // Stake for user1 and user2
+        staking.stake(user1, amount(multiToken, 300));
+        staking.stake(user2, amount(multiToken, 200));
 
         // Check total multi stake: 300 + 200 = 500
         assert (staking.getTotalMultiStake() == 500);
@@ -390,7 +301,7 @@ suite(
     test(
       "getStakeAccounts returns the stake accounts",
       func() {
-        let (_, staking) = setupTest();
+        let (userAccounts, staking) = setupTest();
 
         // Get stake accounts
         let stakeAccounts = staking.getStakeAccounts();
@@ -398,13 +309,10 @@ suite(
         // Verify it's a usable VirtualAccounts instance
         assert (stakeAccounts.getBalance(user1, govToken).value == 0);
 
-        // Record a submission
-        let _ = staking.recordSubmission(
-          user1,
-          amount(proposedToken, 1000),
-          amount(govToken, 200),
-          amount(multiToken, 300),
-        );
+        // Stake some tokens
+        staking.stake(user1, amount(govToken, 200));
+        staking.stake(user1, amount(multiToken, 300));
+        staking.stake(user1, amount(proposedToken, 1000));
 
         // Check balances in the returned stake accounts
         assert (stakeAccounts.getBalance(user1, govToken).value == 200);
