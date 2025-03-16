@@ -1,5 +1,5 @@
 import Types "../types/Types";
-import AmountOperations "./AmountOperations";
+import TokenUtils "./TokenUtils";
 import RatioOperations "./RatioOperations";
 import Principal "mo:base/Principal";
 import Nat "mo:base/Nat";
@@ -23,7 +23,7 @@ module {
 
   // Check if two prices are compatible (same token pair)
   public func isCompatible(a : Price, b : Price) : Bool {
-    Principal.equal(a.baseToken, b.baseToken) and Principal.equal(a.quoteToken, b.quoteToken);
+    TokenUtils.sameToken(a.baseToken, b.baseToken) and TokenUtils.sameToken(a.quoteToken, b.quoteToken);
   };
 
   // Calculate the inverse of a price (B/A from A/B)
@@ -37,9 +37,7 @@ module {
 
   // Calculate quote token amount from base token amount using price
   public func calculateValue(amount : Amount, price : Price) : Amount {
-    if (not Principal.equal(amount.token, price.baseToken)) {
-      Debug.trap("Token mismatch: amount token doesn't match price base token");
-    };
+    TokenUtils.validateTokenMatch(amount.token, price.baseToken);
 
     {
       token = price.quoteToken;
@@ -86,7 +84,7 @@ module {
 
   // Multiply two compatible prices (A/B * B/C = A/C)
   public func multiply(p1 : Price, p2 : Price) : Price {
-    if (not Principal.equal(p1.quoteToken, p2.baseToken)) {
+    if (not TokenUtils.sameToken(p1.quoteToken, p2.baseToken)) {
       Debug.trap("Incompatible price pair for multiplication");
     };
 
@@ -108,5 +106,41 @@ module {
       quoteToken = p.quoteToken;
       value = RatioOperations.multiply(p.value, adjustedRatio);
     };
+  };
+
+  // Convert an amount using a price, specifying the target token type
+  public func convertAmount(
+    amount : Types.Amount,
+    price : Types.Price,
+    direction : { #toBase; #toQuote },
+  ) : Types.Amount {
+    switch (direction) {
+      case (#toBase) {
+        if (TokenUtils.sameToken(amount.token, price.quoteToken)) {
+          // Convert from quote to base token using the inverse price ratio
+          let inversePrice = inverse(price);
+          return RatioOperations.convertToToken(amount, price.baseToken, inversePrice.value);
+        } else if (TokenUtils.sameToken(amount.token, price.baseToken)) {
+          return amount; // Already in base token
+        };
+      };
+      case (#toQuote) {
+        if (TokenUtils.sameToken(amount.token, price.baseToken)) {
+          // Convert from base to quote token using the price ratio
+          return RatioOperations.convertToToken(amount, price.quoteToken, price.value);
+        } else if (TokenUtils.sameToken(amount.token, price.quoteToken)) {
+          return amount; // Already in quote token
+        };
+      };
+    };
+
+    Debug.trap(
+      "Incompatible token conversion: cannot convert " #
+      Principal.toText(amount.token) #
+      " using price between " #
+      Principal.toText(price.baseToken) #
+      " and " #
+      Principal.toText(price.quoteToken)
+    );
   };
 };

@@ -1,5 +1,5 @@
 import Types "../types/Types";
-import Principal "mo:base/Principal";
+import TokenUtils "./TokenUtils";
 import Nat "mo:base/Nat";
 import Iter "mo:base/Iter";
 import Debug "mo:base/Debug";
@@ -12,7 +12,7 @@ module {
   };
 
   public func sameToken(a : Amount, b : Amount) : Bool {
-    Principal.equal(a.token, b.token);
+    TokenUtils.sameAmountToken(a, b);
   };
 
   public func add(a : Amount, b : Amount) : Amount {
@@ -76,5 +76,17 @@ module {
     };
 
     result;
+  };
+
+  public func absoluteDifference(a : Amount, b : Amount) : Amount {
+    if (not sameToken(a, b)) {
+      Debug.trap("Cannot calculate difference between amounts of different tokens");
+    };
+
+    if (a.value >= b.value) {
+      return subtract(a, b);
+    } else {
+      return subtract(b, a);
+    };
   };
 };

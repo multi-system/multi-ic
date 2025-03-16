@@ -118,6 +118,28 @@ suite(
     );
 
     test(
+      "divides one ratio by another",
+      func() {
+        let ratio1 = RatioOperations.fromDecimal(6); // 6.0
+        let ratio2 = RatioOperations.fromDecimal(2); // 2.0
+        let quotient = RatioOperations.divide(ratio1, ratio2);
+
+        assert quotient.value == 3 * SCALING_FACTOR; // 6.0 / 2.0 = 3.0
+      },
+    );
+
+    test(
+      "divides ratios with fractional results",
+      func() {
+        let ratio1 = { value = 5 * SCALING_FACTOR / 10 }; // 0.5
+        let ratio2 = { value = 2 * SCALING_FACTOR / 10 }; // 0.2
+        let quotient = RatioOperations.divide(ratio1, ratio2);
+
+        assert quotient.value == 25 * SCALING_FACTOR / 10; // 0.5 / 0.2 = 2.5
+      },
+    );
+
+    test(
       "calculates inverse of a ratio",
       func() {
         let ratio = RatioOperations.fromDecimal(2);
@@ -237,6 +259,100 @@ suite(
         let floatValue = RatioOperations.toFloat(ratio);
 
         assert floatValue == 2.0;
+      },
+    );
+
+    test(
+      "maintains precision for small proportions in calculateProportionOfAmount",
+      func() {
+        let part = amount(tokenA, 1);
+        let whole = amount(tokenA, 1000);
+        let total = amount(tokenA, 10000);
+
+        let result = RatioOperations.calculateProportionOfAmount(part, whole, total);
+
+        assert result.value == 10;
+      },
+    );
+
+    test(
+      "maintains precision for large values in calculateProportionOfAmount",
+      func() {
+        let part = amount(tokenA, 1_000_000_000);
+        let whole = amount(tokenA, 10_000_000_000);
+        let total = amount(tokenA, 50_000_000_000);
+
+        let result = RatioOperations.calculateProportionOfAmount(part, whole, total);
+
+        assert result.value == 5_000_000_000;
+      },
+    );
+
+    test(
+      "handles non-integer ratios in calculateProportionOfAmount",
+      func() {
+        let part = amount(tokenA, 3);
+        let whole = amount(tokenA, 7);
+        let total = amount(tokenA, 100);
+
+        let result = RatioOperations.calculateProportionOfAmount(part, whole, total);
+
+        assert result.value == 42;
+      },
+    );
+
+    test(
+      "handles tiny proportions without losing precision in calculateProportionOfAmount",
+      func() {
+        let part = amount(tokenA, 1);
+        let whole = amount(tokenA, 1_000_000);
+        let total = amount(tokenA, 10_000_000);
+
+        let result = RatioOperations.calculateProportionOfAmount(part, whole, total);
+
+        assert result.value == 10;
+      },
+    );
+
+    test(
+      "compares Ratio vs direct calculation approaches",
+      func() {
+        func directProportion(part : Types.Amount, whole : Types.Amount, total : Types.Amount) : Types.Amount {
+          {
+            token = total.token;
+            value = (part.value * total.value) / whole.value;
+          };
+        };
+
+        // Test case 1: Basic proportion calculation
+        let part1 = amount(tokenA, 1);
+        let whole1 = amount(tokenA, 3);
+        let total1 = amount(tokenA, 30);
+
+        let ratioResult1 = RatioOperations.calculateProportionOfAmount(part1, whole1, total1);
+        let directResult1 = directProportion(part1, whole1, total1);
+
+        assert directResult1.value == 10;
+
+        // Test case 2: Testing integer division behavior
+        let part2 = amount(tokenA, 1);
+        let whole2 = amount(tokenA, 3);
+        let total2 = amount(tokenA, 10);
+
+        let ratioResult2 = RatioOperations.calculateProportionOfAmount(part2, whole2, total2);
+        let directResult2 = directProportion(part2, whole2, total2);
+
+        assert directResult2.value == 3;
+
+        // Test case 3: Other simple test case
+        let part3 = amount(tokenA, 5);
+        let whole3 = amount(tokenA, 10);
+        let total3 = amount(tokenA, 100);
+
+        let ratioResult3 = RatioOperations.calculateProportionOfAmount(part3, whole3, total3);
+        let directResult3 = directProportion(part3, whole3, total3);
+
+        assert directResult3.value == 50;
       },
     );
   },

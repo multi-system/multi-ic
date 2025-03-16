@@ -1,7 +1,7 @@
 import Nat "mo:base/Nat";
 import Debug "mo:base/Debug";
 import Types "../types/Types";
-import AmountOperations "../financial/AmountOperations";
+import TokenUtils "./TokenUtils";
 import Float "mo:base/Float";
 
 module {
@@ -18,9 +18,31 @@ module {
     { value = basisPoints * SCALING_FACTOR / 10000 };
   };
 
+  // Create a ratio from two natural numbers (numerator/denominator)
+  public func fromNats(numerator : Nat, denominator : Nat) : Types.Ratio {
+    if (denominator == 0) {
+      Debug.trap("Division by zero in RatioOperations.fromNats");
+    };
+
+    let scaledNumerator = Nat.mul(numerator, SCALING_FACTOR);
+    { value = Nat.div(scaledNumerator, denominator) };
+  };
+
+  // Convert an amount from one token to another using a ratio
+  public func convertToToken(
+    amount : Types.Amount,
+    toToken : Types.Token,
+    ratio : Types.Ratio,
+  ) : Types.Amount {
+    {
+      token = toToken;
+      value = applyToAmount(amount, ratio).value;
+    };
+  };
+
   // Calculate ratio between two Amounts
   public func calculateAmountRatio(numerator : Types.Amount, denominator : Types.Amount) : Types.Ratio {
-    if (not AmountOperations.sameToken(numerator, denominator)) {
+    if (not TokenUtils.sameAmountToken(numerator, denominator)) {
       Debug.trap("Cannot calculate ratio between different tokens");
     };
 
@@ -41,22 +63,28 @@ module {
   };
 
   // Calculate proportion of one Amount in another, scaled to a total Amount
+  // Uses Ratio to maintain precision in intermediate calculations
   public func calculateProportionOfAmount(
     part : Types.Amount,
     whole : Types.Amount,
     total : Types.Amount,
   ) : Types.Amount {
     if (
-      not AmountOperations.sameToken(part, whole) or
-      not AmountOperations.sameToken(part, total)
+      not TokenUtils.sameAmountToken(part, whole) or
+      not TokenUtils.sameAmountToken(whole, total)
     ) {
       Debug.trap("Cannot calculate proportion for different tokens");
     };
 
-    {
-      token = total.token;
-      value = calculateProportion(part.value, whole.value, total.value);
+    if (whole.value == 0) {
+      return { token = total.token; value = 0 };
     };
+
+    // 1. Calculate the ratio of part to whole
+    let proportionRatio = calculateAmountRatio(part, whole);
+
+    // 2. Apply this ratio to the total amount
+    applyToAmount(total, proportionRatio);
   };
 
   // Add two ratios
@@ -75,6 +103,16 @@ module {
   // Multiply two ratios
   public func multiply(a : Types.Ratio, b : Types.Ratio) : Types.Ratio {
     { value = Nat.div(Nat.mul(a.value, b.value), SCALING_FACTOR) };
+  };
+
+  // Divide one ratio by another (a/b)
+  public func divide(a : Types.Ratio, b : Types.Ratio) : Types.Ratio {
+    if (b.value == 0) {
+      Debug.trap("Division by zero in Ratio.divide");
+    };
+
+    // To divide a/b, we multiply a by the inverse of b
+    multiply(a, inverse(b));
   };
 
   // Inverse of a ratio (1/ratio)
@@ -113,15 +151,16 @@ module {
     floatValue / floatPrecision;
   };
 
-  // Private helper for proportion calculation
-  private func calculateProportion(
-    part : Nat,
-    whole : Nat,
-    total : Nat,
-  ) : Nat {
-    if (whole == 0) {
-      return 0;
+  // Calculate the absolute difference between two ratios
+  public func absoluteDifference(a : Types.Ratio, b : Types.Ratio) : Types.Ratio {
+    if (a.value >= b.value) { { value = a.value - b.value } } else {
+      { value = b.value - a.value };
     };
-    Nat.div(Nat.mul(part, total), whole);
+  };
+
+  // Returns true if ratios a and b are within the specified tolerance
+  public func withinTolerance(a : Types.Ratio, b : Types.Ratio, tolerance : Types.Ratio) : Bool {
+    let difference = absoluteDifference(a, b);
+    difference.value <= tolerance.value;
   };
 };
