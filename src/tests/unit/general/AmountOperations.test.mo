@@ -1,8 +1,7 @@
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
-import Types "../../multi_backend/types/Types";
-import AmountOperations "../../multi_backend/financial/AmountOperations";
-import Result "mo:base/Result";
+import Types "../../../multi_backend/types/Types";
+import AmountOperations "../../../multi_backend/financial/AmountOperations";
 
 suite(
   "Amount Operations",
@@ -55,43 +54,29 @@ suite(
         let a = amount(token1, 300);
         let b = amount(token1, 100);
 
-        switch (AmountOperations.subtract(a, b)) {
-          case (#ok(result)) {
-            assert (Principal.equal(result.token, token1));
-            assert (result.value == 200);
-          };
-          case (#err(_)) {
-            assert (false); // Should not reach here
-          };
-        };
+        let result = AmountOperations.subtract(a, b);
+
+        assert (Principal.equal(result.token, token1));
+        assert (result.value == 200);
       },
     );
 
     test(
-      "returns error when subtracting with insufficient balance",
+      "checks if subtraction is possible",
       func() {
-        let a = amount(token1, 100);
-        let b = amount(token1, 200);
+        let a = amount(token1, 300);
+        let b = amount(token1, 100);
+        let c = amount(token1, 400);
+        let d = amount(token2, 100);
 
-        switch (AmountOperations.subtract(a, b)) {
-          case (#ok(_)) {
-            assert (false); // Should not reach here
-          };
-          case (#err(error)) {
-            switch (error) {
-              case (#InsufficientBalance(data)) {
-                assert (Principal.equal(data.token, token1));
-                assert (data.required == 200);
-                assert (data.balance == 100);
-              };
-              case (_) {
-                assert (false); // Should not reach here
-              };
-            };
-          };
-        };
+        assert (AmountOperations.canSubtract(a, b) == true); // 300 >= 100, same token
+        assert (AmountOperations.canSubtract(a, c) == false); // 300 < 400, same token
+        assert (AmountOperations.canSubtract(a, d) == false); // Different tokens
       },
     );
+
+    // Note: We can't directly test trapping behavior in a reliable way
+    // So instead we'll test the canSubtract function more thoroughly
 
     test(
       "multiplies amount by scalar",
@@ -112,17 +97,6 @@ suite(
 
         assert (Principal.equal(result.token, token1));
         assert (result.value == 25);
-      },
-    );
-
-    test(
-      "calculates ratio between amounts",
-      func() {
-        let a = amount(token1, 100);
-        let b = amount(token1, 25);
-        let ratio = AmountOperations.ratio(a, b);
-
-        assert (ratio == 4);
       },
     );
 

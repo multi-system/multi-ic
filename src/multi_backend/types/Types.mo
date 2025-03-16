@@ -9,9 +9,13 @@ module {
     value : Nat;
   };
 
+  public type Ratio = {
+    value : Nat;
+  };
+
   public type Price = {
     baseToken : Token;
     quoteToken : Token;
-    value : Nat;
+    value : Ratio;
   };
 };

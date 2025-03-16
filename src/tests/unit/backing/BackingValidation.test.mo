@@ -1,12 +1,12 @@
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
-import Types "../../multi_backend/types/Types";
-import BackingTypes "../../multi_backend/types/BackingTypes";
-import AccountTypes "../../multi_backend/types/AccountTypes";
-import BackingValidation "../../multi_backend/backing/BackingValidation";
-import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
+import Types "../../../multi_backend/types/Types";
+import BackingTypes "../../../multi_backend/types/BackingTypes";
+import AccountTypes "../../../multi_backend/types/AccountTypes";
+import BackingValidation "../../../multi_backend/backing/BackingValidation";
+import VirtualAccounts "../../../multi_backend/custodial/VirtualAccounts";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
-import AmountOperations "../../multi_backend/financial/AmountOperations";
+import AmountOperations "../../../multi_backend/financial/AmountOperations";
 
 suite(
   "Backing Validation",

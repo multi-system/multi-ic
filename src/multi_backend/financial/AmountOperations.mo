@@ -1,8 +1,6 @@
 import Types "../types/Types";
-import Principal "mo:base/Principal";
+import TokenUtils "./TokenUtils";
 import Nat "mo:base/Nat";
-import Result "mo:base/Result";
-import Error "../error/Error";
 import Iter "mo:base/Iter";
 import Debug "mo:base/Debug";
 
@@ -14,7 +12,7 @@ module {
   };
 
   public func sameToken(a : Amount, b : Amount) : Bool {
-    Principal.equal(a.token, b.token);
+    TokenUtils.sameAmountToken(a, b);
   };
 
   public func add(a : Amount, b : Amount) : Amount {
@@ -25,16 +23,21 @@ module {
     { token = a.token; value = Nat.add(a.value, b.value) };
   };
 
-  public func subtract(a : Amount, b : Amount) : Result.Result<Amount, Error.OperationError> {
+  /// Checks if subtraction can be performed without underflow
+  public func canSubtract(a : Amount, b : Amount) : Bool {
+    sameToken(a, b) and a.value >= b.value;
+  };
+
+  public func subtract(a : Amount, b : Amount) : Amount {
     if (not sameToken(a, b)) {
       Debug.trap("Cannot subtract amounts of different tokens");
     };
 
     if (Nat.less(a.value, b.value)) {
-      return #err(#InsufficientBalance({ token = a.token; required = b.value; balance = a.value }));
+      Debug.trap("Insufficient balance for subtraction");
     };
 
-    #ok({ token = a.token; value = Nat.sub(a.value, b.value) });
+    { token = a.token; value = Nat.sub(a.value, b.value) };
   };
 
   public func multiplyByScalar(a : Amount, scalar : Nat) : Amount {
@@ -47,18 +50,6 @@ module {
     };
 
     { token = a.token; value = Nat.div(a.value, scalar) };
-  };
-
-  public func ratio(a : Amount, b : Amount) : Nat {
-    if (not sameToken(a, b)) {
-      Debug.trap("Cannot calculate ratio of amounts with different tokens");
-    };
-
-    if (b.value == 0) {
-      Debug.trap("Division by zero in Amount.ratio");
-    };
-
-    Nat.div(a.value, b.value);
   };
 
   public func equal(a : Amount, b : Amount) : Bool {
@@ -85,5 +76,17 @@ module {
     };
 
     result;
+  };
+
+  public func absoluteDifference(a : Amount, b : Amount) : Amount {
+    if (not sameToken(a, b)) {
+      Debug.trap("Cannot calculate difference between amounts of different tokens");
+    };
+
+    if (a.value >= b.value) {
+      return subtract(a, b);
+    } else {
+      return subtract(b, a);
+    };
   };
 };

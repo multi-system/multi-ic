@@ -1,9 +1,9 @@
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
-import Types "../../multi_backend/types/Types";
-import BackingTypes "../../multi_backend/types/BackingTypes";
-import BackingStore "../../multi_backend/backing/BackingStore";
-import AmountOperations "../../multi_backend/financial/AmountOperations";
+import Types "../../../multi_backend/types/Types";
+import BackingTypes "../../../multi_backend/types/BackingTypes";
+import BackingStore "../../../multi_backend/backing/BackingStore";
+import AmountOperations "../../../multi_backend/financial/AmountOperations";
 
 suite(
   "Backing Store",

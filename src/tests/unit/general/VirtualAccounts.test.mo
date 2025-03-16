@@ -2,12 +2,12 @@ import Principal "mo:base/Principal";
 import Array "mo:base/Array";
 import Option "mo:base/Option";
 import { test; suite } "mo:test";
-import Types "../../multi_backend/types/Types";
-import TransferTypes "../../multi_backend/types/TransferTypes";
-import AccountTypes "../../multi_backend/types/AccountTypes";
-import VirtualAccounts "../../multi_backend/custodial/VirtualAccounts";
+import Types "../../../multi_backend/types/Types";
+import TransferTypes "../../../multi_backend/types/TransferTypes";
+import AccountTypes "../../../multi_backend/types/AccountTypes";
+import VirtualAccounts "../../../multi_backend/custodial/VirtualAccounts";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
-import AmountOperations "../../multi_backend/financial/AmountOperations";
+import AmountOperations "../../../multi_backend/financial/AmountOperations";
 
 suite(
   "Virtual Accounts",
@@ -152,6 +152,45 @@ suite(
         let maxNat : Nat = 0xFFFFFFFFFFFFFFFF;
         manager.mint(alice, amount(tokenA, maxNat));
         assert (manager.getBalance(alice, tokenA).value == maxNat);
+      },
+    );
+
+    test(
+      "calculates total balance correctly across multiple accounts",
+      func() {
+        setup();
+        // Initially no balances
+        assert (manager.getTotalBalance(tokenA).value == 0);
+
+        // Add some balances across different accounts
+        manager.mint(alice, amount(tokenA, 100));
+        manager.mint(bob, amount(tokenA, 150));
+
+        // Check total balance
+        assert (manager.getTotalBalance(tokenA).value == 250);
+
+        // Add more to an existing account
+        manager.mint(alice, amount(tokenA, 50));
+        assert (manager.getTotalBalance(tokenA).value == 300);
+
+        // Transfer between accounts should not change total
+        let transferArgs : TransferTypes.TransferArgs = {
+          from = alice;
+          to = bob;
+          amount = amount(tokenA, 75);
+        };
+        manager.transfer(transferArgs);
+        assert (manager.getTotalBalance(tokenA).value == 300);
+
+        // Burn some tokens and verify total decreases
+        manager.burn(bob, amount(tokenA, 100));
+        assert (manager.getTotalBalance(tokenA).value == 200);
+
+        // Different token should have different total
+        assert (manager.getTotalBalance(tokenB).value == 0);
+        manager.mint(alice, amount(tokenB, 500));
+        assert (manager.getTotalBalance(tokenB).value == 500);
+        assert (manager.getTotalBalance(tokenA).value == 200);
       },
     );
 

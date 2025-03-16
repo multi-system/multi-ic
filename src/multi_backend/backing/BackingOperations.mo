@@ -113,16 +113,12 @@ module {
 
           virtualAccounts.burn(caller, multiAmount);
 
-          let subtractResult = AmountOperations.subtract(currentSupply, multiAmount);
-
-          switch (subtractResult) {
-            case (#ok(newSupply)) {
-              store.updateTotalSupply(newSupply);
-            };
-            case (#err(e)) {
-              return #err(#InvalidAmount({ reason = "Failed to update total supply"; amount = multiAmount.value }));
-            };
+          if (not AmountOperations.canSubtract(currentSupply, multiAmount)) {
+            return #err(#InvalidAmount({ reason = "Failed to update total supply"; amount = multiAmount.value }));
           };
+
+          let newSupply = AmountOperations.subtract(currentSupply, multiAmount);
+          store.updateTotalSupply(newSupply);
 
           #ok(());
         };
@@ -148,17 +144,13 @@ module {
       switch (BackingValidation.validateSupplyChange(changeAmount, false, currentSupply, store.getSupplyUnit())) {
         case (#err(e)) return #err(e);
         case (#ok()) {
-          let subtractResult = AmountOperations.subtract(currentSupply, changeAmount);
-
-          switch (subtractResult) {
-            case (#ok(newSupply)) {
-              updateSupply(newSupply);
-              #ok(());
-            };
-            case (#err(e)) {
-              #err(#InvalidAmount({ reason = "Failed to update supply"; amount = changeAmount.value }));
-            };
+          if (not AmountOperations.canSubtract(currentSupply, changeAmount)) {
+            return #err(#InvalidAmount({ reason = "Failed to update supply"; amount = changeAmount.value }));
           };
+
+          let newSupply = AmountOperations.subtract(currentSupply, changeAmount);
+          updateSupply(newSupply);
+          #ok(());
         };
       };
     };

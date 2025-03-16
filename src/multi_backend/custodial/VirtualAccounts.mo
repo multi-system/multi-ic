@@ -7,14 +7,11 @@ import Types "../types/Types";
 import AccountTypes "../types/AccountTypes";
 import TransferTypes "../types/TransferTypes";
 import AmountOperations "../financial/AmountOperations";
-import Result "mo:base/Result";
-import Error "../error/Error";
 
 module {
   public class VirtualAccounts(initialState : AccountTypes.AccountMap) {
     private let accounts = initialState;
 
-    // Public testable validations that return bools
     public func hasInsufficientBalance(account : Types.Account, amount : Types.Amount) : Bool {
       let balanceAmount = getBalance(account, amount.token);
       balanceAmount.value < amount.value;
@@ -79,6 +76,17 @@ module {
       { token; value };
     };
 
+    public func getTotalBalance(token : Types.Token) : Types.Amount {
+      var total = 0;
+
+      for ((account, balances) in StableHashMap.entries(accounts)) {
+        let balance = Option.get(StableHashMap.get(balances, Principal.equal, Principal.hash, token), 0);
+        total += balance;
+      };
+
+      { token; value = total };
+    };
+
     public func mint(to : Types.Account, amount : Types.Amount) {
       validatePrincipals([to, amount.token]);
       validateAmount(amount, "Mint");
@@ -97,16 +105,8 @@ module {
       };
 
       let currentBalance = getBalance(from, amount.token);
-      let result = AmountOperations.subtract(currentBalance, amount);
-
-      switch (result) {
-        case (#ok(updatedAmount)) {
-          updateBalance(from, updatedAmount);
-        };
-        case (#err(error)) {
-          Debug.trap("Error during burn: " # debug_show (error));
-        };
-      };
+      let updatedAmount = AmountOperations.subtract(currentBalance, amount);
+      updateBalance(from, updatedAmount);
     };
 
     public func transfer(args : TransferTypes.TransferArgs) {
@@ -124,19 +124,11 @@ module {
       let toBalance = getBalance(args.to, args.amount.token);
       let fromBalance = getBalance(args.from, args.amount.token);
 
-      let subtractResult = AmountOperations.subtract(fromBalance, args.amount);
+      let updatedFromAmount = AmountOperations.subtract(fromBalance, args.amount);
+      let updatedToAmount = AmountOperations.add(toBalance, args.amount);
 
-      switch (subtractResult) {
-        case (#ok(updatedFromAmount)) {
-          let updatedToAmount = AmountOperations.add(toBalance, args.amount);
-
-          updateBalance(args.from, updatedFromAmount);
-          updateBalance(args.to, updatedToAmount);
-        };
-        case (#err(error)) {
-          Debug.trap("Error during transfer: " # debug_show (error));
-        };
-      };
+      updateBalance(args.from, updatedFromAmount);
+      updateBalance(args.to, updatedToAmount);
     };
 
     public func getAllBalances(account : Types.Account) : [Types.Amount] {
