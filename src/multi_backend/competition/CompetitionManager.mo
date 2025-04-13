@@ -32,7 +32,7 @@ module {
     stakeVault : StakeVault.StakeVault,
     getCirculatingSupply : () -> Nat,
     getBackingTokens : () -> [BackingTypes.BackingPair],
-    startSettlement : ?SettlementInitiator,
+    startSettlement : SettlementInitiator,
   ) {
     private let stakingManager = StakingManager.StakingManager(
       store,
@@ -123,15 +123,14 @@ module {
             volumeLimit = result.volumeLimit;
           };
 
-          // Automatically start settlement if initiator is provided
-          switch (startSettlement) {
-            case (null) {
-              // No settlement initiator provided, just return the result
+          // Start settlement and handle the result
+          switch (startSettlement(stakingOutput)) {
+            case (#err(e)) {
+              Debug.print("Error starting settlement: " # debug_show (e));
+              // We could propagate this error if needed
             };
-            case (?initiator) {
-              // Start settlement and ignore the result for now
-              // We could add error handling here if needed
-              ignore initiator(stakingOutput);
+            case (#ok(_)) {
+              Debug.print("Settlement started successfully");
             };
           };
 

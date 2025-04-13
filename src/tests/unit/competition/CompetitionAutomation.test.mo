@@ -30,6 +30,11 @@ test(
       pauseTime = 500_000_000; // 0.5 seconds
     };
 
+    // Create a dummy settlement initiator
+    let dummySettlementInitiator : CompetitionAutomation.SettlementInitiator = func(output) {
+      #ok(());
+    };
+
     // Create automation module
     let automation = CompetitionAutomation.CompetitionAutomation(
       store,
@@ -37,7 +42,7 @@ test(
       stakingManager,
       getCirculatingSupply,
       getBackingTokens,
-      null, // No settlement initiator for simple test
+      dummySettlementInitiator,
       testConfig,
     );
 
@@ -69,6 +74,11 @@ test(
       pauseTime = 500_000_000;
     };
 
+    // Create a dummy settlement initiator
+    let dummySettlementInitiator : CompetitionAutomation.SettlementInitiator = func(output) {
+      #ok(());
+    };
+
     // Create automation module
     let automation = CompetitionAutomation.CompetitionAutomation(
       store,
@@ -76,7 +86,7 @@ test(
       stakingManager,
       getCirculatingSupply,
       getBackingTokens,
-      null,
+      dummySettlementInitiator,
       initialConfig,
     );
 
@@ -116,6 +126,11 @@ test(
       pauseTime = 500_000_000;
     };
 
+    // Create a dummy settlement initiator
+    let dummySettlementInitiator : CompetitionAutomation.SettlementInitiator = func(output) {
+      #ok(());
+    };
+
     // Create automation module
     let automation = CompetitionAutomation.CompetitionAutomation(
       store,
@@ -123,7 +138,7 @@ test(
       stakingManager,
       getCirculatingSupply,
       getBackingTokens,
-      null,
+      dummySettlementInitiator,
       config,
     );
 
@@ -162,6 +177,11 @@ test(
       pauseTime = 1_000_000; // 1 millisecond
     };
 
+    // Create a dummy settlement initiator
+    let dummySettlementInitiator : CompetitionAutomation.SettlementInitiator = func(output) {
+      #ok(());
+    };
+
     // Create automation module
     let automation = CompetitionAutomation.CompetitionAutomation(
       store,
@@ -169,7 +189,7 @@ test(
       stakingManager,
       getCirculatingSupply,
       getBackingTokens,
-      null,
+      dummySettlementInitiator,
       minimalConfig,
     );
 
@@ -202,6 +222,11 @@ test(
       pauseTime = thirtyDays / 10; // 3 days
     };
 
+    // Create a dummy settlement initiator
+    let dummySettlementInitiator : CompetitionAutomation.SettlementInitiator = func(output) {
+      #ok(());
+    };
+
     // Create automation module
     let automation = CompetitionAutomation.CompetitionAutomation(
       store,
@@ -209,7 +234,7 @@ test(
       stakingManager,
       getCirculatingSupply,
       getBackingTokens,
-      null,
+      dummySettlementInitiator,
       largeConfig,
     );
 
@@ -253,7 +278,7 @@ test(
       stakingManager,
       getCirculatingSupply,
       getBackingTokens,
-      ?mockSettlementInitiator,
+      mockSettlementInitiator,
       config,
     );
 
@@ -286,6 +311,11 @@ test(
       pauseTime = 500_000_000;
     };
 
+    // Create a dummy settlement initiator
+    let dummySettlementInitiator : CompetitionAutomation.SettlementInitiator = func(output) {
+      #ok(());
+    };
+
     // Create automation module
     let automation = CompetitionAutomation.CompetitionAutomation(
       store,
@@ -293,7 +323,7 @@ test(
       stakingManager,
       getCirculatingSupply,
       getBackingTokens,
-      null,
+      dummySettlementInitiator,
       config,
     );
 
@@ -310,7 +340,7 @@ test(
       stakingManager,
       getCirculatingSupply,
       getBackingTokens,
-      null,
+      dummySettlementInitiator,
       config,
     );
 

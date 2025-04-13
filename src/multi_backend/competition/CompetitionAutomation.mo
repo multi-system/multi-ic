@@ -49,7 +49,7 @@ module {
     stakingManager : StakingManager.StakingManager,
     getCirculatingSupply : () -> Nat,
     getBackingTokens : () -> [BackingTypes.BackingPair],
-    startSettlement : ?SettlementInitiator,
+    startSettlement : SettlementInitiator,
     initialConfig : AutomationConfig,
   ) {
     private var config : AutomationConfig = initialConfig;
@@ -111,22 +111,13 @@ module {
                 volumeLimit = result.volumeLimit;
               };
 
-              // Start settlement if initiator is provided
-              switch (startSettlement) {
-                case (null) {
-                  // No settlement initiator provided
-                  Debug.print("Staking round ended successfully, but no settlement initiator provided");
+              // Start settlement
+              switch (startSettlement(stakingOutput)) {
+                case (#err(e)) {
+                  Debug.print("Error starting settlement: " # debug_show (e));
                 };
-                case (?initiator) {
-                  // Start settlement
-                  switch (initiator(stakingOutput)) {
-                    case (#err(e)) {
-                      Debug.print("Error starting settlement: " # debug_show (e));
-                    };
-                    case (#ok(_)) {
-                      Debug.print("Settlement started successfully");
-                    };
-                  };
+                case (#ok(_)) {
+                  Debug.print("Settlement started successfully");
                 };
               };
 
