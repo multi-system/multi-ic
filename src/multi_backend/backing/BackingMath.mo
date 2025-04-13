@@ -53,4 +53,17 @@ module {
     let supplyUnits = multiAmount.value / supplyUnit;
     AmountOperations.new(pair.token, supplyUnits * pair.backingUnit);
   };
+
+  public func alignToSupplyUnit(value : Nat, supplyUnit : Nat) : Nat {
+    if (supplyUnit == 0) {
+      Debug.trap("Supply unit cannot be zero in alignToSupplyUnit");
+    };
+
+    if (value % supplyUnit == 0) {
+      return value;
+    };
+
+    let remainder = value % supplyUnit;
+    value + (supplyUnit - remainder);
+  };
 };
