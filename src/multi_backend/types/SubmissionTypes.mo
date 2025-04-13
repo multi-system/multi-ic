@@ -1,4 +1,3 @@
-// SubmissionTypes.mo
 import Principal "mo:base/Principal";
 import Time "mo:base/Time";
 import Types "Types";
