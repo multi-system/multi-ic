@@ -160,7 +160,7 @@ module {
       updateBackingRatios();
     };
 
-    private func updateBackingRatios() {
+    public func updateBackingRatios() {
       let totalSupply = store.getTotalSupply();
       let supplyUnit = store.getSupplyUnit();
       let backingTokens = store.getBackingTokens();
