@@ -6,12 +6,12 @@ module {
   // Unique identifier for submissions
   public type SubmissionId = Nat;
 
-  // Status of a submission - temporal approach
+  // Status of a submission
   public type SubmissionStatus = {
-    #PreRound; // Before entering the round
-    #ActiveRound; // Active in current round
-    #PostRound; // Round has closed
-    #PostSettlement; // After market settlement
+    #Queued; // Pre-submission
+    #Staked; // Active in competition
+    #Finalized; // Calculations complete
+    #Settled; // After settlement (final state)
     #Rejected; // Invalid submission
   };
 
