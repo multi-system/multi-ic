@@ -12,15 +12,14 @@ import BackingTypes "../../types/BackingTypes";
 import SystemStakeTypes "../../types/SystemStakeTypes";
 import StakeCalculator "./StakeCalculator";
 import StakeOperations "./StakeOperations";
-import CompetitionStore "../CompetitionStore";
-import StakeVault "./StakeVault";
+import CompetitionEntryStore "../CompetitionEntryStore";
 import SubmissionOperations "./SubmissionOperations";
 import SystemStakeOperations "./SystemStakeOperations";
 
 /**
  * FinalizeStakingRound handles the end of a staking competition round.
- * It processes submissions in the PreRound status, adjusts stake rates based on
- * total stakes and volume limit, then updates ActiveRound submissions to PostRound status.
+ * It processes submissions in the Queued status, adjusts stake rates based on
+ * total stakes and volume limit, then updates Staked submissions to Finalized status.
  * Additionally, it calculates the system's stake for the competition.
  */
 module {
@@ -35,12 +34,12 @@ module {
     totalGovStaked : Nat;
     totalMultiStaked : Nat;
     volumeLimit : Nat;
-    activeSubmissionsCount : Nat;
+    stakedSubmissionsCount : Nat;
     adjustmentSuccessCount : Nat;
     adjustmentFailureCount : Nat;
-    preRoundProcessedCount : Nat;
-    preRoundSuccessCount : Nat;
-    preRoundFailureCount : Nat;
+    queuedProcessedCount : Nat;
+    queuedSuccessCount : Nat;
+    queuedFailureCount : Nat;
     systemStake : SystemStakeTypes.SystemStake;
   };
 
@@ -72,60 +71,57 @@ module {
 
   /**
    * Finalizes the staking round by:
-   * 1. Processing all PreRound submissions
+   * 1. Processing all Queued submissions
    * 2. Calculating adjusted stake rates based on total stakes and volume limit
-   * 3. Processing all ActiveRound submissions with the adjusted rates
+   * 3. Processing all Staked submissions with the adjusted rates
    * 4. Calculating the system's stake and phantom positions
    *
-   * @param store The competition store with configuration and submissions
-   * @param stakeVault The stake vault module
+   * @param competitionEntry The competition entry store with configuration and submissions
    * @param getCirculatingSupply Function to get current circulating supply
    * @param getBackingTokens Function to retrieve backing tokens
    * @returns Result with finalization stats or an error
    */
   public func finalizeRound(
-    store : CompetitionStore.CompetitionStore,
-    stakeVault : StakeVault.StakeVault,
+    competitionEntry : CompetitionEntryStore.CompetitionEntryStore,
     getCirculatingSupply : () -> Nat,
     getBackingTokens : () -> [BackingTypes.BackingPair],
   ) : Result.Result<FinalizationResult, Error.CompetitionError> {
+    // Get the stake vault from the competition entry
+    let stakeVault = competitionEntry.getStakeVault();
+
     // Validate competition state
-    if (not store.hasInitialized()) {
-      return #err(#OperationFailed("Competition system not initialized"));
+    if (competitionEntry.getStatus() != #AcceptingStakes) {
+      return #err(#InvalidPhase({ current = debug_show (competitionEntry.getStatus()); required = "AcceptingStakes" }));
     };
 
-    if (not store.isCompetitionActive()) {
-      return #err(#CompetitionNotActive);
-    };
+    // Process all Queued submissions
+    var queuedProcessedCount = 0;
+    var queuedSuccessCount = 0;
+    var queuedFailureCount = 0;
 
-    // Process all PreRound submissions
-    var preRoundProcessedCount = 0;
-    var preRoundSuccessCount = 0;
-    var preRoundFailureCount = 0;
+    let queuedSubmissions = competitionEntry.getSubmissionsByStatus(#Queued);
 
-    let preRoundSubmissions = store.getSubmissionsByStatus(#PreRound);
-
-    // Process each PreRound submission
-    for (submission in preRoundSubmissions.vals()) {
-      preRoundProcessedCount += 1;
+    // Process each Queued submission
+    for (submission in queuedSubmissions.vals()) {
+      queuedProcessedCount += 1;
 
       // Process the submission and track results
-      switch (SubmissionOperations.processSubmission(store, stakeVault, submission)) {
+      switch (SubmissionOperations.processSubmission(competitionEntry, stakeVault, submission)) {
         case (#err(_)) {
-          preRoundFailureCount += 1;
+          queuedFailureCount += 1;
         };
         case (#ok(_)) {
-          preRoundSuccessCount += 1;
+          queuedSuccessCount += 1;
         };
       };
     };
 
     // Get the volume limit (theta * M_start)
-    let volumeLimit = store.getVolumeLimit(getCirculatingSupply);
+    let volumeLimit = competitionEntry.calculateVolumeLimit(getCirculatingSupply);
 
     // Get the initial rates
-    let initialGovRate = store.getGovRate();
-    let initialMultiRate = store.getMultiRate();
+    let initialGovRate = competitionEntry.getGovRate();
+    let initialMultiRate = competitionEntry.getMultiRate();
 
     // Get current total stakes from the stake vault
     let totalGovStaked = stakeVault.getTotalGovernanceStake();
@@ -133,25 +129,25 @@ module {
 
     // Update both stake rates in the store using StakeOperations
     let (updatedGovRate, updatedMultiRate) = StakeOperations.updateAdjustedStakeRates(
-      store,
+      competitionEntry,
       totalGovStaked,
       totalMultiStaked,
       volumeLimit,
     );
 
-    // Get all active submissions that need to be adjusted
-    let activeSubmissions = store.getSubmissionsByStatus(#ActiveRound);
-    let activeSubmissionsCount = activeSubmissions.size();
+    // Get all Staked submissions that need to be adjusted
+    let stakedSubmissions = competitionEntry.getSubmissionsByStatus(#Staked);
+    let stakedSubmissionsCount = stakedSubmissions.size();
 
     // Track success and failure counts
     var adjustmentSuccessCount = 0;
     var adjustmentFailureCount = 0;
 
-    // Process each active submission to adjust its quantities based on updated rates
-    for (submission in activeSubmissions.vals()) {
+    // Process each Staked submission to adjust its quantities based on updated rates
+    for (submission in stakedSubmissions.vals()) {
       switch (
         SubmissionOperations.adjustSubmissionPostRound(
-          store,
+          competitionEntry,
           stakeVault,
           submission.id,
           updatedGovRate,
@@ -172,14 +168,17 @@ module {
     let backingPairs = getBackingTokens();
 
     let systemStake = SystemStakeOperations.calculateSystemStakes(
-      store,
-      store.getSystemStakeGov(),
-      store.getSystemStakeMulti(),
+      competitionEntry,
+      competitionEntry.getConfig().systemStakeGov,
+      competitionEntry.getConfig().systemStakeMulti,
       totalGovStaked,
       totalMultiStaked,
       volumeLimit,
       backingPairs,
     );
+
+    // Set the system stake in the competition entry
+    competitionEntry.setSystemStake(systemStake);
 
     // Return the finalization result
     #ok({
@@ -190,12 +189,12 @@ module {
       totalGovStaked;
       totalMultiStaked;
       volumeLimit;
-      activeSubmissionsCount;
+      stakedSubmissionsCount;
       adjustmentSuccessCount;
       adjustmentFailureCount;
-      preRoundProcessedCount;
-      preRoundSuccessCount;
-      preRoundFailureCount;
+      queuedProcessedCount;
+      queuedSuccessCount;
+      queuedFailureCount;
       systemStake;
     });
   };

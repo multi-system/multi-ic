@@ -41,7 +41,7 @@ module {
       mintedAmount : Types.Amount,
     ) : RewardTypes.Position {
       // Verify submission is finalized and has adjusted quantity
-      if (submission.status != #PostRound or submission.adjustedQuantity == null) {
+      if (submission.status != #Finalized or submission.adjustedQuantity == null) {
         Debug.trap(
           "Critical error: Attempted to settle submission " #
           debug_show (submission.id) # " with invalid status " #

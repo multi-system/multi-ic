@@ -8,7 +8,7 @@ import Array "mo:base/Array";
 import Types "../../types/Types";
 import Error "../../error/Error";
 import BackingTypes "../../types/BackingTypes";
-import CompetitionStore "../CompetitionStore";
+import CompetitionEntryStore "../CompetitionEntryStore";
 import SubmissionTypes "../../types/SubmissionTypes";
 import StakeOperations "./StakeOperations";
 import StakeVault "./StakeVault";
@@ -26,19 +26,23 @@ module {
   };
 
   public class StakingManager(
-    store : CompetitionStore.CompetitionStore,
-    stakeVault : StakeVault.StakeVault,
+    competitionEntry : CompetitionEntryStore.CompetitionEntryStore,
     getCirculatingSupply : () -> Nat,
     getBackingTokens : () -> [BackingTypes.BackingPair],
   ) {
-    // Create a submission using SubmissionOperations - now with store parameter
+    // Get the StakeVault from the competition entry
+    private func getStakeVault() : StakeVault.StakeVault {
+      competitionEntry.getStakeVault();
+    };
+
+    // Create a submission using SubmissionOperations
     private func createSubmission(
       account : Types.Account,
       quantities : SubmissionQuantities,
       token : Types.Token,
     ) : SubmissionTypes.Submission {
       SubmissionOperations.createSubmission(
-        store,
+        competitionEntry,
         account,
         token,
         quantities.tokenQuantity.value,
@@ -46,6 +50,9 @@ module {
         quantities.multiStake,
       );
     };
+
+    // Track queuedSubmissionIds to handle removal properly
+    private var queuedSubmissionIds = Buffer.Buffer<SubmissionTypes.SubmissionId>(10);
 
     // Queue a submission for later processing
     public func queueSubmission(
@@ -55,14 +62,15 @@ module {
     ) : SubmissionTypes.SubmissionId {
       let submission = createSubmission(account, quantities, token);
 
-      // Create a submission in PreRound status (effectively queued)
+      // Create a submission in Queued status
       let queuedSubmission = {
         submission with
-        status = #PreRound;
+        status = #Queued;
       };
 
-      // Add to store
-      store.addSubmission(queuedSubmission);
+      // Add to both competitionEntry for test visibility and track ID locally
+      competitionEntry.addSubmission(queuedSubmission);
+      queuedSubmissionIds.add(submission.id);
 
       submission.id;
     };
@@ -75,11 +83,11 @@ module {
       shouldQueue : Bool,
     ) : Result.Result<{ submissionId : SubmissionTypes.SubmissionId; tokenQuantity : Types.Amount; isQueued : Bool }, Error.CompetitionError> {
       // Calculate the submission quantities using StakeOperations
-      switch (StakeOperations.calculateSubmission(store, govStake, proposedToken)) {
+      switch (StakeOperations.calculateSubmission(competitionEntry, govStake, proposedToken)) {
         case (#err(e)) return #err(e);
         case (#ok(quantities)) {
           if (shouldQueue) {
-            // Add to queue as PreRound submission
+            // Add to queue as Queued submission
             let submissionId = queueSubmission(account, quantities, proposedToken);
 
             #ok({
@@ -92,7 +100,7 @@ module {
             let submission = createSubmission(account, quantities, proposedToken);
 
             // Process directly using SubmissionOperations
-            switch (SubmissionOperations.processSubmission(store, stakeVault, submission)) {
+            switch (SubmissionOperations.processSubmission(competitionEntry, getStakeVault(), submission)) {
               case (#err(e)) return #err(e);
               case (#ok(_)) {
                 #ok({
@@ -109,29 +117,33 @@ module {
 
     // Process all queued submissions one by one
     public func processQueue() : () {
-      // Get all queued submissions as a stable array copy
-      let queuedSubmissions = Array.freeze<SubmissionTypes.Submission>(
-        Array.thaw<SubmissionTypes.Submission>(store.getSubmissionsByStatus(#PreRound))
-      );
+      let currentQueue = Buffer.toArray(queuedSubmissionIds);
+      queuedSubmissionIds.clear();
 
-      // Process each queued submission from our stable copy
-      for (i in queuedSubmissions.keys()) {
-        let submission = queuedSubmissions[i];
-
-        // First remove the submission from the store to avoid duplication
-        store.removeSubmission(submission.id);
-
-        // Process using SubmissionOperations
-        switch (SubmissionOperations.processSubmission(store, stakeVault, submission)) {
-          case (#ok(_)) {
-            // Successfully processed
+      // Process each queued submission
+      for (submissionId in currentQueue.vals()) {
+        // Get the submission from the store
+        switch (competitionEntry.getSubmission(submissionId)) {
+          case (null) {
+            Debug.trap("Critical error: Queued submission not found: " # debug_show (submissionId));
           };
-          case (#err(error)) {
-            // Failure to process a submission is catastrophic for a financial system
-            Debug.trap(
-              "Fatal error: Failed to process submission ID: " # debug_show (submission.id) #
-              " - Error: " # debug_show (error)
-            );
+          case (?submission) {
+            // Remove from store first to avoid accounting issues
+            ignore competitionEntry.removeSubmission(submissionId);
+
+            // Process using SubmissionOperations
+            switch (SubmissionOperations.processSubmission(competitionEntry, getStakeVault(), submission)) {
+              case (#ok(_)) {
+                // Successfully processed
+              };
+              case (#err(error)) {
+                // Failure to process a submission is catastrophic for a financial system
+                Debug.trap(
+                  "Fatal error: Failed to process submission ID: " # debug_show (submission.id) #
+                  " - Error: " # debug_show (error)
+                );
+              };
+            };
           };
         };
       };
@@ -139,12 +151,12 @@ module {
 
     // Get all queued submissions
     public func getQueuedSubmissions() : [SubmissionTypes.Submission] {
-      store.getSubmissionsByStatus(#PreRound);
+      competitionEntry.getSubmissionsByStatus(#Queued);
     };
 
     // Get number of queued submissions
     public func getQueueSize() : Nat {
-      store.getSubmissionCountByStatus(#PreRound);
+      competitionEntry.getSubmissionCountByStatus(#Queued);
     };
 
     // Finalize a single submission (for testing)
@@ -154,11 +166,20 @@ module {
       updatedMultiRate : Types.Ratio,
     ) : Result.Result<SubmissionTypes.Submission, Error.CompetitionError> {
       SubmissionOperations.adjustSubmissionPostRound(
-        store,
-        stakeVault,
+        competitionEntry,
+        getStakeVault(),
         submissionId,
         updatedGovRate,
         updatedMultiRate,
+      );
+    };
+
+    // Finalize the current staking round
+    public func finalizeRound() : Result.Result<FinalizeStakingRound.FinalizationResult, Error.CompetitionError> {
+      FinalizeStakingRound.finalizeRound(
+        competitionEntry,
+        getCirculatingSupply,
+        getBackingTokens,
       );
     };
   };

@@ -1,3 +1,4 @@
+// StakeVault.mo
 import Principal "mo:base/Principal";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Debug "mo:base/Debug";
@@ -8,19 +9,24 @@ import VirtualAccounts "../../custodial/VirtualAccounts";
 import VirtualAccountBridge "../../custodial/VirtualAccountBridge";
 import StakeValidation "./StakeValidation";
 import Error "../../error/Error";
+import AccountTypes "../../types/AccountTypes";
 
 module {
   public class StakeVault(
     userAccounts : VirtualAccounts.VirtualAccounts,
     multiToken : Types.Token,
     governanceToken : Types.Token,
+    existingStakeAccounts : AccountTypes.AccountMap,
   ) {
-    private let stakeAccounts = VirtualAccounts.VirtualAccounts(
-      StableHashMap.init<Types.Account, StableHashMap.StableHashMap<Types.Token, Nat>>()
-    );
+    private let stakeAccounts = VirtualAccounts.VirtualAccounts(existingStakeAccounts);
 
     public func getUserAccounts() : VirtualAccounts.VirtualAccounts {
       userAccounts;
+    };
+
+    // Get the stake accounts map for persistence
+    public func getStakeAccountsMap() : AccountTypes.AccountMap {
+      existingStakeAccounts;
     };
 
     // Basic staking function - moves tokens from user account to stake account

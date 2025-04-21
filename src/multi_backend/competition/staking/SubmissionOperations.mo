@@ -9,7 +9,7 @@ import Iter "mo:base/Iter";
 import Types "../../types/Types";
 import Error "../../error/Error";
 import SubmissionTypes "../../types/SubmissionTypes";
-import CompetitionStore "../CompetitionStore";
+import CompetitionEntryStore "../CompetitionEntryStore";
 import StakeCalculator "./StakeCalculator";
 import StakeValidation "./StakeValidation";
 import StakeVault "./StakeVault";
@@ -23,7 +23,7 @@ module {
   /**
    * Creates a new submission with the specified parameters.
    *
-   * @param store The competition store for generating submission IDs
+   * @param competitionEntry The competition entry for generating submission IDs
    * @param account The account creating the submission
    * @param token The token being submitted
    * @param tokenQuantity The quantity of the token
@@ -32,7 +32,7 @@ module {
    * @returns The newly created submission
    */
   public func createSubmission(
-    store : CompetitionStore.CompetitionStore,
+    competitionEntry : CompetitionEntryStore.CompetitionEntryStore,
     account : Types.Account,
     token : Types.Token,
     tokenQuantity : Nat,
@@ -40,7 +40,7 @@ module {
     multiStake : Types.Amount,
   ) : SubmissionTypes.Submission {
     {
-      id = store.generateSubmissionId();
+      id = competitionEntry.generateSubmissionId();
       participant = account;
 
       // Stake information
@@ -55,7 +55,7 @@ module {
       timestamp = Time.now();
 
       // Current state
-      status = #PreRound;
+      status = #Queued;
       rejectionReason = null;
 
       // Adjustment results after round closure
@@ -74,23 +74,19 @@ module {
    * Process a single submission using the current stake rate.
    * No stake rate recalculation is performed.
    *
-   * @param store The competition store with configuration
+   * @param competitionEntry The competition entry with configuration
    * @param stakeVault The stake vault module
    * @param submission The submission to process
    * @returns Result indicating success or rejection reason
    */
   public func processSubmission(
-    store : CompetitionStore.CompetitionStore,
+    competitionEntry : CompetitionEntryStore.CompetitionEntryStore,
     stakeVault : StakeVault.StakeVault,
     submission : SubmissionTypes.Submission,
   ) : Result.Result<SubmissionTypes.Submission, Error.CompetitionError> {
-    // Validate competition state - these conditions should never occur in production
-    if (not store.hasInitialized()) {
-      Debug.trap("Competition system not initialized - critical invariant violation");
-    };
-
-    if (not store.isCompetitionActive()) {
-      Debug.trap("Competition not active - processSubmission called in wrong phase");
+    // Validate competition state
+    if (competitionEntry.getStatus() != #AcceptingStakes) {
+      return #err(#InvalidPhase({ current = debug_show (competitionEntry.getStatus()); required = "AcceptingStakes" }));
     };
 
     // Perform staking through StakeVault
@@ -112,22 +108,22 @@ module {
         };
 
         // Store the rejected submission
-        store.addSubmission(rejectedSubmission);
+        competitionEntry.addSubmission(rejectedSubmission);
 
         return #err(error);
       };
       case (#ok(_)) {
-        // Submission is valid, update status to ActiveRound
+        // Submission is valid, update status to Staked
         let activeSubmission = {
           submission with
-          status = #ActiveRound;
+          status = #Staked;
         };
 
-        // Store the submission in the competition store
-        store.addSubmission(activeSubmission);
+        // Store the submission in the competition entry
+        competitionEntry.addSubmission(activeSubmission);
 
-        // Update total stakes in the store
-        store.updateTotalStakes(
+        // Update total stakes in the entry
+        competitionEntry.updateTotalStakes(
           stakeVault.getTotalGovernanceStake(),
           stakeVault.getTotalMultiStake(),
         );
@@ -165,9 +161,9 @@ module {
 
   /**
    * Adjusts a submission at the end of a round by calculating the adjusted quantity based on updated stake rates.
-   * Returns excess tokens to the user if necessary and updates the submission status to PostRound.
+   * Returns excess tokens to the user if necessary and updates the submission status to Finalized.
    *
-   * @param store The competition store with configuration
+   * @param competitionEntry The competition entry with configuration
    * @param stakeVault The stake vault module
    * @param submissionId The ID of the submission to adjust
    * @param updatedGovRate The adjusted governance token stake rate
@@ -175,27 +171,27 @@ module {
    * @returns Result with the updated submission or an error
    */
   public func adjustSubmissionPostRound(
-    store : CompetitionStore.CompetitionStore,
+    competitionEntry : CompetitionEntryStore.CompetitionEntryStore,
     stakeVault : StakeVault.StakeVault,
     submissionId : SubmissionTypes.SubmissionId,
     updatedGovRate : Types.Ratio,
     updatedMultiRate : Types.Ratio,
   ) : Result.Result<SubmissionTypes.Submission, Error.CompetitionError> {
-    // Get the submission directly from the store
-    let submissionOpt = store.getSubmission(submissionId);
+    // Get the submission from the competition entry
+    let submissionOpt = competitionEntry.getSubmission(submissionId);
 
     switch (submissionOpt) {
       case (null) {
-        Debug.trap("Critical error: Submission not found - system state inconsistency detected");
+        return #err(#OperationFailed("Submission not found with ID: " # debug_show (submissionId)));
       };
       case (?submission) {
-        // Skip submissions that are not in ActiveRound status
-        if (submission.status != #ActiveRound) {
-          return #err(#InvalidPhase({ current = debug_show (submission.status); required = "ActiveRound" }));
+        // Skip submissions that are not in Staked status
+        if (submission.status != #Staked) {
+          return #err(#InvalidPhase({ current = debug_show (submission.status); required = "Staked" }));
         };
 
         // Get token price
-        let price = switch (store.getCompetitionPrice(submission.token)) {
+        let price = switch (competitionEntry.getCompetitionPrice(submission.token)) {
           case (null) {
             return #err(#TokenNotApproved(submission.token));
           };
@@ -208,7 +204,7 @@ module {
           submission.govStake,
           updatedGovRate,
           updatedMultiRate,
-          store.getMultiToken(),
+          competitionEntry.getMultiToken(),
         );
 
         // Then, calculate token quantity
@@ -249,12 +245,12 @@ module {
         };
 
         // First remove the old submission
-        store.removeSubmission(submissionId);
+        ignore competitionEntry.removeSubmission(submissionId);
 
         // Create the updated submission
         let updatedSubmission = {
           submission with
-          status = #PostRound;
+          status = #Finalized;
           adjustedQuantity = ?{
             token = adjustedQuantity.token;
             value = adjustedQuantity.value;
@@ -262,7 +258,7 @@ module {
         };
 
         // Add the updated submission
-        store.addSubmission(updatedSubmission);
+        competitionEntry.addSubmission(updatedSubmission);
 
         return #ok(updatedSubmission);
       };

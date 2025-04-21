@@ -5,7 +5,7 @@ import Result "mo:base/Result";
 import Types "../../types/Types";
 import Error "../../error/Error";
 import StakeCalculator "./StakeCalculator";
-import CompetitionStore "../CompetitionStore";
+import CompetitionEntryStore "../CompetitionEntryStore";
 import SubmissionTypes "../../types/SubmissionTypes";
 import StakeValidation "./StakeValidation";
 
@@ -28,23 +28,23 @@ module {
    * including basic validation but without recalculating rates.
    */
   public func calculateSubmission(
-    store : CompetitionStore.CompetitionStore,
+    competitionEntry : CompetitionEntryStore.CompetitionEntryStore,
     govStake : Types.Amount,
     proposedToken : Types.Token,
   ) : Result.Result<SubmissionQuantities, Error.CompetitionError> {
     // Verify competition is active
-    if (not store.isCompetitionActive()) {
-      return #err(#CompetitionNotActive);
+    if (competitionEntry.getStatus() != #AcceptingStakes) {
+      return #err(#InvalidPhase({ current = debug_show (competitionEntry.getStatus()); required = "AcceptingStakes" }));
     };
 
     // Validate the Gov token type
-    switch (StakeValidation.validateTokenType(govStake, store.getGovToken())) {
+    switch (StakeValidation.validateTokenType(govStake, competitionEntry.getGovToken())) {
       case (#err(e)) return #err(e);
       case (#ok()) {};
     };
 
     // Get the competition price for the proposed token
-    let price = switch (store.getCompetitionPrice(proposedToken)) {
+    let price = switch (competitionEntry.getCompetitionPrice(proposedToken)) {
       case (null) {
         return #err(#TokenNotApproved(proposedToken));
       };
@@ -53,18 +53,18 @@ module {
       };
     };
 
-    // Calculate the equivalent Multi stake
+    // Calculate the equivalent Multi stake using the current adjusted rates
     let multiStake = StakeCalculator.calculateEquivalentStake(
       govStake,
-      store.getGovRate(),
-      store.getMultiRate(),
-      store.getMultiToken(),
+      competitionEntry.getAdjustedGovRate(),
+      competitionEntry.getAdjustedMultiRate(),
+      competitionEntry.getMultiToken(),
     );
 
-    // Calculate token quantity using the current stake rate
+    // Calculate token quantity using the current adjusted stake rate
     let tokenQuantity = StakeCalculator.calculateTokenQuantity(
       multiStake,
-      store.getMultiRate(),
+      competitionEntry.getAdjustedMultiRate(),
       price,
     );
 
@@ -77,25 +77,25 @@ module {
   };
 
   /**
-   * Updates stake rates in the store based on the provided total stakes
+   * Updates stake rates in the competition entry based on the provided total stakes
    * and volume limit. This is used during both stake submission processing
    * and submission finalization.
    *
-   * @param store The competition store to update
+   * @param competitionEntry The competition entry to update
    * @param totalGovStake The total governance stake amount
    * @param totalMultiStake The total multi stake amount
    * @param volumeLimit The calculated volume limit
    * @returns A tuple with the adjusted (govRate, multiRate)
    */
   public func updateAdjustedStakeRates(
-    store : CompetitionStore.CompetitionStore,
+    competitionEntry : CompetitionEntryStore.CompetitionEntryStore,
     totalGovStake : Nat,
     totalMultiStake : Nat,
     volumeLimit : Nat,
   ) : (Types.Ratio, Types.Ratio) {
-    // Get current rates from the store
-    let currentGovRate = store.getGovRate();
-    let currentMultiRate = store.getMultiRate();
+    // Get current adjusted rates from the competition entry
+    let currentGovRate = competitionEntry.getAdjustedGovRate();
+    let currentMultiRate = competitionEntry.getAdjustedMultiRate();
 
     // Calculate adjusted rates based on current stakes and limit
     let updatedGovRate = StakeCalculator.calculateAdjustedStakeRate(
@@ -110,8 +110,8 @@ module {
       volumeLimit,
     );
 
-    // Update the rates in the store
-    store.updateStakeRates(updatedGovRate, updatedMultiRate);
+    // Update the rates in the competition entry
+    competitionEntry.updateStakeRates(updatedGovRate, updatedMultiRate);
 
     // Return the new rates
     (updatedGovRate, updatedMultiRate);
@@ -119,24 +119,24 @@ module {
 
   /**
    * Calculates the adjusted stake rate for a specific token type without
-   * updating the store. Useful for preview calculations.
+   * updating the competition entry. Useful for preview calculations.
    *
-   * @param store The competition store with current rates
+   * @param competitionEntry The competition entry with current rates
    * @param isGovToken Whether we're calculating for governance token (true) or multi token (false)
    * @param totalStake The total stake amount for the specified token type
    * @param volumeLimit The calculated volume limit
    * @returns The adjusted stake rate
    */
   public func calculateAdjustedStakeRate(
-    store : CompetitionStore.CompetitionStore,
+    competitionEntry : CompetitionEntryStore.CompetitionEntryStore,
     isGovToken : Bool,
     totalStake : Nat,
     volumeLimit : Nat,
   ) : Types.Ratio {
     let currentRate = if (isGovToken) {
-      store.getGovRate();
+      competitionEntry.getAdjustedGovRate();
     } else {
-      store.getMultiRate();
+      competitionEntry.getAdjustedMultiRate();
     };
 
     StakeCalculator.calculateAdjustedStakeRate(

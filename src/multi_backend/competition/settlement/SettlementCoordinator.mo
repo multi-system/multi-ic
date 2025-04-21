@@ -63,7 +63,7 @@ module {
     /**
      * Executes the settlement process for all finalized submissions and system positions.
      *
-     * @param finalizedSubmissions List of submissions in #PostRound status
+     * @param finalizedSubmissions List of submissions in #Finalized status
      * @param systemStake System stake information with phantom positions
      * @param executionPrices List of execution prices for each token
      * @returns A SettlementRecord with the results
@@ -116,7 +116,7 @@ module {
       // STEP 2: PROCESS USER SUBMISSIONS
       for (submission in finalizedSubmissions.vals()) {
         // Skip any submissions that aren't ready
-        if (submission.status != #PostRound or submission.adjustedQuantity == null) {
+        if (submission.status != #Finalized or submission.adjustedQuantity == null) {
           Debug.trap(
             "Critical error: Submission " # debug_show (submission.id) #
             " in executeSettlement is not properly finalized"

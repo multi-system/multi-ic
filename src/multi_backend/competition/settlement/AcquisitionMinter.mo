@@ -46,7 +46,7 @@ module {
 
       for (submission in submissions.vals()) {
         // Verify submission is properly finalized
-        if (submission.status != #PostRound or submission.adjustedQuantity == null) {
+        if (submission.status != #Finalized or submission.adjustedQuantity == null) {
           Debug.trap(
             "Critical error: Submission " # debug_show (submission.id) #
             " is not properly finalized (status: " # debug_show (submission.status) #
