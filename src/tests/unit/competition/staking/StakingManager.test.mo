@@ -7,8 +7,8 @@ import Array "mo:base/Array";
 import Types "../../../../multi_backend/types/Types";
 import Error "../../../../multi_backend/error/Error";
 import SubmissionTypes "../../../../multi_backend/types/SubmissionTypes";
-import CompetitionTypes "../../../../multi_backend/types/CompetitionTypes";
-import CompetitionStore "../../../../multi_backend/competition/CompetitionStore";
+import CompetitionEntryTypes "../../../../multi_backend/types/CompetitionEntryTypes";
+import CompetitionEntryStore "../../../../multi_backend/competition/CompetitionEntryStore";
 import StakeVault "../../../../multi_backend/competition/staking/StakeVault";
 import StakingManager "../../../../multi_backend/competition/staking/StakingManager";
 import CompetitionTestUtils "../CompetitionTestUtils";
@@ -18,41 +18,33 @@ suite(
   func() {
     // Setup test environment for each test
     let setupTest = func() : (
-      CompetitionStore.CompetitionStore,
-      StakeVault.StakeVault,
+      CompetitionEntryStore.CompetitionEntryStore,
       StakingManager.StakingManager,
       Types.Account,
     ) {
-      let store = CompetitionTestUtils.createCompetitionStore();
-      let userAccounts = CompetitionTestUtils.createUserAccounts();
+      let competitionEntry = CompetitionTestUtils.createCompetitionEntryStore();
       let testUser = CompetitionTestUtils.getUserPrincipal();
-
-      let stakeVault = StakeVault.StakeVault(
-        userAccounts,
-        CompetitionTestUtils.getMultiToken(),
-        CompetitionTestUtils.getGovToken(),
-      );
 
       let getCirculatingSupply = CompetitionTestUtils.createCirculatingSupplyFunction(1_000_000);
       let getBackingTokens = CompetitionTestUtils.getBackingTokensFunction();
 
       let stakingManager = StakingManager.StakingManager(
-        store,
-        stakeVault,
+        competitionEntry,
         getCirculatingSupply,
         getBackingTokens,
       );
 
-      store.setCompetitionActive(true);
+      competitionEntry.updateStatus(#AcceptingStakes);
 
-      (store, stakeVault, stakingManager, testUser);
+      (competitionEntry, stakingManager, testUser);
     };
 
     // Test direct stake processing
     test(
       "acceptStakeRequest - processes direct stake request successfully",
       func() {
-        let (store, stakeVault, stakingManager, user) = setupTest();
+        let (competitionEntry, stakingManager, user) = setupTest();
+        let stakeVault = competitionEntry.getStakeVault();
 
         // Create test input
         let govStake : Types.Amount = {
@@ -97,9 +89,9 @@ suite(
             assert (stakeAccounts.getBalance(user, testToken).value == 20_000);
 
             // Check submission was added to store with correct status
-            let submissions = store.getAllSubmissions();
+            let submissions = competitionEntry.getAllSubmissions();
             assert (submissions.size() == 1);
-            assert (submissions[0].status == #ActiveRound);
+            assert (submissions[0].status == #Staked);
           };
         };
       },
@@ -109,7 +101,8 @@ suite(
     test(
       "acceptStakeRequest - queues stake request when shouldQueue is true",
       func() {
-        let (store, stakeVault, stakingManager, user) = setupTest();
+        let (competitionEntry, stakingManager, user) = setupTest();
+        let stakeVault = competitionEntry.getStakeVault();
 
         // Create test input
         let govStake : Types.Amount = {
@@ -149,10 +142,10 @@ suite(
             assert (stakeAccounts.getBalance(user, CompetitionTestUtils.getMultiToken()).value == 0);
             assert (stakeAccounts.getBalance(user, testToken).value == 0);
 
-            // Check submission was added to store with PreRound status
-            let submissions = store.getAllSubmissions();
+            // Check submission was added to store with Queued status
+            let submissions = competitionEntry.getAllSubmissions();
             assert (submissions.size() == 1);
-            assert (submissions[0].status == #PreRound);
+            assert (submissions[0].status == #Queued);
 
             // Check queue methods report correct state
             assert (stakingManager.getQueueSize() == 1);
@@ -166,7 +159,8 @@ suite(
     test(
       "processQueue - processes queued submissions correctly",
       func() {
-        let (store, stakeVault, stakingManager, user) = setupTest();
+        let (competitionEntry, stakingManager, user) = setupTest();
+        let stakeVault = competitionEntry.getStakeVault();
 
         // Queue two submissions
         let govStake1 : Types.Amount = {
@@ -196,12 +190,12 @@ suite(
         assert (stakingManager.getQueuedSubmissions().size() == 0);
 
         // Check submissions were processed
-        let submissions = store.getAllSubmissions();
+        let submissions = competitionEntry.getAllSubmissions();
         assert (submissions.size() == 2);
 
-        // All submissions should now be ActiveRound
+        // All submissions should now be Staked
         for (submission in submissions.vals()) {
-          assert (submission.status == #ActiveRound);
+          assert (submission.status == #Staked);
         };
 
         // Check stake vault has received all the tokens
@@ -213,7 +207,7 @@ suite(
 
         // Token quantities - token2 has double the price, so quantity matches token1 despite double stake
         assert (stakeAccounts.getBalance(user, testToken1).value == 20_000);
-        assert (stakeAccounts.getBalance(user, testToken2).value == 20_000); // Changed from 40_000
+        assert (stakeAccounts.getBalance(user, testToken2).value == 20_000);
       },
     );
 
@@ -221,10 +215,10 @@ suite(
     test(
       "acceptStakeRequest - returns error when competition inactive",
       func() {
-        let (store, stakeVault, stakingManager, user) = setupTest();
+        let (competitionEntry, stakingManager, user) = setupTest();
 
         // Set competition inactive
-        store.setCompetitionActive(false);
+        competitionEntry.updateStatus(#PreAnnouncement);
 
         // Create test input
         let govStake : Types.Amount = {
@@ -246,8 +240,8 @@ suite(
           case (#ok(_)) {
             assert (false); // Should not succeed
           };
-          case (#err(#CompetitionNotActive)) {
-            // Expected error
+          case (#err(#InvalidPhase(_))) {
+            // Expected error in new architecture
           };
           case (#err(error)) {
             Debug.print("Unexpected error type: " # debug_show (error));
@@ -260,7 +254,7 @@ suite(
     test(
       "acceptStakeRequest - returns error for invalid token",
       func() {
-        let (store, stakeVault, stakingManager, user) = setupTest();
+        let (competitionEntry, stakingManager, user) = setupTest();
 
         // Create test input with invalid gov token
         let govStake : Types.Amount = {
@@ -296,7 +290,7 @@ suite(
     test(
       "acceptStakeRequest - returns error for unapproved token",
       func() {
-        let (store, stakeVault, stakingManager, user) = setupTest();
+        let (competitionEntry, stakingManager, user) = setupTest();
 
         // Create test input with valid gov stake but unapproved target token
         let govStake : Types.Amount = {
@@ -332,7 +326,7 @@ suite(
     test(
       "acceptStakeRequest - returns error for insufficient balance",
       func() {
-        let (store, stakeVault, stakingManager, user) = setupTest();
+        let (competitionEntry, stakingManager, user) = setupTest();
 
         // Create test input with stake larger than user balance
         let govStake : Types.Amount = {
@@ -370,7 +364,8 @@ suite(
     test(
       "finalization process works correctly",
       func() {
-        let (store, stakeVault, stakingManager, user) = setupTest();
+        let (competitionEntry, stakingManager, user) = setupTest();
+        let stakeVault = competitionEntry.getStakeVault();
 
         // Create and process a submission
         let govStake : Types.Amount = {
@@ -416,7 +411,7 @@ suite(
               };
               case (#ok(finalizedSubmission)) {
                 // Verify the submission was properly finalized
-                assert (finalizedSubmission.status == #PostRound);
+                assert (finalizedSubmission.status == #Finalized);
 
                 // Adjusted quantity should be about half the original (since rates doubled)
                 let adjustedQuantity = switch (finalizedSubmission.adjustedQuantity) {

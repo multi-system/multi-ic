@@ -76,7 +76,7 @@ suite(
         token = testToken;
         proposedQuantity = tokenAmount;
         timestamp = 0;
-        status = #PostRound;
+        status = #Finalized;
         rejectionReason = null;
         adjustedQuantity = ?tokenAmount; // Same as proposed for simplicity
         soldQuantity = null;

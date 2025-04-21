@@ -5,12 +5,15 @@ import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 
 import Types "../../../multi_backend/types/Types";
 import Error "../../../multi_backend/error/Error";
-import CompetitionTypes "../../../multi_backend/types/CompetitionTypes";
+import CompetitionEntryTypes "../../../multi_backend/types/CompetitionEntryTypes";
+import CompetitionRegistryTypes "../../../multi_backend/types/CompetitionRegistryTypes";
 import SubmissionTypes "../../../multi_backend/types/SubmissionTypes";
 import BackingTypes "../../../multi_backend/types/BackingTypes";
 import VirtualAccounts "../../../multi_backend/custodial/VirtualAccounts";
-import CompetitionStore "../../../multi_backend/competition/CompetitionStore";
+import CompetitionEntryStore "../../../multi_backend/competition/CompetitionEntryStore";
+import CompetitionRegistryStore "../../../multi_backend/competition/CompetitionRegistryStore";
 import StakeVault "../../../multi_backend/competition/staking/StakeVault";
+import AccountTypes "../../../multi_backend/types/AccountTypes";
 
 module {
   // Define constants for common percentage values using the same SCALING_FACTOR as in RatioOperations
@@ -105,41 +108,12 @@ module {
     };
   };
 
-  // Create a standard competition store with all default settings
-  public func createCompetitionStore() : CompetitionStore.CompetitionStore {
-    // Create initial state for CompetitionStore
-    let state : CompetitionTypes.CompetitionState = {
-      var hasInitialized = false;
-      var competitionActive = false;
-      var config = {
-        govToken = getGovToken();
-        multiToken = getMultiToken();
-        approvedTokens = [];
-        competitionPrices = [];
-        govRate = { value = getFIVE_PERCENT() };
-        multiRate = { value = getONE_PERCENT() };
-        theta = { value = getTWENTY_PERCENT() };
-        systemStakeGov = { value = getTWENTY_PERCENT() };
-        systemStakeMulti = { value = getFIFTY_PERCENT() };
-        competitionPeriodLength = 0;
-        competitionSpacing = 0;
-        settlementDuration = 0;
-        rewardDistributionFrequency = 0;
-        numberOfDistributionEvents = 0;
-      };
-      var submissions = [];
-      var nextSubmissionId = 0;
-      var totalGovStake = 0;
-      var totalMultiStake = 0;
-    };
-
-    // Create store
-    let store = CompetitionStore.CompetitionStore(state);
-
+  // Create a standard competition registry store with default settings
+  public func createCompetitionRegistryStore() : CompetitionRegistryStore.CompetitionRegistryStore {
     // Default time values for test
     let defaultTime : Time.Time = 1_000_000_000_000_000;
 
-    // Create standard prices for test tokens (updated with appropriate values)
+    // Create standard prices for test tokens
     let prices = [
       {
         baseToken = getTestToken1();
@@ -158,25 +132,120 @@ module {
       },
     ];
 
-    // Initialize the store with standard values
-    store.initialize(
-      getGovToken(),
-      getMultiToken(),
-      { value = getFIVE_PERCENT() }, // Initial gov rate: 5%
-      { value = getONE_PERCENT() }, // Initial multi rate: 1%
-      { value = getTWENTY_PERCENT() }, // Theta: 20%
-      { value = getTWENTY_PERCENT() }, // System stake gov: 20%
-      { value = getFIFTY_PERCENT() }, // System stake multi: 50%
-      [getTestToken1(), getTestToken2(), getTestToken3()],
-      prices,
-      defaultTime,
-      defaultTime,
-      defaultTime,
-      defaultTime,
-      10,
+    // Create initial state with pre-initialized values
+    let state : CompetitionRegistryTypes.RegistryState = {
+      var hasInitialized = true;
+      var globalConfig = {
+        govToken = getGovToken();
+        multiToken = getMultiToken();
+        approvedTokens = [getTestToken1(), getTestToken2(), getTestToken3()];
+        competitionPrices = prices;
+        govRate = { value = getFIVE_PERCENT() };
+        multiRate = { value = getONE_PERCENT() };
+        theta = { value = getTWENTY_PERCENT() };
+        systemStakeGov = { value = getTWENTY_PERCENT() };
+        systemStakeMulti = { value = getFIFTY_PERCENT() };
+        competitionCycleDuration = defaultTime;
+        preAnnouncementPeriod = defaultTime / 10; // 10% of cycle is pre-announcement
+        rewardDistributionFrequency = defaultTime;
+        numberOfDistributionEvents = 10;
+      };
+      var competitions = [];
+      var currentCompetitionId = null;
+      var nextCompetitionId = 1;
+      var epochStartTime = defaultTime;
+    };
+
+    // Create user accounts
+    let userAccounts = createUserAccounts();
+
+    // Create registry store with pre-initialized state
+    CompetitionRegistryStore.CompetitionRegistryStore(state, userAccounts);
+  };
+
+  // Create a competition entry for testing
+  public func createCompetitionEntry() : CompetitionEntryTypes.CompetitionEntry {
+    // Default time values for test
+    let defaultTime : Time.Time = 1_000_000_000_000_000;
+
+    // Create standard prices for test tokens
+    let prices = [
+      {
+        baseToken = getTestToken1();
+        quoteToken = getMultiToken();
+        value = { value = getONE_HUNDRED_PERCENT() };
+      },
+      {
+        baseToken = getTestToken2();
+        quoteToken = getMultiToken();
+        value = { value = getONE_HUNDRED_PERCENT() * 2 };
+      },
+      {
+        baseToken = getTestToken3();
+        quoteToken = getMultiToken();
+        value = { value = getONE_HUNDRED_PERCENT() * 3 };
+      },
+    ];
+
+    // Configuration for the competition
+    let config : CompetitionEntryTypes.CompetitionConfig = {
+      govToken = getGovToken();
+      multiToken = getMultiToken();
+      approvedTokens = [getTestToken1(), getTestToken2(), getTestToken3()];
+      competitionPrices = prices;
+      govRate = { value = getFIVE_PERCENT() };
+      multiRate = { value = getONE_PERCENT() };
+      theta = { value = getTWENTY_PERCENT() };
+      systemStakeGov = { value = getTWENTY_PERCENT() };
+      systemStakeMulti = { value = getFIFTY_PERCENT() };
+      competitionCycleDuration = defaultTime;
+      preAnnouncementPeriod = defaultTime / 10;
+      rewardDistributionFrequency = defaultTime;
+      numberOfDistributionEvents = 10;
+    };
+
+    // Initialize empty stake accounts
+    let stakeAccounts = StableHashMap.init<Types.Account, AccountTypes.BalanceMap>();
+
+    // Create the competition entry
+    {
+      id = 1;
+      startTime = Time.now();
+      endTime = null;
+      status = #AcceptingStakes;
+      config = config;
+      submissions = [];
+      nextSubmissionId = 0;
+      totalGovStake = 0;
+      totalMultiStake = 0;
+      adjustedGovRate = null;
+      adjustedMultiRate = null;
+      volumeLimit = 0;
+      systemStake = null;
+      stakeAccounts = stakeAccounts;
+    };
+  };
+
+  // Create a competition entry store for testing
+  public func createCompetitionEntryStore() : CompetitionEntryStore.CompetitionEntryStore {
+    let userAccounts = createUserAccounts();
+    let competition = createCompetitionEntry();
+
+    let stakeVault = StakeVault.StakeVault(
+      userAccounts,
+      competition.config.multiToken,
+      competition.config.govToken,
+      competition.stakeAccounts,
     );
 
-    store;
+    CompetitionEntryStore.CompetitionEntryStore(
+      competition,
+      func(updated : CompetitionEntryTypes.CompetitionEntry) {
+        // No-op persistence for tests
+      },
+      userAccounts,
+      stakeVault,
+    );
   };
 
   // Create user accounts with standard test balances
@@ -210,21 +279,14 @@ module {
 
   // Helper to create a complete test environment with all components
   public func createTestEnvironment() : (
-    CompetitionStore.CompetitionStore,
+    CompetitionEntryStore.CompetitionEntryStore,
     StakeVault.StakeVault,
     Types.Account,
     () -> Nat,
     () -> [BackingTypes.BackingPair],
   ) {
-    let store = createCompetitionStore();
+    let competitionEntry = createCompetitionEntryStore();
     let userAccounts = createUserAccounts();
-
-    // Create stake vault
-    let stakeVault = StakeVault.StakeVault(
-      userAccounts,
-      getMultiToken(),
-      getGovToken(),
-    );
 
     // Default circulating supply of 1 million tokens
     let getCirculatingSupply = createCirculatingSupplyFunction(1_000_000);
@@ -232,6 +294,6 @@ module {
     // Get backing tokens function
     let getBackingTokens = getBackingTokensFunction();
 
-    (store, stakeVault, getUserPrincipal(), getCirculatingSupply, getBackingTokens);
+    (competitionEntry, competitionEntry.getStakeVault(), getUserPrincipal(), getCirculatingSupply, getBackingTokens);
   };
 };

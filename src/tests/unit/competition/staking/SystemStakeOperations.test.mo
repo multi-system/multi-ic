@@ -9,10 +9,10 @@ import Types "../../../../multi_backend/types/Types";
 import BackingTypes "../../../../multi_backend/types/BackingTypes";
 import SystemStakeTypes "../../../../multi_backend/types/SystemStakeTypes";
 import SystemStakeOperations "../../../../multi_backend/competition/staking/SystemStakeOperations";
-import CompetitionStore "../../../../multi_backend/competition/CompetitionStore";
+import CompetitionEntryStore "../../../../multi_backend/competition/CompetitionEntryStore";
 import RatioOperations "../../../../multi_backend/financial/RatioOperations";
 import TokenUtils "../../../../multi_backend/financial/TokenUtils";
-import CompetitionTypes "../../../../multi_backend/types/CompetitionTypes";
+import CompetitionEntryTypes "../../../../multi_backend/types/CompetitionEntryTypes";
 import CompetitionTestUtils "../CompetitionTestUtils";
 
 // Test suite for SystemStakeOperations
@@ -23,7 +23,7 @@ suite(
       "calculateSystemStakes - basic test",
       func() {
         // Setup test data
-        let store = CompetitionTestUtils.createCompetitionStore();
+        let competitionEntry = CompetitionTestUtils.createCompetitionEntryStore();
         let govMultiplier : Types.Ratio = {
           value = CompetitionTestUtils.getTWENTY_PERCENT();
         };
@@ -41,7 +41,7 @@ suite(
 
         // Execute the function
         let result = SystemStakeOperations.calculateSystemStakes(
-          store,
+          competitionEntry,
           govMultiplier,
           multiMultiplier,
           totalGovStake,
@@ -81,7 +81,7 @@ suite(
       "calculateSystemStakes - with volume limit higher than stakes",
       func() {
         // Setup test data with higher volume limit
-        let store = CompetitionTestUtils.createCompetitionStore();
+        let competitionEntry = CompetitionTestUtils.createCompetitionEntryStore();
         let govMultiplier : Types.Ratio = {
           value = CompetitionTestUtils.getTWENTY_PERCENT();
         };
@@ -95,7 +95,7 @@ suite(
 
         // Execute the function
         let result = SystemStakeOperations.calculateSystemStakes(
-          store,
+          competitionEntry,
           govMultiplier,
           multiMultiplier,
           totalGovStake,
@@ -124,7 +124,7 @@ suite(
       "calculateSystemStakes - with uneven backing distribution",
       func() {
         // Setup test data with highly skewed backing units
-        let store = CompetitionTestUtils.createCompetitionStore();
+        let competitionEntry = CompetitionTestUtils.createCompetitionEntryStore();
         let govMultiplier : Types.Ratio = {
           value = CompetitionTestUtils.getTWENTY_PERCENT();
         };
@@ -142,7 +142,7 @@ suite(
 
         // Execute the function
         let result = SystemStakeOperations.calculateSystemStakes(
-          store,
+          competitionEntry,
           govMultiplier,
           multiMultiplier,
           totalGovStake,
@@ -186,7 +186,7 @@ suite(
       "calculateSystemStakes - with zero stakes",
       func() {
         // Setup test data with zero stakes
-        let store = CompetitionTestUtils.createCompetitionStore();
+        let competitionEntry = CompetitionTestUtils.createCompetitionEntryStore();
         let govMultiplier : Types.Ratio = {
           value = CompetitionTestUtils.getTWENTY_PERCENT();
         };
@@ -200,7 +200,7 @@ suite(
 
         // Execute the function
         let result = SystemStakeOperations.calculateSystemStakes(
-          store,
+          competitionEntry,
           govMultiplier,
           multiMultiplier,
           totalGovStake,
@@ -230,7 +230,7 @@ suite(
       "calculateSystemStakes - with zero backing units",
       func() {
         // Setup test data with empty backing pairs
-        let store = CompetitionTestUtils.createCompetitionStore();
+        let competitionEntry = CompetitionTestUtils.createCompetitionEntryStore();
         let govMultiplier : Types.Ratio = {
           value = CompetitionTestUtils.getTWENTY_PERCENT();
         };
@@ -244,7 +244,7 @@ suite(
 
         // Execute the function
         let result = SystemStakeOperations.calculateSystemStakes(
-          store,
+          competitionEntry,
           govMultiplier,
           multiMultiplier,
           totalGovStake,
@@ -266,7 +266,7 @@ suite(
       "calculateSystemStakes - with very high multipliers",
       func() {
         // Setup test data with multipliers greater than 100%
-        let store = CompetitionTestUtils.createCompetitionStore();
+        let competitionEntry = CompetitionTestUtils.createCompetitionEntryStore();
         let govMultiplier : Types.Ratio = {
           value = CompetitionTestUtils.getONE_HUNDRED_PERCENT() * 2;
         }; // 200%
@@ -280,7 +280,7 @@ suite(
 
         // Execute the function
         let result = SystemStakeOperations.calculateSystemStakes(
-          store,
+          competitionEntry,
           govMultiplier,
           multiMultiplier,
           totalGovStake,

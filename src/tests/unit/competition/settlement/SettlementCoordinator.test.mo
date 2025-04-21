@@ -131,7 +131,7 @@ suite(
         token = token1;
         proposedQuantity = quantity1;
         timestamp = 0;
-        status = #PostRound;
+        status = #Finalized;
         rejectionReason = null;
         adjustedQuantity = ?quantity1;
         soldQuantity = null;
@@ -147,7 +147,7 @@ suite(
         token = token2;
         proposedQuantity = quantity2;
         timestamp = 0;
-        status = #PostRound;
+        status = #Finalized;
         rejectionReason = null;
         adjustedQuantity = ?quantity2;
         soldQuantity = null;
@@ -489,7 +489,7 @@ suite(
           token = token1;
           proposedQuantity = { token = token1; value = 1000 };
           timestamp = Time.now();
-          status = #PostRound;
+          status = #Finalized;
           rejectionReason = null;
           adjustedQuantity = null;
           soldQuantity = null;

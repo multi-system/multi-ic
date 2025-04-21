@@ -143,7 +143,7 @@ suite(
             token = token;
             proposedQuantity = adjustedQuantity;
             timestamp = 0;
-            status = #PostRound;
+            status = #Finalized;
             rejectionReason = null;
             adjustedQuantity = ?adjustedQuantity;
             soldQuantity = null;

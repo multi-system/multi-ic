@@ -42,10 +42,14 @@ suite(
       userAccounts.mint(user2, amount(multiToken, 700));
       userAccounts.mint(user2, amount(proposedToken, 900));
 
+      // Create empty stake accounts map for the stake vault
+      let initStakeState = StableHashMap.init<Types.Account, AccountTypes.BalanceMap>();
+
       let staking = StakeVault.StakeVault(
         userAccounts,
         multiToken,
         govToken,
+        initStakeState,
       );
 
       (userAccounts, staking);
@@ -318,6 +322,33 @@ suite(
         assert (stakeAccounts.getBalance(user1, govToken).value == 200);
         assert (stakeAccounts.getBalance(user1, multiToken).value == 300);
         assert (stakeAccounts.getBalance(user1, proposedToken).value == 1000);
+      },
+    );
+
+    test(
+      "getStakeAccountsMap returns map that can be used to persist state",
+      func() {
+        let (userAccounts, staking) = setupTest();
+
+        // Stake some tokens
+        staking.stake(user1, amount(govToken, 200));
+        staking.stake(user1, amount(multiToken, 300));
+
+        // Get the stake accounts map
+        let stakeAccountsMap = staking.getStakeAccountsMap();
+
+        // Create a new stake vault with the saved map
+        let newStaking = StakeVault.StakeVault(
+          userAccounts,
+          multiToken,
+          govToken,
+          stakeAccountsMap,
+        );
+
+        // Verify the new vault has the same balances
+        let newStakeAccounts = newStaking.getStakeAccounts();
+        assert (newStakeAccounts.getBalance(user1, govToken).value == 200);
+        assert (newStakeAccounts.getBalance(user1, multiToken).value == 300);
       },
     );
   },

@@ -7,26 +7,26 @@ import Array "mo:base/Array";
 import Types "../../../../multi_backend/types/Types";
 import Error "../../../../multi_backend/error/Error";
 import RatioOperations "../../../../multi_backend/financial/RatioOperations";
-import CompetitionStore "../../../../multi_backend/competition/CompetitionStore";
+import CompetitionEntryStore "../../../../multi_backend/competition/CompetitionEntryStore";
 import StakeOperations "../../../../multi_backend/competition/staking/StakeOperations";
-import CompetitionTypes "../../../../multi_backend/types/CompetitionTypes";
+import CompetitionEntryTypes "../../../../multi_backend/types/CompetitionEntryTypes";
 import CompetitionTestUtils "../CompetitionTestUtils";
 
 suite(
   "Stake Operations",
   func() {
     // Setup test environment for each test
-    let setupTest = func() : CompetitionStore.CompetitionStore {
-      let store = CompetitionTestUtils.createCompetitionStore();
-      store.setCompetitionActive(true);
-      store;
+    let setupTest = func() : CompetitionEntryStore.CompetitionEntryStore {
+      let competitionEntry = CompetitionTestUtils.createCompetitionEntryStore();
+      competitionEntry.updateStatus(#AcceptingStakes);
+      competitionEntry;
     };
 
     // Test calculateSubmission function
     test(
       "calculateSubmission - returns correct quantities for valid input",
       func() {
-        let store = setupTest();
+        let competitionEntry = setupTest();
 
         // Create test inputs
         let govStake : Types.Amount = {
@@ -37,7 +37,7 @@ suite(
 
         // Call the function under test
         let result = StakeOperations.calculateSubmission(
-          store,
+          competitionEntry,
           govStake,
           testToken,
         );
@@ -73,8 +73,8 @@ suite(
     test(
       "calculateSubmission - returns error when competition inactive",
       func() {
-        let store = setupTest();
-        store.setCompetitionActive(false);
+        let competitionEntry = setupTest();
+        competitionEntry.updateStatus(#PreAnnouncement);
 
         let govStake : Types.Amount = {
           token = CompetitionTestUtils.getGovToken();
@@ -83,7 +83,7 @@ suite(
         let testToken = CompetitionTestUtils.getTestToken1();
 
         let result = StakeOperations.calculateSubmission(
-          store,
+          competitionEntry,
           govStake,
           testToken,
         );
@@ -92,8 +92,8 @@ suite(
           case (#ok(_)) {
             assert (false); // Should not succeed
           };
-          case (#err(#CompetitionNotActive)) {
-            // Expected error
+          case (#err(#InvalidPhase(_))) {
+            // Expected error - in the new architecture, we get InvalidPhase instead of CompetitionNotActive
           };
           case (#err(error)) {
             Debug.print("Unexpected error type: " # debug_show (error));
@@ -106,7 +106,7 @@ suite(
     test(
       "calculateSubmission - returns error for unapproved token",
       func() {
-        let store = setupTest();
+        let competitionEntry = setupTest();
 
         let govStake : Types.Amount = {
           token = CompetitionTestUtils.getGovToken();
@@ -117,7 +117,7 @@ suite(
         let unapprovedToken = Principal.fromText("aaaaa-aa");
 
         let result = StakeOperations.calculateSubmission(
-          store,
+          competitionEntry,
           govStake,
           unapprovedToken,
         );
@@ -140,7 +140,7 @@ suite(
     test(
       "calculateSubmission - validates token type",
       func() {
-        let store = setupTest();
+        let competitionEntry = setupTest();
 
         // Create invalid gov stake with wrong token
         let invalidGovStake : Types.Amount = {
@@ -150,7 +150,7 @@ suite(
         let testToken = CompetitionTestUtils.getTestToken1();
 
         let result = StakeOperations.calculateSubmission(
-          store,
+          competitionEntry,
           invalidGovStake,
           testToken,
         );
@@ -175,11 +175,11 @@ suite(
     test(
       "updateAdjustedStakeRates - updates rates correctly when below volume limit",
       func() {
-        let store = setupTest();
+        let competitionEntry = setupTest();
 
         // Initial rates from test utils: govRate = 5%, multiRate = 1%
-        let initialGovRate = store.getGovRate();
-        let initialMultiRate = store.getMultiRate();
+        let initialGovRate = competitionEntry.getGovRate();
+        let initialMultiRate = competitionEntry.getMultiRate();
 
         // Set total stakes to 1% of volume limit
         let volumeLimit = 1_000_000; // from test utils (20% of 5,000,000)
@@ -188,7 +188,7 @@ suite(
 
         // Call function under test
         let (updatedGovRate, updatedMultiRate) = StakeOperations.updateAdjustedStakeRates(
-          store,
+          competitionEntry,
           totalGovStake,
           totalMultiStake,
           volumeLimit,
@@ -198,20 +198,20 @@ suite(
         assert (updatedGovRate.value == initialGovRate.value);
         assert (updatedMultiRate.value == initialMultiRate.value);
 
-        // Store should reflect the same rates
-        assert (store.getGovRate().value == initialGovRate.value);
-        assert (store.getMultiRate().value == initialMultiRate.value);
+        // Check the adjusted rates (not base rates)
+        assert (competitionEntry.getAdjustedGovRate().value == initialGovRate.value);
+        assert (competitionEntry.getAdjustedMultiRate().value == initialMultiRate.value);
       },
     );
 
     test(
       "updateAdjustedStakeRates - increases rates when above volume limit",
       func() {
-        let store = setupTest();
+        let competitionEntry = setupTest();
 
         // Initial rates from test utils: govRate = 5%, multiRate = 1%
-        let initialGovRate = store.getGovRate();
-        let initialMultiRate = store.getMultiRate();
+        let initialGovRate = competitionEntry.getGovRate();
+        let initialMultiRate = competitionEntry.getMultiRate();
 
         // Set total stakes to 80% of volume limit
         let volumeLimit = 1_000_000; // from test utils
@@ -223,7 +223,7 @@ suite(
 
         // Call function under test
         let (updatedGovRate, updatedMultiRate) = StakeOperations.updateAdjustedStakeRates(
-          store,
+          competitionEntry,
           totalGovStake,
           totalMultiStake,
           volumeLimit,
@@ -233,22 +233,22 @@ suite(
         assert (updatedGovRate.value == expectedRate.value);
         assert (updatedMultiRate.value == expectedRate.value);
 
-        // Store should reflect the updated rates
-        assert (store.getGovRate().value == expectedRate.value);
-        assert (store.getMultiRate().value == expectedRate.value);
+        // Check the adjusted rates (not base rates)
+        assert (competitionEntry.getAdjustedGovRate().value == expectedRate.value);
+        assert (competitionEntry.getAdjustedMultiRate().value == expectedRate.value);
       },
     );
 
     test(
       "updateAdjustedStakeRates - never decreases rates",
       func() {
-        let store = setupTest();
+        let competitionEntry = setupTest();
 
         // First, increase rates to 80%
         let volumeLimit = 1_000_000;
         let highStake = 800_000; // 80% of limit
         let (highGovRate, highMultiRate) = StakeOperations.updateAdjustedStakeRates(
-          store,
+          competitionEntry,
           highStake,
           highStake,
           volumeLimit,
@@ -257,7 +257,7 @@ suite(
         // Then call with lower stakes (10%)
         let lowStake = 100_000; // 10% of limit
         let (newGovRate, newMultiRate) = StakeOperations.updateAdjustedStakeRates(
-          store,
+          competitionEntry,
           lowStake,
           lowStake,
           volumeLimit,
@@ -267,9 +267,9 @@ suite(
         assert (newGovRate.value == highGovRate.value);
         assert (newMultiRate.value == highMultiRate.value);
 
-        // Store should maintain the high rates
-        assert (store.getGovRate().value == highGovRate.value);
-        assert (store.getMultiRate().value == highMultiRate.value);
+        // Check the adjusted rates (not base rates)
+        assert (competitionEntry.getAdjustedGovRate().value == highGovRate.value);
+        assert (competitionEntry.getAdjustedMultiRate().value == highMultiRate.value);
       },
     );
 
@@ -277,7 +277,7 @@ suite(
     test(
       "calculateAdjustedStakeRate - calculates correct rate for gov token",
       func() {
-        let store = setupTest();
+        let competitionEntry = setupTest();
         let volumeLimit = 1_000_000;
 
         // Test with 50% of volume limit
@@ -285,7 +285,7 @@ suite(
         let isGovToken = true;
 
         let calculatedRate = StakeOperations.calculateAdjustedStakeRate(
-          store,
+          competitionEntry,
           isGovToken,
           totalStake,
           volumeLimit,
@@ -296,14 +296,14 @@ suite(
         assert (calculatedRate.value == expectedRate.value);
 
         // Store should not be affected by this calculation
-        assert (store.getGovRate().value == CompetitionTestUtils.getFIVE_PERCENT());
+        assert (competitionEntry.getGovRate().value == CompetitionTestUtils.getFIVE_PERCENT());
       },
     );
 
     test(
       "calculateAdjustedStakeRate - calculates correct rate for multi token",
       func() {
-        let store = setupTest();
+        let competitionEntry = setupTest();
         let volumeLimit = 1_000_000;
 
         // Test with 0.5% of volume limit (below current rate)
@@ -311,18 +311,18 @@ suite(
         let isGovToken = false;
 
         let calculatedRate = StakeOperations.calculateAdjustedStakeRate(
-          store,
+          competitionEntry,
           isGovToken,
           totalStake,
           volumeLimit,
         );
 
         // Expected: max(1%, 0.5%) = 1%
-        let expectedRate = store.getMultiRate(); // Should remain at 1%
+        let expectedRate = competitionEntry.getMultiRate(); // Should remain at 1%
         assert (calculatedRate.value == expectedRate.value);
 
         // Store should not be affected
-        assert (store.getMultiRate().value == CompetitionTestUtils.getONE_PERCENT());
+        assert (competitionEntry.getMultiRate().value == CompetitionTestUtils.getONE_PERCENT());
       },
     );
   },
