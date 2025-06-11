@@ -160,35 +160,6 @@ module {
     };
 
     /**
-     * Accept a stake request for a specific competition.
-     * This method handles user input, so it returns errors rather than trapping.
-     *
-     * @param entryStore The entry store for the competition
-     * @param govStake The governance token stake
-     * @param account The account making the stake
-     * @param proposedToken The token being proposed
-     * @param shouldQueue Whether to queue the submission
-     * @return Result with submission details or error
-     */
-    public func acceptStakeRequest(
-      entryStore : CompetitionEntryStore.CompetitionEntryStore,
-      govStake : Types.Amount,
-      account : Types.Account,
-      proposedToken : Types.Token,
-      shouldQueue : Bool,
-    ) : Result.Result<{ submissionId : SubmissionTypes.SubmissionId; tokenQuantity : Types.Amount; isQueued : Bool }, Error.CompetitionError> {
-      // Validate the competition is in the right state
-      // This method handles user input, so return error instead of trapping
-      if (entryStore.getStatus() != #AcceptingStakes) {
-        return #err(#InvalidPhase({ current = debug_show (entryStore.getStatus()); required = "AcceptingStakes" }));
-      };
-
-      // Create the staking manager and process the stake request
-      let stakingManager = createStakingManager(entryStore);
-      stakingManager.acceptStakeRequest(govStake, account, proposedToken, shouldQueue);
-    };
-
-    /**
      * Process a distribution event for a competition.
      * This distributes rewards to participants based on performance.
      *
