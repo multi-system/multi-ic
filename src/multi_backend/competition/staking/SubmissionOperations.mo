@@ -190,13 +190,13 @@ module {
           return #err(#InvalidPhase({ current = debug_show (submission.status); required = "Staked" }));
         };
 
-        // Get token price
-        let price = switch (competitionEntry.getCompetitionPrice(submission.token)) {
-          case (null) {
-            return #err(#TokenNotApproved(submission.token));
-          };
-          case (?p) { p };
+        // Check if token is approved first
+        if (not competitionEntry.isTokenApproved(submission.token)) {
+          return #err(#TokenNotApproved(submission.token));
         };
+
+        // Get token price (now returns Price directly)
+        let price = competitionEntry.getCompetitionPrice(submission.token);
 
         // Calculate the adjusted quantity based on the adjusted stake rate
         // First, recalculate the multi stake using gov stake

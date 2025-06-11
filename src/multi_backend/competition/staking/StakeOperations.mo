@@ -43,15 +43,13 @@ module {
       case (#ok()) {};
     };
 
-    // Get the competition price for the proposed token
-    let price = switch (competitionEntry.getCompetitionPrice(proposedToken)) {
-      case (null) {
-        return #err(#TokenNotApproved(proposedToken));
-      };
-      case (?p) {
-        p;
-      };
+    // Check if token is approved first
+    if (not competitionEntry.isTokenApproved(proposedToken)) {
+      return #err(#TokenNotApproved(proposedToken));
     };
+
+    // Get the competition price for the proposed token (now returns Price directly)
+    let price = competitionEntry.getCompetitionPrice(proposedToken);
 
     // Calculate the equivalent Multi stake using the current adjusted rates
     let multiStake = StakeCalculator.calculateEquivalentStake(

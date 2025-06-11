@@ -272,17 +272,7 @@ suite(
 
         // 1. Get the test token and price
         let testToken = CompetitionTestUtils.getTestToken1();
-        let price = switch (competitionEntry.getCompetitionPrice(testToken)) {
-          case (null) {
-            assert (false);
-            {
-              baseToken = testToken;
-              quoteToken = CompetitionTestUtils.getMultiToken();
-              value = { value = 0 };
-            };
-          };
-          case (?p) { p };
-        };
+        let price = competitionEntry.getCompetitionPrice(testToken);
 
         // 2. Set up gov stake
         let govStake : Types.Amount = {
@@ -367,17 +357,7 @@ suite(
 
         // 1. Get the test token and price
         let testToken = CompetitionTestUtils.getTestToken1();
-        let price = switch (competitionEntry.getCompetitionPrice(testToken)) {
-          case (null) {
-            assert (false);
-            {
-              baseToken = testToken;
-              quoteToken = CompetitionTestUtils.getMultiToken();
-              value = { value = 0 };
-            };
-          };
-          case (?p) { p };
-        };
+        let price = competitionEntry.getCompetitionPrice(testToken);
 
         // 2. Set up gov stake
         let govStake : Types.Amount = {

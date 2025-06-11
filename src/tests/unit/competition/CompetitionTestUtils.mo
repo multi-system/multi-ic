@@ -2,11 +2,13 @@ import Principal "mo:base/Principal";
 import Nat "mo:base/Nat";
 import Time "mo:base/Time";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
+import Hash "mo:base/Hash";
 
 import Types "../../../multi_backend/types/Types";
 import Error "../../../multi_backend/error/Error";
 import CompetitionEntryTypes "../../../multi_backend/types/CompetitionEntryTypes";
 import CompetitionRegistryTypes "../../../multi_backend/types/CompetitionRegistryTypes";
+import EventTypes "../../../multi_backend/types/EventTypes";
 import SubmissionTypes "../../../multi_backend/types/SubmissionTypes";
 import BackingTypes "../../../multi_backend/types/BackingTypes";
 import VirtualAccounts "../../../multi_backend/custodial/VirtualAccounts";
@@ -108,13 +110,9 @@ module {
     };
   };
 
-  // Create a standard competition registry store with default settings
-  public func createCompetitionRegistryStore() : CompetitionRegistryStore.CompetitionRegistryStore {
-    // Default time values for test
-    let defaultTime : Time.Time = 1_000_000_000_000_000;
-
-    // Create standard prices for test tokens
-    let prices = [
+  // Create test prices for use in multiple functions
+  public func createTestPrices() : [Types.Price] {
+    [
       {
         baseToken = getTestToken1();
         quoteToken = getMultiToken();
@@ -131,29 +129,70 @@ module {
         value = { value = getONE_HUNDRED_PERCENT() * 3 };
       },
     ];
+  };
+
+  // Create a mock event registry for testing
+  public func createTestEventRegistry() : CompetitionRegistryTypes.EventRegistry {
+    // Initialize empty hashmaps for events
+    let heartbeats = StableHashMap.init<Nat, EventTypes.HeartbeatEvent>();
+    let priceEvents = StableHashMap.init<Nat, EventTypes.PriceEvent>();
+
+    // Create a heartbeat event
+    let heartbeatEvent : EventTypes.HeartbeatEvent = {
+      id = 1;
+      timestamp = Time.now();
+    };
+
+    // Create a price event referencing the heartbeat
+    let priceEvent : EventTypes.PriceEvent = {
+      id = 1;
+      heartbeatId = 1;
+      prices = createTestPrices();
+    };
+
+    // Store events in maps - Fix: Use Hash.hash instead of Nat.hash
+    StableHashMap.put(heartbeats, Nat.equal, Hash.hash, 1, heartbeatEvent);
+    StableHashMap.put(priceEvents, Nat.equal, Hash.hash, 1, priceEvent);
+
+    // Return initialized registry
+    {
+      var heartbeats = heartbeats;
+      var priceEvents = priceEvents;
+      var nextHeartbeatId = 2;
+      var nextPriceEventId = 2;
+      var lastUpdateTime = Time.now();
+    };
+  };
+
+  // Create a standard competition registry store with default settings
+  public func createCompetitionRegistryStore() : CompetitionRegistryStore.CompetitionRegistryStore {
+    // Default time values for test
+    let defaultTime : Time.Time = 1_000_000_000_000_000;
+
+    // Create event registry with test data
+    let eventRegistry = createTestEventRegistry();
 
     // Create initial state with pre-initialized values
-    let state : CompetitionRegistryTypes.RegistryState = {
+    let state : CompetitionRegistryTypes.CompetitionRegistryState = {
       var hasInitialized = true;
       var globalConfig = {
         govToken = getGovToken();
         multiToken = getMultiToken();
         approvedTokens = [getTestToken1(), getTestToken2(), getTestToken3()];
-        competitionPrices = prices;
+        theta = { value = getTWENTY_PERCENT() };
         govRate = { value = getFIVE_PERCENT() };
         multiRate = { value = getONE_PERCENT() };
-        theta = { value = getTWENTY_PERCENT() };
         systemStakeGov = { value = getTWENTY_PERCENT() };
         systemStakeMulti = { value = getFIFTY_PERCENT() };
         competitionCycleDuration = defaultTime;
-        preAnnouncementPeriod = defaultTime / 10; // 10% of cycle is pre-announcement
-        rewardDistributionFrequency = defaultTime;
+        preAnnouncementDuration = defaultTime / 10; // 10% of cycle is pre-announcement
+        rewardDistributionDuration = defaultTime;
         numberOfDistributionEvents = 10;
       };
       var competitions = [];
-      var currentCompetitionId = null;
-      var nextCompetitionId = 1;
-      var epochStartTime = defaultTime;
+      var currentCompetitionId = 1;
+      var startTime = defaultTime;
+      var eventRegistry = eventRegistry;
     };
 
     // Create user accounts
@@ -164,58 +203,39 @@ module {
   };
 
   // Create a competition entry for testing
-  public func createCompetitionEntry() : CompetitionEntryTypes.CompetitionEntry {
+  public func createCompetitionEntry() : CompetitionEntryTypes.Competition {
     // Default time values for test
     let defaultTime : Time.Time = 1_000_000_000_000_000;
-
-    // Create standard prices for test tokens
-    let prices = [
-      {
-        baseToken = getTestToken1();
-        quoteToken = getMultiToken();
-        value = { value = getONE_HUNDRED_PERCENT() };
-      },
-      {
-        baseToken = getTestToken2();
-        quoteToken = getMultiToken();
-        value = { value = getONE_HUNDRED_PERCENT() * 2 };
-      },
-      {
-        baseToken = getTestToken3();
-        quoteToken = getMultiToken();
-        value = { value = getONE_HUNDRED_PERCENT() * 3 };
-      },
-    ];
 
     // Configuration for the competition
     let config : CompetitionEntryTypes.CompetitionConfig = {
       govToken = getGovToken();
       multiToken = getMultiToken();
       approvedTokens = [getTestToken1(), getTestToken2(), getTestToken3()];
-      competitionPrices = prices;
       govRate = { value = getFIVE_PERCENT() };
       multiRate = { value = getONE_PERCENT() };
       theta = { value = getTWENTY_PERCENT() };
       systemStakeGov = { value = getTWENTY_PERCENT() };
       systemStakeMulti = { value = getFIFTY_PERCENT() };
       competitionCycleDuration = defaultTime;
-      preAnnouncementPeriod = defaultTime / 10;
-      rewardDistributionFrequency = defaultTime;
+      preAnnouncementDuration = defaultTime / 10;
+      rewardDistributionDuration = defaultTime;
       numberOfDistributionEvents = 10;
     };
 
     // Initialize empty stake accounts
     let stakeAccounts = StableHashMap.init<Types.Account, AccountTypes.BalanceMap>();
 
-    // Create the competition entry
+    // Create the competition
     {
       id = 1;
       startTime = Time.now();
-      endTime = null;
+      completionTime = null;
       status = #AcceptingStakes;
       config = config;
+      competitionPrices = 1; // Reference to test price event with ID 1
       submissions = [];
-      nextSubmissionId = 0;
+      submissionCounter = 0;
       totalGovStake = 0;
       totalMultiStake = 0;
       adjustedGovRate = null;
@@ -223,13 +243,24 @@ module {
       volumeLimit = 0;
       systemStake = null;
       stakeAccounts = stakeAccounts;
+      lastDistributionIndex = null;
+      nextDistributionTime = null;
+      distributionHistory = [];
+      positions = [];
     };
+  };
+
+  // Helper function to get a price event by ID from a test registry
+  public func getPriceEventById(registry : CompetitionRegistryTypes.EventRegistry, id : Nat) : ?EventTypes.PriceEvent {
+    // Fix: Use Hash.hash instead of Nat.hash
+    StableHashMap.get(registry.priceEvents, Nat.equal, Hash.hash, id);
   };
 
   // Create a competition entry store for testing
   public func createCompetitionEntryStore() : CompetitionEntryStore.CompetitionEntryStore {
     let userAccounts = createUserAccounts();
     let competition = createCompetitionEntry();
+    let eventRegistry = createTestEventRegistry();
 
     let stakeVault = StakeVault.StakeVault(
       userAccounts,
@@ -238,14 +269,23 @@ module {
       competition.stakeAccounts,
     );
 
-    CompetitionEntryStore.CompetitionEntryStore(
+    let store = CompetitionEntryStore.CompetitionEntryStore(
       competition,
-      func(updated : CompetitionEntryTypes.CompetitionEntry) {
+      func(updated : CompetitionEntryTypes.Competition) {
         // No-op persistence for tests
       },
       userAccounts,
       stakeVault,
     );
+
+    // Set the price event retriever function
+    store.setPriceEventRetriever(
+      func(id : Nat) : ?EventTypes.PriceEvent {
+        getPriceEventById(eventRegistry, id);
+      }
+    );
+
+    store;
   };
 
   // Create user accounts with standard test balances
@@ -284,9 +324,11 @@ module {
     Types.Account,
     () -> Nat,
     () -> [BackingTypes.BackingPair],
+    CompetitionRegistryTypes.EventRegistry,
   ) {
-    let competitionEntry = createCompetitionEntryStore();
+    let competitionStore = createCompetitionEntryStore();
     let userAccounts = createUserAccounts();
+    let eventRegistry = createTestEventRegistry();
 
     // Default circulating supply of 1 million tokens
     let getCirculatingSupply = createCirculatingSupplyFunction(1_000_000);
@@ -294,6 +336,6 @@ module {
     // Get backing tokens function
     let getBackingTokens = getBackingTokensFunction();
 
-    (competitionEntry, competitionEntry.getStakeVault(), getUserPrincipal(), getCirculatingSupply, getBackingTokens);
+    (competitionStore, competitionStore.getStakeVault(), getUserPrincipal(), getCirculatingSupply, getBackingTokens, eventRegistry);
   };
 };

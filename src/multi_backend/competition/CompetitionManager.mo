@@ -3,6 +3,7 @@ import Result "mo:base/Result";
 import Debug "mo:base/Debug";
 import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
+import Nat "mo:base/Nat";
 
 import Types "../types/Types";
 import Error "../error/Error";
@@ -80,15 +81,18 @@ module {
     public func endStakingRound(
       entryStore : CompetitionEntryStore.CompetitionEntryStore
     ) : Result.Result<FinalizeStakingRound.FinalizationResult, Error.CompetitionError> {
+      // Add logging to track state when method is called
+      let status = entryStore.getStatus();
+      Debug.print(
+        "CompetitionManager.endStakingRound: Competition #" # Nat.toText(entryStore.getId()) #
+        " current status: " # debug_show (status)
+      );
+
       // This method is called by the orchestrator, so we trap on unexpected state
       // since it would indicate a bug in the orchestration logic
-      let status = entryStore.getStatus();
       if (status != #AcceptingStakes) {
         Debug.trap("Critical error: Cannot end staking round for competition not in AcceptingStakes state. Current state: " # debug_show (status));
       };
-
-      // Update competition status to Finalizing
-      entryStore.updateStatus(#Finalizing);
 
       // Create the staking manager for this competition
       let stakingManager = createStakingManager(entryStore);
@@ -102,7 +106,9 @@ module {
           return #err(e);
         };
         case (#ok(result)) {
-          // Mark the competition as in Settlement phase
+          // NOW update competition status to Finalizing, then Settlement, then Distribution
+          // This ensures all staking operations complete while still in AcceptingStakes
+          entryStore.updateStatus(#Finalizing);
           entryStore.updateStatus(#Settlement);
 
           // Prepare data for settlement phase
@@ -180,6 +186,97 @@ module {
       // Create the staking manager and process the stake request
       let stakingManager = createStakingManager(entryStore);
       stakingManager.acceptStakeRequest(govStake, account, proposedToken, shouldQueue);
+    };
+
+    /**
+     * Process a distribution event for a competition.
+     * This distributes rewards to participants based on performance.
+     *
+     * @param entryStore The entry store for the competition
+     * @param distributionNumber The distribution event number (0-based)
+     * @param distributionEvent The distribution event details
+     * @return Result indicating success or error
+     */
+    public func processDistribution(
+      entryStore : CompetitionEntryStore.CompetitionEntryStore,
+      distributionNumber : Nat,
+      distributionEvent : CompetitionEntryTypes.DistributionEvent,
+    ) : Result.Result<(), Error.CompetitionError> {
+      // This method is called by the orchestrator, so we trap on unexpected state
+      let status = entryStore.getStatus();
+      if (status != #Distribution) {
+        Debug.trap("Critical error: Cannot process distribution for competition not in Distribution state. Current state: " # debug_show (status));
+      };
+
+      // Verify this is the expected distribution number
+      let expectedNumber = switch (entryStore.getLastDistributionIndex()) {
+        case (null) { 0 };
+        case (?lastIndex) { lastIndex + 1 };
+      };
+
+      if (distributionNumber != expectedNumber) {
+        Debug.trap("Critical error: Distribution number mismatch. Expected: " # Nat.toText(expectedNumber) # ", Got: " # Nat.toText(distributionNumber));
+      };
+
+      // TODO: Implement actual distribution logic
+      // This is where the whitepaper's "Reward Distribution" phase would be implemented:
+      // 1. Track performance of each position relative to others
+      // 2. Calculate stake redistribution based on performance
+      // 3. Update participant stakes accordingly
+      // 4. Handle system's won/lost stakes (burn Multi tokens, etc.)
+
+      Debug.print("Processing distribution #" # Nat.toText(distributionNumber + 1) # " for competition " # Nat.toText(entryStore.getId()));
+      Debug.print("Distribution event uses price event #" # Nat.toText(distributionEvent.distributionPrices));
+
+      // For now, we just record that the distribution happened
+      // The actual redistribution logic would go here
+
+      #ok(());
+    };
+
+    /**
+     * End a competition and perform final cleanup.
+     *
+     * @param entryStore The entry store for the competition to end
+     * @return Result indicating success or error
+     */
+    public func endCompetition(
+      entryStore : CompetitionEntryStore.CompetitionEntryStore
+    ) : Result.Result<(), Error.CompetitionError> {
+      // This method is called by the orchestrator, so we trap on unexpected state
+      let status = entryStore.getStatus();
+      if (status != #Distribution) {
+        Debug.trap("Critical error: Cannot end competition not in Distribution state. Current state: " # debug_show (status));
+      };
+
+      // Verify all distributions have been completed
+      let config = entryStore.getConfig();
+      let lastDistribution = entryStore.getLastDistributionIndex();
+
+      switch (lastDistribution) {
+        case (null) {
+          Debug.trap("Critical error: No distributions have been processed");
+        };
+        case (?index) {
+          // Index is 0-based, so we need index + 1 to equal numberOfDistributionEvents
+          if (index + 1 < config.numberOfDistributionEvents) {
+            Debug.trap("Critical error: Not all distributions completed. Processed: " # Nat.toText(index + 1) # ", Required: " # Nat.toText(config.numberOfDistributionEvents));
+          };
+        };
+      };
+
+      // Update status to Completed
+      entryStore.updateStatus(#Completed);
+
+      Debug.print("Competition " # Nat.toText(entryStore.getId()) # " has been completed");
+
+      // TODO: Any final cleanup logic could go here
+      // For example:
+      // - Final stake reconciliation
+      // - Archiving competition data
+      // - Releasing any locked resources
+
+      #ok(());
     };
   };
 };

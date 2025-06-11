@@ -29,7 +29,7 @@ suite(
       "starts staking round successfully",
       func() {
         // Create test environment
-        let (entryStore, _, _, getCirculatingSupply, getBackingTokens) = CompetitionTestUtils.createTestEnvironment();
+        let (entryStore, _, _, getCirculatingSupply, getBackingTokens, _) = CompetitionTestUtils.createTestEnvironment();
 
         // Set status to PreAnnouncement for testing
         entryStore.updateStatus(#PreAnnouncement);
@@ -67,7 +67,7 @@ suite(
       "starts staking round only from PreAnnouncement state",
       func() {
         // Create test environment
-        let (entryStore, _, _, getCirculatingSupply, getBackingTokens) = CompetitionTestUtils.createTestEnvironment();
+        let (entryStore, _, _, getCirculatingSupply, getBackingTokens, _) = CompetitionTestUtils.createTestEnvironment();
 
         // Set status to PreAnnouncement
         entryStore.updateStatus(#PreAnnouncement);
@@ -105,7 +105,7 @@ suite(
       "accepts stake request successfully",
       func() {
         // Create test environment with a competition in AcceptingStakes state
-        let (entryStore, stakeVault, userAccount, getCirculatingSupply, getBackingTokens) = CompetitionTestUtils.createTestEnvironment();
+        let (entryStore, stakeVault, userAccount, getCirculatingSupply, getBackingTokens, _) = CompetitionTestUtils.createTestEnvironment();
         entryStore.updateStatus(#AcceptingStakes);
 
         // Create mock settlement function
@@ -154,7 +154,7 @@ suite(
       "fails to accept stake when competition is in wrong state",
       func() {
         // Create test environment with a competition in wrong state
-        let (entryStore, stakeVault, userAccount, getCirculatingSupply, getBackingTokens) = CompetitionTestUtils.createTestEnvironment();
+        let (entryStore, stakeVault, userAccount, getCirculatingSupply, getBackingTokens, _) = CompetitionTestUtils.createTestEnvironment();
         entryStore.updateStatus(#PreAnnouncement); // Wrong state for accepting stakes
 
         // Create mock settlement function
@@ -201,7 +201,7 @@ suite(
       "accepts and queues stake requests properly",
       func() {
         // Create test environment with a competition in AcceptingStakes state
-        let (entryStore, stakeVault, userAccount, getCirculatingSupply, getBackingTokens) = CompetitionTestUtils.createTestEnvironment();
+        let (entryStore, stakeVault, userAccount, getCirculatingSupply, getBackingTokens, _) = CompetitionTestUtils.createTestEnvironment();
         entryStore.updateStatus(#AcceptingStakes);
 
         // Create mock settlement function

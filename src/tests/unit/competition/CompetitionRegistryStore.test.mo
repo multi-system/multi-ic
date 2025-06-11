@@ -2,12 +2,14 @@ import Principal "mo:base/Principal";
 import Debug "mo:base/Debug";
 import Time "mo:base/Time";
 import Option "mo:base/Option";
+import Buffer "mo:base/Buffer";
 import { suite; test; expect } "mo:test";
 
 import Types "../../../multi_backend/types/Types";
 import Error "../../../multi_backend/error/Error";
 import CompetitionRegistryTypes "../../../multi_backend/types/CompetitionRegistryTypes";
 import CompetitionEntryTypes "../../../multi_backend/types/CompetitionEntryTypes";
+import RewardTypes "../../../multi_backend/types/RewardTypes";
 import CompetitionRegistryStore "../../../multi_backend/competition/CompetitionRegistryStore";
 import CompetitionTestUtils "./CompetitionTestUtils";
 
@@ -66,7 +68,11 @@ suite(
           case (#ok(competitionId)) {
             // Check competition was created and is active
             expect.bool(registry.hasActiveCompetition()).isTrue();
-            expect.nat(Option.get(registry.getCurrentCompetitionId(), 0)).equal(competitionId);
+
+            // FIXED: getCurrentCompetitionId now returns the NEXT competition ID after increment
+            // The created competition has ID = competitionId
+            // After creation, currentCompetitionId is incremented to competitionId + 1
+            expect.nat(registry.getCurrentCompetitionId()).equal(competitionId + 1);
 
             // Get competition entry
             switch (registry.getCurrentCompetition()) {
@@ -86,6 +92,7 @@ suite(
               };
               case (?entryStore) {
                 expect.bool(entryStore.getStatus() == #PreAnnouncement).isTrue();
+                expect.nat(entryStore.getId()).equal(competitionId);
               };
             };
           };
@@ -243,6 +250,70 @@ suite(
           };
           case (_) {
             expect.bool(false).isTrue(); // Should be null for non-existent ID
+          };
+        };
+      },
+    );
+
+    test(
+      "navigates the competition-position hierarchy",
+      func() {
+        let registry = CompetitionTestUtils.createCompetitionRegistryStore();
+        var competitionId : Nat = 0;
+
+        // 1. Create a competition
+        switch (registry.createCompetition()) {
+          case (#err(_)) {
+            expect.bool(false).isTrue(); // Should not error
+          };
+          case (#ok(id)) {
+            competitionId := id;
+
+            // 2. Get the competition entry store
+            switch (registry.getCompetitionEntryStoreById(competitionId)) {
+              case (null) {
+                expect.bool(false).isTrue(); // Should not be null
+              };
+              case (?entryStore) {
+                // 3. Create a test position
+                let testToken = CompetitionTestUtils.getTestToken1();
+                let position : RewardTypes.Position = {
+                  quantity = { token = testToken; value = 1000 };
+                  govStake = { token = mockGovToken; value = 200 };
+                  multiStake = { token = mockSystemToken; value = 100 };
+                  submissionId = ?0;
+                  isSystem = false;
+                };
+
+                // 4. Add the position to the competition
+                entryStore.addPosition(position);
+
+                // 5. Verify the position was added
+                let positions = entryStore.getPositions();
+                expect.nat(positions.size()).equal(1);
+
+                // 6. For now, positions don't have performance history
+                // This will need to be addressed when we properly implement performance tracking
+
+                // 7. Get the competition again to verify persistence
+                switch (registry.getCompetitionEntryStoreById(competitionId)) {
+                  case (null) {
+                    expect.bool(false).isTrue(); // Should not be null
+                  };
+                  case (?refreshedStore) {
+                    // 8. Verify we can access the positions
+                    let refreshedPositions = refreshedStore.getPositions();
+                    expect.nat(refreshedPositions.size()).equal(1);
+
+                    // 9. Verify the position data
+                    let pos = refreshedPositions[0];
+                    expect.nat(pos.quantity.value).equal(1000);
+                    expect.nat(pos.govStake.value).equal(200);
+                    expect.nat(pos.multiStake.value).equal(100);
+                  };
+                };
+              };
+            };
           };
         };
       },

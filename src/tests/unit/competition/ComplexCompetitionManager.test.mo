@@ -33,7 +33,7 @@ suite(
       "creates system stake with proper parameters",
       func() {
         // Create test environment
-        let (entryStore, stakeVault, userAccount, getCirculatingSupply, getBackingTokens) = CompetitionTestUtils.createTestEnvironment();
+        let (entryStore, stakeVault, userAccount, getCirculatingSupply, getBackingTokens, eventRegistry) = CompetitionTestUtils.createTestEnvironment();
 
         // Initialize competition to correct state (AcceptingStakes)
         entryStore.updateStatus(#AcceptingStakes);
@@ -151,7 +151,7 @@ suite(
       "getQueuedSubmissions returns correct submissions",
       func() {
         // Create test environment
-        let (entryStore, _, userAccount, getCirculatingSupply, getBackingTokens) = CompetitionTestUtils.createTestEnvironment();
+        let (entryStore, _, userAccount, getCirculatingSupply, getBackingTokens, _) = CompetitionTestUtils.createTestEnvironment();
         entryStore.updateStatus(#AcceptingStakes);
 
         // Create settlement function
@@ -198,7 +198,7 @@ suite(
         let fixedSupply = 1_000_000; // 1 million tokens
         let getFixedSupply = CompetitionTestUtils.createCirculatingSupplyFunction(fixedSupply);
 
-        let (entryStore, _, _, _, getBackingTokens) = CompetitionTestUtils.createTestEnvironment();
+        let (entryStore, _, _, _, getBackingTokens, _) = CompetitionTestUtils.createTestEnvironment();
 
         // Create settlement function
         let startSettlement = func(output : CompetitionManager.StakingRoundOutput) : Result.Result<(), Error.CompetitionError> {

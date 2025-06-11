@@ -29,7 +29,7 @@ suite(
       "settlement process with backing updates",
       func() {
         // SETUP: Create the test environment
-        let (entryStore, stakeVault, user, getCirculatingSupply, getBackingTokens) = CompetitionTestUtils.createTestEnvironment();
+        let (entryStore, stakeVault, user, getCirculatingSupply, getBackingTokens, _) = CompetitionTestUtils.createTestEnvironment();
         let user2 = CompetitionTestUtils.getUser2Principal();
 
         // Create backing store with precise, fixed supply unit

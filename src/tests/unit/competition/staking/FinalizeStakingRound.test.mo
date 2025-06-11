@@ -28,7 +28,7 @@ suite(
       () -> Nat,
       () -> [BackingTypes.BackingPair],
     ) {
-      let (competitionEntry, stakeVault, user, getCirculatingSupply, getBackingTokens) = CompetitionTestUtils.createTestEnvironment();
+      let (competitionEntry, stakeVault, user, getCirculatingSupply, getBackingTokens, _) = CompetitionTestUtils.createTestEnvironment();
 
       // Ensure competition is active
       competitionEntry.updateStatus(#AcceptingStakes);

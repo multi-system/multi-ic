@@ -2,11 +2,12 @@ import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
 import Debug "mo:base/Debug";
 import Iter "mo:base/Iter";
-import Nat "mo:base/Nat"; // Added for Nat.toText
+import Nat "mo:base/Nat";
 import Principal "mo:base/Principal";
 import Time "mo:base/Time";
 import Option "mo:base/Option";
 import Result "mo:base/Result";
+import Int "mo:base/Int";
 
 import Types "../types/Types";
 import CompetitionEntryTypes "../types/CompetitionEntryTypes";
@@ -16,28 +17,46 @@ import SystemStakeTypes "../types/SystemStakeTypes";
 import StakeVault "./staking/StakeVault";
 import VirtualAccounts "../custodial/VirtualAccounts";
 import Error "../error/Error";
+import EventTypes "../types/EventTypes";
+import RewardTypes "../types/RewardTypes";
 
 module {
   // The CompetitionEntryStore class manages a single competition
   public class CompetitionEntryStore(
     // The competition data - this is passed by reference but any changes need to be saved back
-    competitionDataParam : CompetitionEntryTypes.CompetitionEntry,
+    competitionDataParam : CompetitionEntryTypes.Competition,
     // Callback to persist changes back to the registry
-    persistChanges : (CompetitionEntryTypes.CompetitionEntry) -> (),
+    persistChanges : (CompetitionEntryTypes.Competition) -> (),
     // Shared user accounts used across the system
     userAccounts : VirtualAccounts.VirtualAccounts,
     // The stake vault for this competition
     stakeVault : StakeVault.StakeVault,
   ) {
     // Store competition data in a private field
-    private var competitionData : CompetitionEntryTypes.CompetitionEntry = competitionDataParam;
+    private var competitionData : CompetitionEntryTypes.Competition = competitionDataParam;
+
+    // Reference to external method to retrieve price event data
+    // Using an optional type for the function
+    private var getPriceEventById : ?(Nat -> ?EventTypes.PriceEvent) = null;
+
+    // Set the price event retrieval method
+    public func setPriceEventRetriever(retriever : (Nat) -> ?EventTypes.PriceEvent) {
+      getPriceEventById := ?retriever;
+    };
 
     // Update competition status
     public func updateStatus(status : CompetitionEntryTypes.CompetitionStatus) {
+      // Add logging to track status changes
+      Debug.print(
+        "CompetitionEntryStore: Updating competition #" # Nat.toText(competitionData.id) #
+        " status from " # debug_show (competitionData.status) #
+        " to " # debug_show (status)
+      );
+
       let updated = {
         competitionData with
         status = status;
-        endTime = if (status == #Completed or status == #Distribution) ?Time.now() else competitionData.endTime;
+        completionTime = if (status == #Completed or status == #Distribution) ?Time.now() else competitionData.completionTime;
       };
       competitionData := updated;
       persistChanges(updated);
@@ -211,22 +230,23 @@ module {
     };
 
     // Get competition price for a token
-    public func getCompetitionPrice(token : Types.Token) : ?Types.Price {
-      for (i in Iter.range(0, competitionData.config.approvedTokens.size() - 1)) {
-        if (Principal.equal(competitionData.config.approvedTokens[i], token)) {
-          return ?competitionData.config.competitionPrices[i];
+    public func getCompetitionPrice(token : Types.Token) : Types.Price {
+      let prices = getCompetitionPrices();
+      for (price in prices.vals()) {
+        if (Principal.equal(price.baseToken, token)) {
+          return price;
         };
       };
-      null;
+      Debug.trap("Critical error: No price found for token " # Principal.toText(token) # " in competition " # Nat.toText(competitionData.id));
     };
 
     // Generate a new submission ID
     public func generateSubmissionId() : SubmissionTypes.SubmissionId {
-      let id = competitionData.nextSubmissionId;
+      let id = competitionData.submissionCounter;
 
       let updated = {
         competitionData with
-        nextSubmissionId = id + 1;
+        submissionCounter = id + 1;
       };
       competitionData := updated;
       persistChanges(updated);
@@ -251,6 +271,64 @@ module {
       persistChanges(updated);
 
       volumeLimit;
+    };
+
+    /**
+     * Add a distribution event and update the last distribution index
+     *
+     * @param distributionEvent The event to add
+     */
+    public func addDistributionEvent(distributionEvent : CompetitionEntryTypes.DistributionEvent) {
+      // Add to events array
+      let buffer = Buffer.fromArray<CompetitionEntryTypes.DistributionEvent>(competitionData.distributionHistory);
+      buffer.add(distributionEvent);
+
+      // The distribution event already contains the distribution number
+      // We should use that as the last distribution index
+      let updated = {
+        competitionData with
+        distributionHistory = Buffer.toArray(buffer);
+        lastDistributionIndex = ?distributionEvent.distributionNumber;
+      };
+
+      competitionData := updated;
+      persistChanges(updated);
+    };
+
+    /**
+     * Add a position to the competition
+     *
+     * @param position The position to add
+     */
+    public func addPosition(position : RewardTypes.Position) {
+      let buffer = Buffer.fromArray<RewardTypes.Position>(competitionData.positions);
+      buffer.add(position);
+
+      let updated = {
+        competitionData with
+        positions = Buffer.toArray(buffer);
+      };
+
+      competitionData := updated;
+      persistChanges(updated);
+    };
+
+    /**
+     * Get the last distribution index
+     *
+     * @return The last processed distribution index (null if none)
+     */
+    public func getLastDistributionIndex() : ?Nat {
+      competitionData.lastDistributionIndex;
+    };
+
+    /**
+     * Get all positions in the competition
+     *
+     * @return Array of all positions
+     */
+    public func getPositions() : [RewardTypes.Position] {
+      competitionData.positions;
     };
 
     // === GETTERS ===
@@ -325,9 +403,30 @@ module {
       competitionData.config.approvedTokens;
     };
 
-    // Get competition prices
+    // Get competition prices by retrieving from price event
     public func getCompetitionPrices() : [Types.Price] {
-      competitionData.config.competitionPrices;
+      switch (getPriceEventById) {
+        case (null) {
+          Debug.trap("Price event retriever not set - call setPriceEventRetriever first");
+        };
+        case (?retriever) {
+          // Get the price event using the competition's price event ID
+          let priceEventOpt = retriever(competitionData.competitionPrices);
+          switch (priceEventOpt) {
+            case (null) {
+              Debug.trap("Critical error: Price event not found for competition " # Nat.toText(competitionData.id) # " with price event ID: " # Nat.toText(competitionData.competitionPrices));
+            };
+            case (?priceEvent) {
+              priceEvent.prices;
+            };
+          };
+        };
+      };
+    };
+
+    // Get competition price event ID
+    public func getCompetitionPriceEventId() : Nat {
+      competitionData.competitionPrices;
     };
 
     // Get volume limit
@@ -341,7 +440,7 @@ module {
     };
 
     // Get competition data (direct access to the underlying data)
-    public func getData() : CompetitionEntryTypes.CompetitionEntry {
+    public func getData() : CompetitionEntryTypes.Competition {
       competitionData;
     };
   };
