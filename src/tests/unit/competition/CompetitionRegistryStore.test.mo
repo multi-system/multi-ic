@@ -283,6 +283,7 @@ suite(
                   multiStake = { token = mockSystemToken; value = 100 };
                   submissionId = ?0;
                   isSystem = false;
+                  distributionPayouts = [];
                 };
 
                 // 4. Add the position to the competition

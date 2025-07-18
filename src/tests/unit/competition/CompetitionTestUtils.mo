@@ -11,6 +11,7 @@ import CompetitionRegistryTypes "../../../multi_backend/types/CompetitionRegistr
 import EventTypes "../../../multi_backend/types/EventTypes";
 import SubmissionTypes "../../../multi_backend/types/SubmissionTypes";
 import BackingTypes "../../../multi_backend/types/BackingTypes";
+import RewardTypes "../../../multi_backend/types/RewardTypes";
 import VirtualAccounts "../../../multi_backend/custodial/VirtualAccounts";
 import CompetitionEntryStore "../../../multi_backend/competition/CompetitionEntryStore";
 import CompetitionRegistryStore "../../../multi_backend/competition/CompetitionRegistryStore";
@@ -92,6 +93,50 @@ module {
       // Position reference
       positionId = null;
     };
+  };
+
+  // Create a test position for use in tests
+  public func createTestPosition(
+    token : Types.Token,
+    quantity : Nat,
+    govStake : Nat,
+    multiStake : Nat,
+    submissionId : ?SubmissionTypes.SubmissionId,
+    isSystem : Bool,
+  ) : RewardTypes.Position {
+    {
+      quantity = { token = token; value = quantity };
+      govStake = { token = getGovToken(); value = govStake };
+      multiStake = { token = getMultiToken(); value = multiStake };
+      submissionId = submissionId;
+      isSystem = isSystem;
+      distributionPayouts = []; // Always starts empty for tests
+    };
+  };
+
+  // Convenience function for creating a user position from a submission
+  public func createUserPositionFromSubmission(
+    submission : SubmissionTypes.Submission,
+    adjustedQuantity : Types.Amount,
+  ) : RewardTypes.Position {
+    {
+      quantity = adjustedQuantity;
+      govStake = submission.govStake;
+      multiStake = submission.multiStake;
+      submissionId = ?submission.id;
+      isSystem = false;
+      distributionPayouts = [];
+    };
+  };
+
+  // Convenience function for creating a system position
+  public func createSystemPosition(
+    token : Types.Token,
+    quantity : Nat,
+    govStake : Nat,
+    multiStake : Nat,
+  ) : RewardTypes.Position {
+    createTestPosition(token, quantity, govStake, multiStake, null, true);
   };
 
   // Create mock backing tokens for testing

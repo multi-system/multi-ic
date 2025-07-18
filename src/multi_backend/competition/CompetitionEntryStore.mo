@@ -37,11 +37,11 @@ module {
 
     // Reference to external method to retrieve price event data
     // Using an optional type for the function
-    private var getPriceEventById : ?(Nat -> ?EventTypes.PriceEvent) = null;
+    private var getPriceEventByIdFunc : ?(Nat -> ?EventTypes.PriceEvent) = null;
 
     // Set the price event retrieval method
     public func setPriceEventRetriever(retriever : (Nat) -> ?EventTypes.PriceEvent) {
-      getPriceEventById := ?retriever;
+      getPriceEventByIdFunc := ?retriever;
     };
 
     // Update competition status
@@ -314,6 +314,76 @@ module {
     };
 
     /**
+     * Get position by submission ID
+     *
+     * @param submissionId The submission ID to search for
+     * @return The position if found
+     */
+    public func getPositionBySubmissionId(submissionId : SubmissionTypes.SubmissionId) : ?RewardTypes.Position {
+      Array.find<RewardTypes.Position>(
+        competitionData.positions,
+        func(position) {
+          switch (position.submissionId) {
+            case (?id) { id == submissionId };
+            case (null) { false };
+          };
+        },
+      );
+    };
+
+    /**
+     * Update a position with distribution payout information
+     *
+     * @param positionIndex Index of the position to update
+     * @param distributionNumber The distribution event number
+     * @param govPayout Amount of gov tokens paid out
+     * @param multiPayout Amount of multi tokens paid out
+     * @return True if update successful
+     */
+    public func updatePositionPayout(
+      positionIndex : Nat,
+      distributionNumber : Nat,
+      govPayout : Nat,
+      multiPayout : Nat,
+    ) : Bool {
+      if (positionIndex < competitionData.positions.size()) {
+        let oldPosition = competitionData.positions[positionIndex];
+
+        // Create new payout record
+        let newPayout : RewardTypes.DistributionPayout = {
+          distributionNumber = distributionNumber;
+          govPayout = govPayout;
+          multiPayout = multiPayout;
+        };
+
+        // Add to existing payouts
+        let payoutBuffer = Buffer.fromArray<RewardTypes.DistributionPayout>(oldPosition.distributionPayouts);
+        payoutBuffer.add(newPayout);
+
+        // Create updated position
+        let updatedPosition = {
+          oldPosition with
+          distributionPayouts = Buffer.toArray(payoutBuffer);
+        };
+
+        // Update the positions array
+        let positionsBuffer = Buffer.fromArray<RewardTypes.Position>(competitionData.positions);
+        positionsBuffer.put(positionIndex, updatedPosition);
+
+        let updated = {
+          competitionData with
+          positions = Buffer.toArray(positionsBuffer);
+        };
+
+        competitionData := updated;
+        persistChanges(updated);
+        true;
+      } else {
+        false;
+      };
+    };
+
+    /**
      * Get the last distribution index
      *
      * @return The last processed distribution index (null if none)
@@ -405,7 +475,7 @@ module {
 
     // Get competition prices by retrieving from price event
     public func getCompetitionPrices() : [Types.Price] {
-      switch (getPriceEventById) {
+      switch (getPriceEventByIdFunc) {
         case (null) {
           Debug.trap("Price event retriever not set - call setPriceEventRetriever first");
         };
@@ -442,6 +512,18 @@ module {
     // Get competition data (direct access to the underlying data)
     public func getData() : CompetitionEntryTypes.Competition {
       competitionData;
+    };
+
+    // Get a price event by its ID
+    public func getPriceEventById(id : Nat) : ?EventTypes.PriceEvent {
+      switch (getPriceEventByIdFunc) {
+        case (null) {
+          Debug.trap("Price event retriever not set - call setPriceEventRetriever first");
+        };
+        case (?retriever) {
+          retriever(id);
+        };
+      };
     };
   };
 };
