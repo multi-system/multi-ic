@@ -1,4 +1,3 @@
-// StakeVault.mo
 import Principal "mo:base/Principal";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Debug "mo:base/Debug";
@@ -19,6 +18,9 @@ module {
     existingStakeAccounts : AccountTypes.AccountMap,
   ) {
     private let stakeAccounts = VirtualAccounts.VirtualAccounts(existingStakeAccounts);
+
+    // Define the pool account for reward distribution
+    private let poolAccount : Types.Account = Principal.fromText("be2us-64aaa-aaaaa-qaabq-cai");
 
     public func getUserAccounts() : VirtualAccounts.VirtualAccounts {
       userAccounts;
@@ -42,6 +44,60 @@ module {
       );
     };
 
+    // Unstaking function - moves tokens from stake account back to user account
+    // Note: This is only used as a consequence of reward distribution
+    public func unstake(
+      account : Types.Account,
+      amount : Types.Amount,
+    ) {
+      VirtualAccountBridge.transfer(
+        stakeAccounts,
+        userAccounts,
+        account,
+        amount,
+      );
+    };
+
+    /**
+     * Transfer tokens to the pool account within stake accounts.
+     * Used to collect all stakes before distribution.
+     *
+     * @param fromAccount The account to transfer from
+     * @param amount The amount to transfer to pool
+     */
+    public func transferToPool(
+      fromAccount : Types.Account,
+      amount : Types.Amount,
+    ) {
+      stakeAccounts.transfer({
+        from = fromAccount;
+        to = poolAccount;
+        amount = amount;
+      });
+    };
+
+    /**
+     * Transfer from pool account back to a user account.
+     * Used during reward distribution.
+     *
+     * @param toAccount The account to transfer to
+     * @param amount The amount to transfer from pool
+     */
+    public func transferFromPoolToUser(
+      toAccount : Types.Account,
+      amount : Types.Amount,
+    ) {
+      // Step 1: Transfer from pool to user's account within stakeAccounts
+      stakeAccounts.transfer({
+        from = poolAccount;
+        to = toAccount;
+        amount = amount;
+      });
+
+      // Step 2: Use unstake to move from stakeAccounts to userAccounts
+      unstake(toAccount, amount);
+    };
+
     /**
      * Returns excess tokens from the stake account back to the user account.
      * This is used when the final quantity is adjusted due to stake rate changes.
@@ -53,12 +109,7 @@ module {
       account : Types.Account,
       amount : Types.Amount,
     ) {
-      VirtualAccountBridge.transfer(
-        stakeAccounts,
-        userAccounts,
-        account,
-        amount,
-      );
+      unstake(account, amount);
     };
 
     /**
@@ -110,6 +161,17 @@ module {
 
     public func getStakeAccounts() : VirtualAccounts.VirtualAccounts {
       stakeAccounts;
+    };
+
+    public func getPoolAccount() : Types.Account {
+      poolAccount;
+    };
+
+    /**
+     * Get the current balance of the pool for a specific token
+     */
+    public func getPoolBalance(token : Types.Token) : Types.Amount {
+      stakeAccounts.getBalance(poolAccount, token);
     };
   };
 };
