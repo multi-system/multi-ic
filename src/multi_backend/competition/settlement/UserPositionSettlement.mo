@@ -112,6 +112,7 @@ module {
         multiStake = submission.multiStake;
         submissionId = ?submission.id;
         isSystem = false;
+        distributionPayouts = [];
       };
     };
   };

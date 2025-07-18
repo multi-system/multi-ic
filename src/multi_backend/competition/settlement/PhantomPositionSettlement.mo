@@ -37,6 +37,7 @@ module {
         multiStake = systemStake.multiSystemStake;
         submissionId = null; // System positions don't have a submission ID
         isSystem = true;
+        distributionPayouts = [];
       };
     };
   };
