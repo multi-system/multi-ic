@@ -11,10 +11,13 @@ NC='\033[0m' # No Color
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+# Source the shared cleanup script
+source "${SCRIPT_DIR}/cleanup-dfx.sh"
+
 # Function to handle errors
 handle_error() {
     echo -e "${RED}Error: $1${NC}"
-    cleanup
+    cleanup_dfx
     exit 1
 }
 
@@ -33,26 +36,6 @@ check_success() {
     if [ $? -ne 0 ]; then
         handle_error "$1"
     fi
-}
-
-# Function to clean up DFX processes
-cleanup() {
-    info_msg "Cleaning up DFX processes..."
-    dfx stop || true
-    
-    # Check if port 4943 is in use
-    if lsof -i :4943 >/dev/null 2>&1; then
-        info_msg "Port 4943 is still in use. Attempting to free it..."
-        sudo lsof -ti :4943 | xargs -r sudo kill
-    fi
-    
-    # Remove .dfx directory if it exists
-    if [ -d ".dfx" ]; then
-        info_msg "Removing .dfx directory..."
-        rm -rf .dfx
-    fi
-    
-    sleep 2
 }
 
 # Function to check if time sync is needed
@@ -101,7 +84,13 @@ run_unit_tests() {
 # Function to start DFX
 start_dfx() {
     info_msg "Starting dfx with clean state..."
-    cleanup
+    cleanup_dfx
+    
+    # Make sure we're really clean
+    if [ -d ".dfx" ]; then
+        handle_error ".dfx directory still exists after cleanup"
+    fi
+    
     # Start dfx in background but redirect output to a file
     dfx start --clean --background > dfx.log 2>&1
     
@@ -122,7 +111,7 @@ start_dfx() {
     TAIL_PID=$!
     
     # Make sure to kill the tail process in cleanup
-    trap 'kill $TAIL_PID' EXIT
+    trap 'kill $TAIL_PID 2>/dev/null || true' EXIT
     
     success_msg "DFX started successfully"
 }
@@ -147,7 +136,7 @@ main() {
     
     # Try to deploy, sync time only if needed
     info_msg "Attempting deployment..."
-    if "${SCRIPT_DIR}/deploy.sh"; then
+    if "${SCRIPT_DIR}/deploy-backend.sh"; then
         success_msg "Deployment successful!"
     else
         if need_time_sync; then
@@ -156,9 +145,9 @@ main() {
             check_success "Failed to sync WSL time"
             
             info_msg "Retrying deployment..."
-            cleanup
+            cleanup_dfx
             start_dfx
-            "${SCRIPT_DIR}/deploy.sh"
+            "${SCRIPT_DIR}/deploy-backend.sh"
             check_success "Failed to deploy canisters even after time sync"
         else
             handle_error "Failed to deploy canisters for unknown reason"
@@ -167,17 +156,17 @@ main() {
     
     # Run e2e tests
     info_msg "Running e2e tests..."
-    yarn test:e2e
+    NODE_ENV=test yarn test:e2e
     check_success "e2e tests failed"
     
     # Cleanup
-    cleanup
+    cleanup_dfx
     
     success_msg "All tests completed successfully! 🎉"
 }
 
 # Trap ctrl-c and call cleanup
-trap 'echo -e "\n${RED}Test script interrupted${NC}"; cleanup; exit 1' INT
+trap 'echo -e "\n${RED}Test script interrupted${NC}"; cleanup_dfx; exit 1' INT
 
 # Run main function
 main

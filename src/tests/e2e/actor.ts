@@ -1,27 +1,20 @@
-import { execSync } from "child_process";
-import type {
-  ActorConfig,
-  ActorSubclass,
-  Agent,
-  HttpAgentOptions,
-  Identity,
-} from "@dfinity/agent";
-import { IDL } from "@dfinity/candid";
-import { Principal } from "@dfinity/principal";
-import { Actor, HttpAgent } from "@dfinity/agent";
-import { expect } from "vitest";
-import fetch from "isomorphic-fetch";
-import { minter, defaultIdentity } from "./identity";
+import { execSync } from 'child_process';
+import type { ActorConfig, ActorSubclass, Agent, HttpAgentOptions, Identity } from '@dfinity/agent';
+import { IDL } from '@dfinity/candid';
+import { Principal } from '@dfinity/principal';
+import { Actor, HttpAgent } from '@dfinity/agent';
+import fetch from 'isomorphic-fetch';
+import { minter, defaultIdentity } from './identity';
 
 // Import declarations
 import {
   _SERVICE as MultiService,
   idlFactory as multiTokenIdl,
-} from "../../declarations/multi_backend/multi_backend.did.js";
+} from '../../declarations/multi_backend/multi_backend.did.js';
 import {
   _SERVICE as TokenService,
   idlFactory as tokenIdl,
-} from "../../declarations/token_a/token_a.did.js";
+} from '../../declarations/token_a/token_a.did.js';
 
 // Actor creation options interface
 export interface CreateActorOptions {
@@ -31,7 +24,7 @@ export interface CreateActorOptions {
 }
 
 // Get dfx port
-const dfxPort = execSync("dfx info replica-port", { encoding: "utf-8" }).trim();
+const dfxPort = execSync('dfx info replica-port', { encoding: 'utf-8' }).trim();
 
 // Create base agent
 export function createAgent(identity?: Identity) {
@@ -41,11 +34,9 @@ export function createAgent(identity?: Identity) {
     fetch,
   });
 
-  if (process.env.DFX_NETWORK !== "ic") {
+  if (process.env.DFX_NETWORK !== 'ic') {
     agent.fetchRootKey().catch((err) => {
-      console.warn(
-        "Unable to fetch root key. Check to ensure that your local replica is running",
-      );
+      console.warn('Unable to fetch root key. Check to ensure that your local replica is running');
       console.error(err);
     });
   }
@@ -57,14 +48,13 @@ export function createAgent(identity?: Identity) {
 export function createActor<T>(
   canisterId: string | Principal,
   idlFactory: IDL.InterfaceFactory,
-  options: CreateActorOptions = {},
+  options: CreateActorOptions = {}
 ): ActorSubclass<T> {
-  const agentInstance =
-    options.agent || new HttpAgent({ ...options.agentOptions });
+  const agentInstance = options.agent || new HttpAgent({ ...options.agentOptions });
 
   if (options.agent && options.agentOptions) {
     console.warn(
-      "Detected both agent and agentOptions passed to createActor. Ignoring agentOptions and proceeding with the provided agent.",
+      'Detected both agent and agentOptions passed to createActor. Ignoring agentOptions and proceeding with the provided agent.'
     );
   }
 
@@ -82,21 +72,19 @@ function getCanisterId(name: string): Principal {
     return Principal.fromText(envVar);
   }
   try {
-    return Principal.fromText(
-      execSync(`dfx canister id ${name}`, { encoding: "utf-8" }).trim(),
-    );
+    return Principal.fromText(execSync(`dfx canister id ${name}`, { encoding: 'utf-8' }).trim());
   } catch (error) {
     throw new Error(`Failed to get canister ID for ${name}: ${error}`);
   }
 }
 
 // Export canister IDs
-export const TOKEN_A = getCanisterId("token_a");
-export const TOKEN_B = getCanisterId("token_b");
-export const TOKEN_C = getCanisterId("token_c");
-export const MULTI_BACKEND_ID = getCanisterId("multi_backend");
-export const MULTI_TOKEN_ID = getCanisterId("multi_token");
-export const GOVERNANCE_TOKEN_ID = getCanisterId("governance_token");
+export const TOKEN_A = getCanisterId('token_a');
+export const TOKEN_B = getCanisterId('token_b');
+export const TOKEN_C = getCanisterId('token_c');
+export const MULTI_BACKEND_ID = getCanisterId('multi_backend');
+export const MULTI_TOKEN_ID = getCanisterId('multi_token');
+export const GOVERNANCE_TOKEN_ID = getCanisterId('governance_token');
 
 // Token actor creation functions
 export function tokenA(identity?: Identity) {
@@ -140,7 +128,7 @@ export function multiBackend(identity?: Identity) {
 export async function fundTestAccount(
   token: ActorSubclass<TokenService>,
   to: Identity,
-  amount: bigint,
+  amount: bigint
 ): Promise<void> {
   const result = await token.icrc1_transfer({
     to: { owner: to.getPrincipal(), subaccount: [] },
@@ -150,7 +138,35 @@ export async function fundTestAccount(
     created_at_time: [],
     amount,
   });
-  expect(result).toHaveProperty("Ok");
+
+  // Check if transfer was successful
+  if (!('Ok' in result)) {
+    throw new Error(`Transfer failed: ${JSON.stringify(result)}`);
+  }
+}
+
+// For test environments, conditionally import expect
+export async function fundTestAccountWithExpect(
+  token: ActorSubclass<TokenService>,
+  to: Identity,
+  amount: bigint
+): Promise<void> {
+  // Only import expect when in test environment
+  if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
+    const { expect } = await import('vitest');
+    const result = await token.icrc1_transfer({
+      to: { owner: to.getPrincipal(), subaccount: [] },
+      fee: [],
+      memo: [],
+      from_subaccount: [],
+      created_at_time: [],
+      amount,
+    });
+    expect(result).toHaveProperty('Ok');
+  } else {
+    // Use the non-expect version
+    await fundTestAccount(token, to, amount);
+  }
 }
 
 export { minter };

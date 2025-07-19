@@ -39,11 +39,21 @@ To test the project locally:
 ```bash
 # Start the replica in the background
 dfx start --background
-# Deploy canisters to the replica and generate the Candid interface
-dfx deploy
+# Deploy backend canisters
+./scripts/deploy-backend.sh
 ```
 
-Alternatively, you can use the provided script to automate these steps along with running tests:
+For a complete local development experience with frontend:
+
+```bash
+# Start local development environment (deploys backend and starts frontend)
+yarn local
+
+# In a new terminal, run the demo to see the system in action
+yarn demo
+```
+
+Alternatively, you can use the provided script to automate testing:
 
 ```bash
 yarn test:full
@@ -54,8 +64,10 @@ yarn test:full
 ```bash
 # Development
 dfx start --background  # Start the local replica
-dfx deploy              # Deploy all canisters
+./scripts/deploy-backend.sh  # Deploy backend canisters
 yarn generate           # Generate Candid interface
+yarn local              # Start complete dev environment with frontend
+yarn demo               # Run demo operations (requires yarn local)
 
 # Testing
 mops test               # Run Motoko unit tests
