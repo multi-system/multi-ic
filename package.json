@@ -4,7 +4,11 @@
   "description": "Multi is a decentralized currency backed by a diversified reserve of tokens, designed to set a new standard for value and stability in the Web3 ecosystem.",
   "main": "index.js",
   "packageManager": "yarn@1.22.22",
+  "type": "module",
   "scripts": {
+    "local": "./scripts/local.sh",
+    "demo": "./scripts/demo.sh",
+    "demo:quick": "npx tsx scripts/demo-setup.ts",
     "test": "vitest",
     "test:unit": "mops test",
     "test:e2e": "vitest --run",
@@ -34,24 +38,48 @@
   },
   "author": "",
   "license": "ISC",
-  "devDependencies": {
+  "dependencies": {
     "@dfinity/agent": "^2.1.3",
+    "@dfinity/auth-client": "^2.1.3",
     "@dfinity/candid": "^2.1.3",
     "@dfinity/identity": "^2.1.3",
+    "@dfinity/identity-secp256k1": "^2.1.3",
     "@dfinity/principal": "^2.1.3",
-    "@types/node": "^20.11.0",
+    "@ic-reactor/react": "^1.16.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.14",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "dotenv": "^16.3.2",
+    "eslint": "^8.56.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
     "ic-mops": "^1.1.1",
     "isomorphic-fetch": "^3.0.0",
+    "mo-dev": "^0.12.0",
+    "npm-run-all": "^4.1.5",
+    "postcss": "^8.4.33",
     "prettier": "^3.3.3",
     "prettier-plugin-motoko": "^0.9.4",
+    "sass": "^1.70.0",
+    "tailwindcss": "^3.4.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.7.1",
     "typescript": "^5.3.3",
+    "vite": "^5.0.12",
+    "vite-plugin-compression": "^0.5.1",
+    "vite-plugin-environment": "^1.1.3",
     "vitest": "^2.1.3"
   },
   "engines": {
     "node": ">=16.0.0",
     "npm": ">=7.0.0"
-  },
-  "dependencies": {
-    "@dfinity/identity-secp256k1": "^2.1.3"
   }
 }

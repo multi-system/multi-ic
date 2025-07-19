@@ -1,18 +1,18 @@
-import { defineConfig } from "vite";
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   test: {
     globals: true,
-    environment: "node",
+    environment: 'node',
     testTimeout: 30000,
     slowTestThreshold: 2000,
     bail: 1,
     threads: false, // Run tests sequentially within files
-    reporters: ["verbose"],
+    reporters: ['verbose'],
   },
   resolve: {
     alias: {
-      "@": "/src",
+      '@': '/src',
     },
   },
 });
