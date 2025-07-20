@@ -24,7 +24,7 @@ export interface CreateActorOptions {
 }
 
 // Get dfx port
-const dfxPort = execSync('dfx info replica-port', { encoding: 'utf-8' }).trim();
+const dfxPort = execSync('dfx info webserver-port', { encoding: 'utf-8' }).trim();
 
 // Create base agent
 export function createAgent(identity?: Identity) {
