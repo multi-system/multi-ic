@@ -1,164 +1,31 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Actor, HttpAgent } from '@dfinity/agent';
-import { Principal } from '@dfinity/principal';
+import React, { useState } from 'react';
 // @ts-ignore
 import { idlFactory as backendIdl } from '../../declarations/multi_backend';
 // @ts-ignore
 import type { _SERVICE } from '../../declarations/multi_backend';
-import { TOKEN_PRICES, getTokenInfo, calculateMultiPrice, preloadTokenMetadata } from '../config/tokenPrices';
+import { getTokenInfo } from '../config/tokenPrices';
 import MultiLogo from '../assets/multi_logo.svg';
 import { formatAmount, formatMultiPrice, formatUSD } from '../utils/formatters';
 import InfoCard from './InfoCard';
-
-const REFRESH_INTERVAL = 3000;
-const REFRESH_INDICATOR_MIN_TIME = 500; // Minimum time to show refresh indicator
-
-interface BackingToken {
-  tokenInfo: { canisterId: Principal | string };
-  backingUnit: bigint;
-  reserveQuantity: bigint;
-}
-
-interface SystemInfo {
-  initialized: boolean;
-  totalSupply: bigint;
-  supplyUnit: bigint;
-  multiToken: { canisterId: Principal | string };
-  governanceToken: { canisterId: Principal | string };
-  backingTokens: BackingToken[];
-}
-
-type PriceDisplay = 'usd' | 'multi';
+import HeaderSection from './HeaderSection';
+import { PriceDisplay, ValuePercentage } from '../utils/types';
+import { useSystemInfo } from '../contexts/SystemInfoContext';
 
 const BasketDisplay: React.FC = () => {
-  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [autoRefresh, setAutoRefresh] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-
-  // View controls
-  const [priceDisplay, setPriceDisplay] = useState<PriceDisplay>('usd');
+  const [priceDisplay, setPriceDisplay] = useState<PriceDisplay>('USD');
   const [multiAmount, setMultiAmount] = useState<string>('1');
 
-  // Refs to track refresh timing
-  const refreshStartTime = useRef<number>(0);
-  const refreshTimeoutId = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    // Preload token metadata when component mounts
-    preloadTokenMetadata();
-  }, []);
-  
-  // Calculate derived values
-  const multiPrice = systemInfo
-    ? calculateMultiPrice(systemInfo.backingTokens, systemInfo.supplyUnit)
-    : 0;
-
-  // Calculate value percentages
-  const calculateValuePercentages = useCallback(() => {
-    if (!systemInfo) return [];
-
-    let totalValue = 0;
-    const tokenValues = systemInfo.backingTokens.map((token) => {
-      const tokenInfo = getTokenInfo(token.tokenInfo.canisterId.toString());
-      const tokenAmount = Number(token.backingUnit) / 1e8;
-      const value = tokenAmount * (tokenInfo?.priceUSD || 0);
-      totalValue += value;
-      return { token, value, tokenInfo };
-    });
-
-    return tokenValues.map((tv) => ({
-      ...tv,
-      percentage: totalValue > 0 ? (tv.value / totalValue) * 100 : 0,
-    }));
-  }, [systemInfo]);
-
-  const fetchBasketInfo = useCallback(async (isAutoRefresh = false) => {
-    try {
-      // For auto-refresh, show indicator but don't set loading
-      if (isAutoRefresh) {
-        refreshStartTime.current = Date.now();
-        setRefreshing(true);
-
-        // Clear any existing timeout
-        if (refreshTimeoutId.current) {
-          clearTimeout(refreshTimeoutId.current);
-        }
-      } else {
-        setLoading(true);
-      }
-
-      setError(null);
-
-      const host =
-        import.meta.env.VITE_DFX_NETWORK === 'ic' ? 'https://icp-api.io' : 'http://localhost:4943';
-
-      const agent = new HttpAgent({ host });
-
-      if (import.meta.env.VITE_DFX_NETWORK !== 'ic') {
-        await agent.fetchRootKey();
-      }
-
-      const canisterId =
-        import.meta.env.VITE_CANISTER_ID_MULTI_BACKEND ||
-        process.env.CANISTER_ID_MULTI_BACKEND ||
-        'bd3sg-teaaa-aaaaa-qaaba-cai';
-
-      const actor = Actor.createActor<_SERVICE>(backendIdl, {
-        agent,
-        canisterId,
-      });
-
-      const result = await actor.getSystemInfo();
-
-      if ('ok' in result) {
-        setSystemInfo(result.ok);
-        setLastRefresh(new Date());
-      } else {
-        setError(`Failed to fetch basket information: ${JSON.stringify(result.err)}`);
-      }
-    } catch (err) {
-      console.error('Error fetching basket:', err);
-      setError('Error loading basket data');
-    } finally {
-      if (isAutoRefresh) {
-        // Calculate how long the refresh has been showing
-        const elapsed = Date.now() - refreshStartTime.current;
-        const remaining = Math.max(0, REFRESH_INDICATOR_MIN_TIME - elapsed);
-
-        // Ensure minimum display time for refresh indicator
-        refreshTimeoutId.current = setTimeout(() => {
-          setRefreshing(false);
-        }, remaining);
-      } else {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    }
-  }, []);
-
-  // Initial load
-  useEffect(() => {
-    fetchBasketInfo(false);
-  }, [fetchBasketInfo]);
-
-  // Auto-refresh
-  useEffect(() => {
-    if (!autoRefresh) return;
-
-    const interval = setInterval(() => {
-      fetchBasketInfo(true);
-    }, REFRESH_INTERVAL);
-
-    return () => {
-      clearInterval(interval);
-      if (refreshTimeoutId.current) {
-        clearTimeout(refreshTimeoutId.current);
-      }
-    };
-  }, [autoRefresh, fetchBasketInfo]);
+  const {
+    systemInfo,
+    loading,
+    error,
+    autoRefresh,
+    refreshing,
+    multiPrice,
+    calculateValuePercentages,
+    fetchBasketInfo,
+    setAutoRefresh,
+  } = useSystemInfo();
 
   if (loading) {
     return (
@@ -212,13 +79,13 @@ const BasketDisplay: React.FC = () => {
     );
   }
 
-  const valuePercentages = calculateValuePercentages();
+  const valuePercentages: ValuePercentage[] = calculateValuePercentages();
   const multiAmountNum = parseFloat(multiAmount) || 0;
 
   return (
     <div className="space-y-6">
       {/* Main Content */}
-      <div className="card">
+      <div className="flex-col flex gap-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <img src={MultiLogo} alt="Multi" className="h-10 w-10" />
@@ -229,9 +96,9 @@ const BasketDisplay: React.FC = () => {
             {/* Price Display Toggle */}
             <div className="flex bg-white bg-opacity-10 rounded-lg p-1">
               <button
-                onClick={() => setPriceDisplay('usd')}
+                onClick={() => setPriceDisplay('USD')}
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                  priceDisplay === 'usd'
+                  priceDisplay === 'USD'
                     ? 'bg-[#586CE1] text-white'
                     : 'text-gray-300 hover:text-white'
                 }`}
@@ -239,9 +106,9 @@ const BasketDisplay: React.FC = () => {
                 USD
               </button>
               <button
-                onClick={() => setPriceDisplay('multi')}
+                onClick={() => setPriceDisplay('MULTI')}
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                  priceDisplay === 'multi'
+                  priceDisplay === 'MULTI'
                     ? 'bg-[#586CE1] text-white'
                     : 'text-gray-300 hover:text-white'
                 }`}
@@ -323,47 +190,43 @@ const BasketDisplay: React.FC = () => {
         </div>
 
         {/* Value Composition Visual */}
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Portfolio Value Composition</h3>
-          <div className="bg-white bg-opacity-5 rounded-lg p-4">
-            <div className="flex h-8 rounded-full overflow-hidden mb-4">
-              {valuePercentages.map((vp, index) => {
-                const style = getTokenStyle(index);
-                return (
-                  <div
-                    key={index}
-                    style={{
-                      width: `${vp.percentage}%`,
-                      ...style.bar,
-                    }}
-                    className="transition-all duration-1000"
-                    title={`${vp.tokenInfo?.symbol}: ${vp.percentage.toFixed(1)}%`}
-                  />
-                );
-              })}
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {valuePercentages.map((vp, index) => {
-                const style = getTokenStyle(index);
-                return (
-                  <div key={index} className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={style.badge} />
-                    <span className="text-sm text-gray-300">
-                      {vp.tokenInfo?.symbol}: {vp.percentage.toFixed(1)}% (
-                      {priceDisplay === 'usd' ? formatUSD(vp.value) : formatMultiPrice(vp.value)})
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+        <HeaderSection header="Portfolio Value Composition">
+          <div className="flex h-8 rounded-full overflow-hidden mb-4">
+            {valuePercentages.map((vp, index) => {
+              const style = getTokenStyle(index);
+              return (
+                <div
+                  key={index}
+                  style={{
+                    width: `${vp.percentage}%`,
+                    ...style.bar,
+                  }}
+                  className="transition-all duration-1000"
+                  title={`${vp.tokenInfo?.symbol}: ${vp.percentage.toFixed(1)}%`}
+                />
+              );
+            })}
           </div>
-        </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {valuePercentages.map((vp, index) => {
+              const style = getTokenStyle(index);
+              return (
+                <div key={index} className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={style.badge} />
+                  <span className="text-sm text-gray-300">
+                    {vp.tokenInfo?.symbol}: {vp.percentage.toFixed(1)}% (
+                    {priceDisplay === 'USD' ? formatUSD(vp.value) : formatMultiPrice(vp.value)})
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </HeaderSection>
 
         {/* Redemption Calculator */}
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Redemption Calculator</h3>
-          <div className="bg-white bg-opacity-5 rounded-lg p-4">
+        <HeaderSection header="Redemption Calculator">
+          <div className="">
             <div className="flex items-center gap-3 mb-4">
               <input
                 type="number"
@@ -376,7 +239,7 @@ const BasketDisplay: React.FC = () => {
               <span className="text-gray-300">MULTI tokens can be redeemed for:</span>
               <span className="ml-auto text-lg font-semibold text-white">
                 ≈{' '}
-                {priceDisplay === 'usd'
+                {priceDisplay === 'USD'
                   ? formatUSD(multiAmountNum * multiPrice)
                   : `${multiAmountNum.toFixed(4)} MULTI`}
               </span>
@@ -397,7 +260,7 @@ const BasketDisplay: React.FC = () => {
                     <div className="text-right">
                       <span className="font-mono text-white">{totalAmount.toFixed(8)}</span>
                       <span className="text-gray-400 ml-2">
-                        ({priceDisplay === 'usd' ? formatUSD(value) : formatMultiPrice(value)})
+                        ({priceDisplay === 'USD' ? formatUSD(value) : formatMultiPrice(value)})
                       </span>
                     </div>
                   </div>
@@ -405,12 +268,10 @@ const BasketDisplay: React.FC = () => {
               })}
             </div>
           </div>
-        </div>
+        </HeaderSection>
 
         {/* Detailed Token Information */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-white">Reserve Token Details</h3>
-
+        <HeaderSection header="Reserve Token Details">
           <div className="space-y-3">
             {systemInfo.backingTokens.map((token, index) => {
               const tokenInfo = getTokenInfo(token.tokenInfo.canisterId.toString());
@@ -418,7 +279,7 @@ const BasketDisplay: React.FC = () => {
               const backingPerMulti = Number(token.backingUnit) / Number(systemInfo.supplyUnit);
               const vp = valuePercentages[index];
               const tokenPrice =
-                priceDisplay === 'usd'
+                priceDisplay === 'USD'
                   ? formatUSD(tokenInfo?.priceUSD || 0)
                   : formatMultiPrice(tokenInfo?.priceUSD || 0);
 
@@ -485,7 +346,7 @@ const BasketDisplay: React.FC = () => {
                     <div>
                       <p className="text-gray-400">Total Value</p>
                       <p className="text-white">
-                        {priceDisplay === 'usd' ? formatUSD(vp.value) : formatMultiPrice(vp.value)}
+                        {priceDisplay === 'USD' ? formatUSD(vp.value) : formatMultiPrice(vp.value)}
                       </p>
                     </div>
                   </div>
@@ -493,39 +354,7 @@ const BasketDisplay: React.FC = () => {
               );
             })}
           </div>
-        </div>
-      </div>
-
-      {/* System Info Footer */}
-      <div className="card">
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-400">Supply Unit</span>
-            <span className="text-white font-mono">{systemInfo.supplyUnit.toString()}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-400">Multi Token</span>
-            <span className="text-white font-mono text-xs">
-              {systemInfo.multiToken.canisterId.toString()}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-400">Governance Token</span>
-            <span className="text-white font-mono text-xs">
-              {systemInfo.governanceToken.canisterId.toString()}
-            </span>
-          </div>
-          <div className="flex justify-between items-center pt-2 border-t border-white border-opacity-10">
-            <span className="text-xs text-gray-500">
-              Last updated: {lastRefresh.toLocaleTimeString()}
-            </span>
-            {autoRefresh && (
-              <span className="text-xs text-gray-500">
-                Auto-refresh: {REFRESH_INTERVAL / 1000}s
-              </span>
-            )}
-          </div>
-        </div>
+        </HeaderSection>
       </div>
     </div>
   );

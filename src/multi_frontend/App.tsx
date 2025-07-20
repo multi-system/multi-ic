@@ -5,12 +5,14 @@ import WalletSidebar from './components/WalletSidebar';
 import { ToastContainer } from './components/Toast';
 import MultiLogo from './assets/multi_logo.svg';
 import './App.css';
+import { SystemInfoProvider } from './contexts/SystemInfoContext';
+import Footer from './components/Footer';
 
 // Separate component to use the auth context
 function AppContent() {
   const { isAuthenticated, principal, login, logout } = useAuth();
   const [walletOpen, setWalletOpen] = useState(false);
-  
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-900">
       {/* Header */}
@@ -21,7 +23,7 @@ function AppContent() {
               <img src={MultiLogo} alt="Multi" className="h-8 w-8" />
               <h1 className="text-3xl font-bold text-white">Multi</h1>
             </div>
-            
+
             {/* Auth Status */}
             <div className="flex items-center gap-4">
               {isAuthenticated ? (
@@ -31,20 +33,26 @@ function AppContent() {
                     className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                      />
                     </svg>
                     Wallet
                   </button>
                   <div className="text-sm text-gray-400">
                     <span className="text-gray-500">Principal:</span>{' '}
-                    <span 
+                    <span
                       className="font-mono text-white cursor-pointer hover:text-[#586CE1] transition-colors"
                       onClick={() => {
                         navigator.clipboard.writeText(principal.toText());
                         // Optional: brief visual feedback
                         const el = document.createElement('div');
                         el.textContent = 'Copied!';
-                        el.className = 'fixed top-20 right-4 bg-green-600 text-white px-3 py-1 rounded text-sm';
+                        el.className =
+                          'fixed top-20 right-4 bg-green-600 text-white px-3 py-1 rounded text-sm';
                         document.body.appendChild(el);
                         setTimeout(() => el.remove(), 1500);
                       }}
@@ -81,15 +89,8 @@ function AppContent() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-20 py-8 bg-black bg-opacity-30 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-center gap-2 text-gray-400 text-sm">
-            <img src={MultiLogo} alt="Multi" className="h-5 w-5 opacity-60" />
-            <p>Multi © 2025 - Built on the Internet Computer</p>
-          </div>
-        </div>
-      </footer>
-      
+      <Footer />
+
       {/* Wallet Sidebar */}
       <WalletSidebar isOpen={walletOpen} onClose={() => setWalletOpen(false)} />
     </div>
@@ -100,8 +101,10 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
-      <ToastContainer />
+      <SystemInfoProvider>
+        <AppContent />
+        <ToastContainer />
+      </SystemInfoProvider>
     </AuthProvider>
   );
 }

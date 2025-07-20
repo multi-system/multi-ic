@@ -4,13 +4,13 @@ import { Principal } from '@dfinity/principal';
 import { idlFactory as tokenIdl } from '../../declarations/token_a'; // They all use the same ICRC-1 interface
 
 // Token price configuration
-export interface TokenPrice {
+export type TokenPrice = {
   symbol: string;
   name: string;
   priceUSD: number;
   decimals: number;
   lastUpdated?: string;
-}
+};
 
 // Cache for token metadata
 const tokenMetadataCache: Record<string, TokenPrice> = {};
