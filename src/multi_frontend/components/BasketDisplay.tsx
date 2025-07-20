@@ -5,7 +5,7 @@ import { Principal } from '@dfinity/principal';
 import { idlFactory as backendIdl } from '../../declarations/multi_backend';
 // @ts-ignore
 import type { _SERVICE } from '../../declarations/multi_backend';
-import { TOKEN_PRICES, getTokenInfo, calculateMultiPrice } from '../config/tokenPrices';
+import { TOKEN_PRICES, getTokenInfo, calculateMultiPrice, preloadTokenMetadata } from '../config/tokenPrices';
 import MultiLogo from '../assets/multi_logo.svg';
 
 const REFRESH_INTERVAL = 3000;
@@ -43,6 +43,11 @@ const BasketDisplay: React.FC = () => {
   // Refs to track refresh timing
   const refreshStartTime = useRef<number>(0);
   const refreshTimeoutId = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Preload token metadata when component mounts
+    preloadTokenMetadata();
+  }, []);
   
   // Calculate derived values
   const multiPrice = systemInfo ? calculateMultiPrice(systemInfo.backingTokens, systemInfo.supplyUnit) : 0;
