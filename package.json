@@ -9,6 +9,7 @@
     "local": "./scripts/local.sh",
     "demo": "./scripts/demo.sh",
     "demo:quick": "npx tsx scripts/demo-setup.ts",
+    "fund": "npx tsx scripts/fund-account.ts",
     "test": "vitest",
     "test:unit": "mops test",
     "test:e2e": "vitest --run",
