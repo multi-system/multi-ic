@@ -41,9 +41,26 @@ start_dfx() {
     print_green "✓ DFX started successfully"
 }
 
+# Function to deploy Internet Identity
+deploy_internet_identity() {
+    print_info "🆔 Deploying Internet Identity..."
+    
+    # Deploy Internet Identity
+    dfx deploy internet_identity
+    
+    # Get the canister ID
+    export INTERNET_IDENTITY_ID=$(dfx canister id internet_identity)
+    
+    print_green "✓ Internet Identity deployed"
+    print_info "Internet Identity canister ID: ${INTERNET_IDENTITY_ID}"
+}
+
 # Function to deploy backend
 deploy_backend() {
     print_info "📦 Deploying backend canisters..."
+    
+    # Deploy Internet Identity first
+    deploy_internet_identity
     
     # Run the deploy script
     "${SCRIPT_DIR}/deploy-backend.sh"
@@ -75,6 +92,7 @@ start_frontend() {
     export VITE_CANISTER_ID_TOKEN_A=$(dfx canister id token_a)
     export VITE_CANISTER_ID_TOKEN_B=$(dfx canister id token_b)
     export VITE_CANISTER_ID_TOKEN_C=$(dfx canister id token_c)
+    export VITE_CANISTER_ID_INTERNET_IDENTITY=$(dfx canister id internet_identity)
     
     # Generate latest declarations
     print_info "Generating TypeScript declarations..."
@@ -112,21 +130,23 @@ show_status() {
     print_green "✨ Multi-IC Development Environment Ready!"
     print_blue "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    print_magenta "🌐 Frontend:     http://localhost:5173"
-    print_magenta "🔧 Backend API:  http://localhost:4943"
+    print_magenta "🌐 Frontend:          http://localhost:5173"
+    print_magenta "🆔 Internet Identity: http://${INTERNET_IDENTITY_ID}.localhost:4943"
+    print_magenta "🔧 Backend API:       http://localhost:4943"
     echo ""
     print_info "📦 Canister IDs:"
-    echo "   Multi Backend:     $(dfx canister id multi_backend)"
-    echo "   Multi Token:       $(dfx canister id multi_token)"
-    echo "   Governance Token:  $(dfx canister id governance_token)"
-    echo "   Token A:           $(dfx canister id token_a)"
-    echo "   Token B:           $(dfx canister id token_b)"
-    echo "   Token C:           $(dfx canister id token_c)"
+    echo "   Internet Identity:  ${INTERNET_IDENTITY_ID}"
+    echo "   Multi Backend:      $(dfx canister id multi_backend)"
+    echo "   Multi Token:        $(dfx canister id multi_token)"
+    echo "   Governance Token:   $(dfx canister id governance_token)"
+    echo "   Token A:            $(dfx canister id token_a)"
+    echo "   Token B:            $(dfx canister id token_b)"
+    echo "   Token C:            $(dfx canister id token_c)"
     echo ""
     print_blue "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     print_info "📝 The system is deployed but not initialized with data"
-    print_info "💡 Run 'yarn demo' in a new terminal to initialize and see demo"
+    print_info "💡 Run 'yarn demo init' to initialize the system"
     print_info "🛑 Press Ctrl+C to stop"
     echo ""
 }
