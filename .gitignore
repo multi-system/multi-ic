@@ -22,6 +22,9 @@ node_modules/
 dist/
 .svelte-kit/
 
+# Package manager files
+package-lock.json
+
 # environment variables
 .env
 
