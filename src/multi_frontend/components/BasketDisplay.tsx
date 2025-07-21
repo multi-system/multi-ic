@@ -86,14 +86,14 @@ const BasketDisplay: React.FC = () => {
     <div className="space-y-6">
       {/* Main Content */}
       <div className="flex-col flex gap-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <img src={MultiLogo} alt="Multi" className="h-10 w-10" />
-            <h2 className="text-2xl font-bold text-white">Multi Token Reserve Basket</h2>
-          </div>
+        <div className="flex w-full items-center justify-between mb-6">
+          <div className="flex item-center gap-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-4xl font-bold text-nowrap text-white">
+                Multi Token Reserve Basket
+              </h2>
+            </div>
 
-          <div className="flex items-center gap-4">
-            {/* Price Display Toggle */}
             <div className="flex bg-white bg-opacity-10 rounded-lg p-1">
               <button
                 onClick={() => setPriceDisplay('USD')}
@@ -116,6 +116,10 @@ const BasketDisplay: React.FC = () => {
                 MULTI
               </button>
             </div>
+          </div>
+
+          <div className="flex relative  z-0 items-center gap-4">
+            {/* Price Display Toggle */}
 
             {/* Refresh Controls */}
             <div
@@ -134,12 +138,12 @@ const BasketDisplay: React.FC = () => {
               <span className="text-sm text-gray-400 select-none">Auto-refresh</span>
               <button
                 onClick={() => setAutoRefresh(!autoRefresh)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                   autoRefresh ? 'bg-[#586CE1]' : 'bg-gray-600'
                 }`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  className={` inline-flex h-4 w-4 relative rounded-full bg-white transition-transform ${
                     autoRefresh ? 'translate-x-6' : 'translate-x-1'
                   }`}
                 />
@@ -155,12 +159,14 @@ const BasketDisplay: React.FC = () => {
               title={refreshing ? 'Refreshing...' : 'Refresh now'}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
+                <g transform="scale(-1, 1) translate(-24, 0)">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </g>
               </svg>
             </button>
           </div>

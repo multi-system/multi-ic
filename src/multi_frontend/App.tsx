@@ -7,6 +7,8 @@ import MultiLogo from './assets/multi_logo.svg';
 import './App.css';
 import { SystemInfoProvider } from './contexts/SystemInfoContext';
 import Footer from './components/Footer';
+import DropdownMenu from './components/DropdownMenu';
+import UserMenu from './components/UserMenu';
 
 // Separate component to use the auth context
 function AppContent() {
@@ -16,7 +18,7 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-900">
       {/* Header */}
-      <header className="bg-black bg-opacity-30 backdrop-blur-md border-b border-white border-opacity-10">
+      <header className="bg-black relative z-50 bg-opacity-30 backdrop-blur-md border-b border-white border-opacity-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center gap-3">
@@ -42,31 +44,7 @@ function AppContent() {
                     </svg>
                     Wallet
                   </button>
-                  <div className="text-sm text-gray-400">
-                    <span className="text-gray-500">Principal:</span>{' '}
-                    <span
-                      className="font-mono text-white cursor-pointer hover:text-[#586CE1] transition-colors"
-                      onClick={() => {
-                        navigator.clipboard.writeText(principal.toText());
-                        // Optional: brief visual feedback
-                        const el = document.createElement('div');
-                        el.textContent = 'Copied!';
-                        el.className =
-                          'fixed top-20 right-4 bg-green-600 text-white px-3 py-1 rounded text-sm';
-                        document.body.appendChild(el);
-                        setTimeout(() => el.remove(), 1500);
-                      }}
-                      title="Click to copy full principal"
-                    >
-                      {principal?.toText().slice(0, 8)}...{principal?.toText().slice(-3)}
-                    </span>
-                  </div>
-                  <button
-                    onClick={logout}
-                    className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
-                  >
-                    Logout
-                  </button>
+                  <UserMenu />
                 </>
               ) : (
                 <button
