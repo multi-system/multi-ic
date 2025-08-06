@@ -13,20 +13,13 @@ import type { _SERVICE as TokenService } from '../../declarations/token_a';
 import { useAuth } from '../contexts/AuthContext';
 import { getTokenInfo } from '../config/tokenPrices';
 import { showError, logError, safeStringify } from '../utils/errorHandler';
+import { TokenBalance } from '../utils/types';
+import { Loader } from './Loader';
 
-interface TokenBalance {
-  canisterId: string;
-  name: string;
-  symbol: string;
-  walletBalance: bigint;
-  systemBalance: bigint;
-  decimals: number;
-}
-
-interface WalletSidebarProps {
+type WalletSidebarProps = {
   isOpen: boolean;
   onClose: () => void;
-}
+};
 
 const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
   const { principal } = useAuth();
@@ -338,8 +331,8 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center text-gray-400">Loading balances...</div>
+            <div className="h-full text-center items-center justify-center overflow-y-hidden text-gray-400 flex">
+              <Loader size="lg" />
             </div>
           ) : (
             <div className="p-6 space-y-6">

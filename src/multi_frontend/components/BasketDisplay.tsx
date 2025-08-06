@@ -7,9 +7,10 @@ import { getTokenInfo } from '../config/tokenPrices';
 import MultiLogo from '../assets/multi_logo.svg';
 import { formatAmount, formatMultiPrice, formatUSD } from '../utils/formatters';
 import InfoCard from './InfoCard';
-import HeaderSection from './HeaderSection';
+import Section from './Section';
 import { PriceDisplay, ValuePercentage } from '../utils/types';
 import { useSystemInfo } from '../contexts/SystemInfoContext';
+import { Loader } from './Loader';
 
 const BasketDisplay: React.FC = () => {
   const [priceDisplay, setPriceDisplay] = useState<PriceDisplay>('USD');
@@ -30,23 +31,8 @@ const BasketDisplay: React.FC = () => {
   if (loading) {
     return (
       <div className="card">
-        <div className="flex items-center justify-center py-12">
-          <svg className="animate-spin h-8 w-8 text-white mr-3" viewBox="0 0 24 24">
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-              fill="none"
-            ></circle>
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
+        <div className="flex gap-4 items-center justify-center py-12">
+          <Loader size="sm" />
           <span className="text-white">Loading basket composition...</span>
         </div>
       </div>
@@ -196,7 +182,7 @@ const BasketDisplay: React.FC = () => {
         </div>
 
         {/* Value Composition Visual */}
-        <HeaderSection header="Portfolio Value Composition">
+        <Section title="Portfolio Value Composition">
           <div className="flex h-8 rounded-full overflow-hidden mb-4">
             {valuePercentages.map((vp, index) => {
               const style = getTokenStyle(index);
@@ -228,10 +214,10 @@ const BasketDisplay: React.FC = () => {
               );
             })}
           </div>
-        </HeaderSection>
+        </Section>
 
         {/* Redemption Calculator */}
-        <HeaderSection header="Redemption Calculator">
+        <Section title="Redemption Calculator">
           <div className="">
             <div className="flex items-center gap-3 mb-4">
               <input
@@ -274,10 +260,10 @@ const BasketDisplay: React.FC = () => {
               })}
             </div>
           </div>
-        </HeaderSection>
+        </Section>
 
         {/* Detailed Token Information */}
-        <HeaderSection header="Reserve Token Details">
+        <Section title="Reserve Token Details">
           <div className="space-y-3">
             {systemInfo.backingTokens.map((token, index) => {
               const tokenInfo = getTokenInfo(token.tokenInfo.canisterId.toString());
@@ -360,7 +346,7 @@ const BasketDisplay: React.FC = () => {
               );
             })}
           </div>
-        </HeaderSection>
+        </Section>
       </div>
     </div>
   );

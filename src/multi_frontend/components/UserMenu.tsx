@@ -1,4 +1,4 @@
-import { Menu } from '@headlessui/react';
+import { Menu, MenuItems, MenuItem, MenuButton } from '@headlessui/react';
 import { useState, useRef, Fragment } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
@@ -23,24 +23,28 @@ export default function UserMenu() {
 
   return (
     <Menu as="div" className="relative inline-block text-left">
-      <Menu.Button className="inline-flex items-center h-10 duration-75 transition-colors rounded-full hover:bg-[#292F3C] bg-[#1D2432] pr-3 px-2 py-2 text-white select-none">
+      <MenuButton className="inline-flex items-center h-10 duration-75 transition-colors rounded-full hover:bg-[#292F3C] bg-[#1D2432] pr-3 px-2 py-2 text-white select-none">
         <Blockies seed={principal?.toText() ?? ':('} />
         <span className="ml-3 mr-2 font-mono text-sm truncate max-w-[120px]">
           {principal?.toText().slice(0, 8)}...{principal?.toText().slice(-3)}
         </span>
         <FontAwesomeIcon className="h-3 opacity-50" icon={faChevronDown} />
-      </Menu.Button>
+      </MenuButton>
 
-      <Menu.Items className="absolute p-2 z-50 right-0 mt-2 w-44 origin-top-right rounded-md bg-[#1D2432] shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+      <MenuItems className="absolute p-2 z-50 right-0 mt-2 w-44 origin-top-right rounded-md bg-[#1D2432] shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
         <div></div>
-        <MenuItem stayOpen label={copied ? 'Copied!' : 'Copy Principal'} onClick={handleCopy} />
-        <MenuItem label="Logout" onClick={logout} />
-      </Menu.Items>
+        <MenuItemWrapper
+          stayOpen
+          label={copied ? 'Copied!' : 'Copy Principal'}
+          onClick={handleCopy}
+        />
+        <MenuItemWrapper label="Logout" onClick={logout} />
+      </MenuItems>
     </Menu>
   );
 }
 
-function MenuItem({
+function MenuItemWrapper({
   label,
   onClick,
   stayOpen = false,
@@ -61,17 +65,17 @@ function MenuItem({
   }
 
   return (
-    <Menu.Item as={Fragment}>
-      {({ active }) => (
+    <MenuItem as={Fragment}>
+      {({ focus }) => (
         <button
           onClick={onClick}
           className={`${
-            active ? 'bg-[#586CE1] text-white' : 'text-white'
+            focus ? 'bg-[#586CE1] text-white' : 'text-white'
           } group flex w-full rounded items-center px-4 py-2 text-sm font-medium`}
         >
           {label}
         </button>
       )}
-    </Menu.Item>
+    </MenuItem>
   );
 }

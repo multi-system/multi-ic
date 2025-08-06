@@ -23,4 +23,13 @@ export type ValuePercentage = {
   tokenInfo: TokenPrice | undefined;
 };
 
+export type TokenBalance = {
+  canisterId: string;
+  name: string;
+  symbol: string;
+  walletBalance: bigint;
+  systemBalance: bigint;
+  decimals: number;
+};
+
 export type PriceDisplay = 'USD' | 'MULTI';

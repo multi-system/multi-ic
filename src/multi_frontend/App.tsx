@@ -9,6 +9,7 @@ import { SystemInfoProvider } from './contexts/SystemInfoContext';
 import Footer from './components/Footer';
 import DropdownMenu from './components/DropdownMenu';
 import UserMenu from './components/UserMenu';
+import { Button } from './components/Button';
 
 // Separate component to use the auth context
 function AppContent() {
@@ -30,10 +31,7 @@ function AppContent() {
             <div className="flex items-center gap-4">
               {isAuthenticated ? (
                 <>
-                  <button
-                    onClick={() => setWalletOpen(true)}
-                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
-                  >
+                  <Button onClick={() => setWalletOpen(true)}>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         strokeLinecap="round"
@@ -43,16 +41,13 @@ function AppContent() {
                       />
                     </svg>
                     Wallet
-                  </button>
+                  </Button>
                   <UserMenu />
                 </>
               ) : (
-                <button
-                  onClick={login}
-                  className="px-4 py-2 bg-[#586CE1] hover:bg-[#4056C7] text-white font-medium rounded-lg transition-colors"
-                >
+                <Button onClick={login} type="primary">
                   Connect
-                </button>
+                </Button>
               )}
             </div>
           </div>
