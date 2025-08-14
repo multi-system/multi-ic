@@ -44,7 +44,7 @@ async function sleep(ms: number) {
 
 // Helper to check if system is initialized
 async function checkSystemState() {
-  const backend = multiBackend(minter);
+  const backend = await multiBackend(minter);
   const isInit = await backend.isInitialized();
 
   if (isInit) {
@@ -64,7 +64,7 @@ async function checkSystemState() {
 async function initializeSystem() {
   logSection('🚀 Initializing Multi Token System');
 
-  const adminBackend = multiBackend(minter);
+  const adminBackend = await multiBackend(minter);
 
   // Approve tokens
   log('Approving backing tokens...', colors.yellow);
@@ -75,9 +75,9 @@ async function initializeSystem() {
   ]) {
     const result = await adminBackend.approveToken({ canisterId: tokenId });
     if ('ok' in result) {
-      log(`  ✓ ${name} approved`, colors.green);
+      log(`  ✔ ${name} approved`, colors.green);
     } else if ('err' in result && 'TokenAlreadyApproved' in result.err) {
-      log(`  ✓ ${name} already approved`, colors.green);
+      log(`  ✔ ${name} already approved`, colors.green);
     } else {
       log(`  ✗ Failed to approve ${name}`, colors.red);
     }
@@ -107,14 +107,14 @@ async function initializeSystem() {
 
   const initResult = await adminBackend.initialize(config);
   if ('ok' in initResult) {
-    log('  ✓ System initialized successfully', colors.green);
+    log('  ✔ System initialized successfully', colors.green);
     log(`  Supply Unit: ${(Number(config.supplyUnit) / 1e8).toFixed(2)} MULTI`, colors.blue);
     log('  Backing ratios:', colors.blue);
     log('    - 1 MULTI = 1.5 Token A', colors.blue);
     log('    - 1 MULTI = 3.0 Token B', colors.blue);
     log('    - 1 MULTI = 0.5 Token C', colors.blue);
   } else if ('err' in initResult && 'AlreadyInitialized' in initResult.err) {
-    log('  ✓ System already initialized', colors.green);
+    log('  ✔ System already initialized', colors.green);
   } else {
     log('  ✗ Initialization failed', colors.red);
     console.error(initResult);
@@ -137,29 +137,39 @@ async function performDemoOperations() {
 
   const fundAmount = BigInt(100000000000000); // 1,000,000 tokens (enough for all operations)
 
+  // Create token instances for minter
+  const minterTokenA = await tokenA(minter);
+  const minterTokenB = await tokenB(minter);
+  const minterTokenC = await tokenC(minter);
+
   await Promise.all([
-    fundTestAccount(tokenA(minter), alice, fundAmount),
-    fundTestAccount(tokenB(minter), alice, fundAmount),
-    fundTestAccount(tokenC(minter), alice, fundAmount),
-    fundTestAccount(tokenA(minter), bob, fundAmount),
-    fundTestAccount(tokenB(minter), bob, fundAmount),
-    fundTestAccount(tokenC(minter), bob, fundAmount),
+    fundTestAccount(minterTokenA, alice, fundAmount),
+    fundTestAccount(minterTokenB, alice, fundAmount),
+    fundTestAccount(minterTokenC, alice, fundAmount),
+    fundTestAccount(minterTokenA, bob, fundAmount),
+    fundTestAccount(minterTokenB, bob, fundAmount),
+    fundTestAccount(minterTokenC, bob, fundAmount),
   ]);
 
-  log('  ✓ Users funded with 1,000,000 of each token', colors.green);
+  log('  ✔ Users funded with 1,000,000 of each token', colors.green);
 
   // Alice deposits and issues
   logSection('👩 Alice: Depositing and Issuing MULTI');
 
-  const aliceBackend = multiBackend(alice);
+  const aliceBackend = await multiBackend(alice);
   const depositAmount = BigInt(50000000000000); // 500,000 tokens
   const fee = BigInt(10_000);
 
+  // Create token instances for Alice
+  const aliceTokenA = await tokenA(alice);
+  const aliceTokenB = await tokenB(alice);
+  const aliceTokenC = await tokenC(alice);
+
   // Deposit each token type
   for (const { token, tokenId, name } of [
-    { token: tokenA(alice), tokenId: TOKEN_A, name: 'Token A' },
-    { token: tokenB(alice), tokenId: TOKEN_B, name: 'Token B' },
-    { token: tokenC(alice), tokenId: TOKEN_C, name: 'Token C' },
+    { token: aliceTokenA, tokenId: TOKEN_A, name: 'Token A' },
+    { token: aliceTokenB, tokenId: TOKEN_B, name: 'Token B' },
+    { token: aliceTokenC, tokenId: TOKEN_C, name: 'Token C' },
   ]) {
     log(`\nDepositing ${name}...`, colors.yellow);
 
@@ -182,7 +192,7 @@ async function performDemoOperations() {
     });
 
     if ('ok' in depositResult) {
-      log(`  ✓ Deposited ${(Number(depositAmount) / 1e8).toFixed(2)} ${name}`, colors.green);
+      log(`  ✔ Deposited ${(Number(depositAmount) / 1e8).toFixed(2)} ${name}`, colors.green);
     }
   }
 
@@ -201,7 +211,7 @@ async function performDemoOperations() {
 
   const issueResult = await aliceBackend.issue({ amount: issueAmount });
   if ('ok' in issueResult) {
-    log(`  ✓ Issued ${(Number(issueAmount) / 1e8).toFixed(2)} MULTI tokens`, colors.green);
+    log(`  ✔ Issued ${(Number(issueAmount) / 1e8).toFixed(2)} MULTI tokens`, colors.green);
 
     // Check balance
     const balanceResult = await aliceBackend.getMultiTokenBalance(alice.getPrincipal());
@@ -220,13 +230,18 @@ async function performDemoOperations() {
   // Bob does similar operations
   logSection('👨 Bob: Depositing and Issuing MULTI');
 
-  const bobBackend = multiBackend(bob);
+  const bobBackend = await multiBackend(bob);
+
+  // Create token instances for Bob
+  const bobTokenA = await tokenA(bob);
+  const bobTokenB = await tokenB(bob);
+  const bobTokenC = await tokenC(bob);
 
   // Bob deposits (simplified - same pattern as Alice)
   for (const { token, tokenId, name } of [
-    { token: tokenA(bob), tokenId: TOKEN_A, name: 'Token A' },
-    { token: tokenB(bob), tokenId: TOKEN_B, name: 'Token B' },
-    { token: tokenC(bob), tokenId: TOKEN_C, name: 'Token C' },
+    { token: bobTokenA, tokenId: TOKEN_A, name: 'Token A' },
+    { token: bobTokenB, tokenId: TOKEN_B, name: 'Token B' },
+    { token: bobTokenC, tokenId: TOKEN_C, name: 'Token C' },
   ]) {
     await token.icrc2_approve({
       spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
@@ -245,13 +260,13 @@ async function performDemoOperations() {
     });
   }
 
-  log(`  ✓ Bob deposited ${(Number(depositAmount) / 1e8).toFixed(2)} of each token`, colors.green);
+  log(`  ✔ Bob deposited ${(Number(depositAmount) / 1e8).toFixed(2)} of each token`, colors.green);
 
   // Bob issues less MULTI
   const bobIssueAmount = BigInt(1234500000000); // 12,345 MULTI tokens
   log(`\nBob issuing ${(Number(bobIssueAmount) / 1e8).toFixed(2)} MULTI tokens...`, colors.yellow);
   await bobBackend.issue({ amount: bobIssueAmount });
-  log(`  ✓ Bob issued ${(Number(bobIssueAmount) / 1e8).toFixed(2)} MULTI tokens`, colors.green);
+  log(`  ✔ Bob issued ${(Number(bobIssueAmount) / 1e8).toFixed(2)} MULTI tokens`, colors.green);
 
   const bobBalanceResult = await bobBackend.getMultiTokenBalance(bob.getPrincipal());
   if ('ok' in bobBalanceResult) {
@@ -278,7 +293,7 @@ async function performDemoOperations() {
 
   const redeemResult = await aliceBackend.redeem({ amount: redeemAmount });
   if ('ok' in redeemResult) {
-    log('  ✓ Redemption successful', colors.green);
+    log('  ✔ Redemption successful', colors.green);
 
     // Check new balance
     const newBalanceResult = await aliceBackend.getMultiTokenBalance(alice.getPrincipal());
@@ -362,7 +377,7 @@ async function performDemoOperations() {
 async function showSystemState() {
   logSection('📊 Current System State');
 
-  const backend = multiBackend(minter);
+  const backend = await multiBackend(minter);
   const systemInfoResult = await backend.getSystemInfo();
 
   if ('ok' in systemInfoResult) {
@@ -423,7 +438,7 @@ async function main() {
 
     // Check if backend is available
     try {
-      const backend = multiBackend(minter);
+      const backend = await multiBackend(minter);
       await backend.isInitialized();
     } catch (error) {
       log('❌ Cannot connect to backend. Please run "yarn local" first.', colors.red);

@@ -70,28 +70,41 @@ function getErrorType(result) {
 
 describe('Multi Token Backing System', () => {
   const testIdentity = newIdentity();
-  const backend = multiBackend(testIdentity);
+  let backend: any;
+  let tokenAInstance: any;
+  let tokenBInstance: any;
+  let tokenCInstance: any;
 
   beforeAll(async () => {
     try {
+      // Create actor instances once
+      backend = await multiBackend(testIdentity);
+      tokenAInstance = await tokenA(testIdentity);
+      tokenBInstance = await tokenB(testIdentity);
+      tokenCInstance = await tokenC(testIdentity);
+
+      const minterTokenA = await tokenA(minter);
+      const minterTokenB = await tokenB(minter);
+      const minterTokenC = await tokenC(minter);
+
       // Fund test identity with tokens
       await Promise.all([
-        fundTestAccount(tokenA(minter), testIdentity, BigInt(1_000_000)),
-        fundTestAccount(tokenB(minter), testIdentity, BigInt(1_000_000)),
-        fundTestAccount(tokenC(minter), testIdentity, BigInt(1_000_000)),
+        fundTestAccount(minterTokenA, testIdentity, BigInt(1_000_000)),
+        fundTestAccount(minterTokenB, testIdentity, BigInt(1_000_000)),
+        fundTestAccount(minterTokenC, testIdentity, BigInt(1_000_000)),
       ]);
 
       // Log initial balances
       const [balanceA, balanceB, balanceC] = await Promise.all([
-        tokenA(testIdentity).icrc1_balance_of({
+        tokenAInstance.icrc1_balance_of({
           owner: testIdentity.getPrincipal(),
           subaccount: [],
         }),
-        tokenB(testIdentity).icrc1_balance_of({
+        tokenBInstance.icrc1_balance_of({
           owner: testIdentity.getPrincipal(),
           subaccount: [],
         }),
-        tokenC(testIdentity).icrc1_balance_of({
+        tokenCInstance.icrc1_balance_of({
           owner: testIdentity.getPrincipal(),
           subaccount: [],
         }),
@@ -116,7 +129,7 @@ describe('Multi Token Backing System', () => {
     }
 
     // We need to use an admin/owner identity to approve tokens
-    const adminBackend = multiBackend(minter);
+    const adminBackend = await multiBackend(minter);
 
     // Process each token approval
     for (const [name, tokenId] of [
@@ -184,7 +197,7 @@ describe('Multi Token Backing System', () => {
       }
 
       // Use admin identity for initialization
-      const adminBackend = multiBackend(minter);
+      const adminBackend = await multiBackend(minter);
 
       // Test initializing with a duplicate token
       const duplicateConfig = {
@@ -348,7 +361,7 @@ describe('Multi Token Backing System', () => {
 
   test.sequential('3. should prevent double initialization', { timeout: 15000 }, async () => {
     // Use admin identity for attempted re-initialization
-    const adminBackend = multiBackend(minter);
+    const adminBackend = await multiBackend(minter);
 
     // Attempt to initialize again
     const config = {
@@ -438,9 +451,9 @@ describe('Multi Token Backing System', () => {
 
     // Get fees
     const [feeA, feeB, feeC] = await Promise.all([
-      tokenA(testIdentity).icrc1_fee(),
-      tokenB(testIdentity).icrc1_fee(),
-      tokenC(testIdentity).icrc1_fee(),
+      tokenAInstance.icrc1_fee(),
+      tokenBInstance.icrc1_fee(),
+      tokenCInstance.icrc1_fee(),
     ]);
 
     debugLog('Token fees:', {
@@ -453,27 +466,25 @@ describe('Multi Token Backing System', () => {
     const totalNeededB = requiredAmountB + feeB + feeB;
     const totalNeededC = requiredAmountC + feeC + feeC;
 
-    const backend = multiBackend(testIdentity);
-
     // Process each token in sequence
     for (const { tokenId, amount, name, token } of [
       {
         tokenId: TOKEN_A,
         amount: totalNeededA - feeA, // Subtract one fee since approve takes its own
         name: 'Token A',
-        token: tokenA(testIdentity),
+        token: tokenAInstance,
       },
       {
         tokenId: TOKEN_B,
         amount: totalNeededB - feeB,
         name: 'Token B',
-        token: tokenB(testIdentity),
+        token: tokenBInstance,
       },
       {
         tokenId: TOKEN_C,
         amount: totalNeededC - feeC,
         name: 'Token C',
-        token: tokenC(testIdentity),
+        token: tokenCInstance,
       },
     ]) {
       debugLog(`Processing ${name}...`);
@@ -557,8 +568,6 @@ describe('Multi Token Backing System', () => {
   });
 
   test.sequential('6. should handle insufficient funds correctly', { timeout: 15000 }, async () => {
-    const backend = multiBackend(testIdentity);
-
     // Store initial state
     const backingTokensResult = await backend.getBackingTokens();
     expect(hasError(backingTokensResult)).toBe(false);
@@ -658,8 +667,6 @@ describe('Multi Token Backing System', () => {
   });
 
   test.sequential('7. should handle transfer failures atomically', { timeout: 15000 }, async () => {
-    const backend = multiBackend(testIdentity);
-
     // Store initial state
     const backingTokensResult = await backend.getBackingTokens();
     expect(hasError(backingTokensResult)).toBe(false);
@@ -763,7 +770,6 @@ describe('Multi Token Backing System', () => {
   });
 
   test.sequential('8. should handle token withdrawals correctly', { timeout: 60000 }, async () => {
-    const backend = multiBackend(testIdentity);
     const fee = BigInt(10000);
     const testAmount = BigInt(20000);
 
@@ -777,7 +783,7 @@ describe('Multi Token Backing System', () => {
     debugLog('Starting test 8 with deposit amount:', depositAmount.toString());
 
     // Add approval before deposit
-    const approveRes = await tokenA(testIdentity).icrc2_approve({
+    const approveRes = await tokenAInstance.icrc2_approve({
       spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
       amount: approvalAmount,
       fee: [],
@@ -805,7 +811,7 @@ describe('Multi Token Backing System', () => {
     expect(hasError(depositResult)).toBe(false);
 
     // Record starting balances
-    const startRealBalance = await tokenA(testIdentity).icrc1_balance_of({
+    const startRealBalance = await tokenAInstance.icrc1_balance_of({
       owner: testIdentity.getPrincipal(),
       subaccount: [],
     });
@@ -829,7 +835,7 @@ describe('Multi Token Backing System', () => {
 
     // Check real balance updated
     const expectedRealBalance = startRealBalance + (testAmount - fee);
-    const currentBalance = await tokenA(testIdentity).icrc1_balance_of({
+    const currentBalance = await tokenAInstance.icrc1_balance_of({
       owner: testIdentity.getPrincipal(),
       subaccount: [],
     });
@@ -869,7 +875,7 @@ describe('Multi Token Backing System', () => {
     const finalVirtualBalance = unwrapResult(finalVirtualBalanceResult);
     expect(finalVirtualBalance.toString()).toBe(endVirtualBalance.toString());
 
-    const finalRealBalance = await tokenA(testIdentity).icrc1_balance_of({
+    const finalRealBalance = await tokenAInstance.icrc1_balance_of({
       owner: testIdentity.getPrincipal(),
       subaccount: [],
     });
@@ -881,18 +887,22 @@ describe('Multi Token Backing System', () => {
     { timeout: 30000 },
     async () => {
       const identities = [newIdentity(), newIdentity(), newIdentity()];
-      const backend = multiBackend(testIdentity);
       const depositAmount = BigInt(100000); // Large enough for multiple operations
       const fee = BigInt(10000);
       const issueAmount = BigInt(100); // Must be multiple of supply unit
       const withdrawAmount = BigInt(20000); // Ensure it's larger than fee (10000)
 
+      // Create token instances once
+      const minterTokenA = await tokenA(minter);
+      const minterTokenB = await tokenB(minter);
+      const minterTokenC = await tokenC(minter);
+
       // Fund identities - must happen before any test logic
       await Promise.all(
         identities.flatMap((identity) => [
-          fundTestAccount(tokenA(minter), identity, BigInt(1_000_000)),
-          fundTestAccount(tokenB(minter), identity, BigInt(1_000_000)),
-          fundTestAccount(tokenC(minter), identity, BigInt(1_000_000)),
+          fundTestAccount(minterTokenA, identity, BigInt(1_000_000)),
+          fundTestAccount(minterTokenB, identity, BigInt(1_000_000)),
+          fundTestAccount(minterTokenC, identity, BigInt(1_000_000)),
         ])
       );
 
@@ -901,8 +911,9 @@ describe('Multi Token Backing System', () => {
       // Test concurrent deposits of the same token
       const sameTokenDeposits = await Promise.all(
         identities.map(async (identity) => {
+          const tokenAInstance = await tokenA(identity);
           // First approve
-          await tokenA(identity).icrc2_approve({
+          await tokenAInstance.icrc2_approve({
             spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
             amount: depositAmount + fee,
             fee: [],
@@ -914,7 +925,7 @@ describe('Multi Token Backing System', () => {
           });
 
           // Then deposit the same token simultaneously
-          return multiBackend(identity).deposit({
+          return (await multiBackend(identity)).deposit({
             token: TOKEN_A,
             amount: depositAmount,
           });
@@ -939,30 +950,51 @@ describe('Multi Token Backing System', () => {
 
       // Set up virtual balances for remaining tokens
       await Promise.all(
-        identities.flatMap((identity) => {
-          const tokens = [
-            { token: tokenB(identity), tokenId: TOKEN_B },
-            { token: tokenC(identity), tokenId: TOKEN_C },
-          ];
+        identities.map(async (identity) => {
+          const tokenBInstance = await tokenB(identity);
+          const tokenCInstance = await tokenC(identity);
 
-          return tokens.map(async ({ token, tokenId }) => {
-            await token.icrc2_approve({
-              spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
-              amount: depositAmount + fee,
-              fee: [],
-              memo: [],
-              from_subaccount: [],
-              created_at_time: [],
-              expected_allowance: [],
-              expires_at: [],
-            });
-
-            const result = await multiBackend(identity).deposit({
-              token: tokenId,
-              amount: depositAmount,
-            });
-            expect(hasError(result)).toBe(false);
+          // Approve Token B
+          await tokenBInstance.icrc2_approve({
+            spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
+            amount: depositAmount + fee,
+            fee: [],
+            memo: [],
+            from_subaccount: [],
+            created_at_time: [],
+            expected_allowance: [],
+            expires_at: [],
           });
+
+          // Deposit Token B
+          const resultB = await (
+            await multiBackend(identity)
+          ).deposit({
+            token: TOKEN_B,
+            amount: depositAmount,
+          });
+          expect(hasError(resultB)).toBe(false);
+
+          // Approve Token C
+          await tokenCInstance.icrc2_approve({
+            spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
+            amount: depositAmount + fee,
+            fee: [],
+            memo: [],
+            from_subaccount: [],
+            created_at_time: [],
+            expected_allowance: [],
+            expires_at: [],
+          });
+
+          // Deposit Token C
+          const resultC = await (
+            await multiBackend(identity)
+          ).deposit({
+            token: TOKEN_C,
+            amount: depositAmount,
+          });
+          expect(hasError(resultC)).toBe(false);
         })
       );
 
@@ -977,7 +1009,9 @@ describe('Multi Token Backing System', () => {
 
       // Execute concurrent issue operations
       const results = await Promise.all(
-        identities.map((identity) => multiBackend(identity).issue({ amount: issueAmount }))
+        identities.map(async (identity) =>
+          (await multiBackend(identity)).issue({ amount: issueAmount })
+        )
       );
 
       // Verify all operations succeeded
@@ -1006,8 +1040,8 @@ describe('Multi Token Backing System', () => {
 
       // Test concurrent withdrawals of the same token
       const sameTokenWithdrawals = await Promise.all(
-        identities.map((identity) =>
-          multiBackend(identity).withdraw({
+        identities.map(async (identity) =>
+          (await multiBackend(identity)).withdraw({
             token: TOKEN_A,
             amount: withdrawAmount, // Now using larger amount that exceeds fee
           })
@@ -1043,15 +1077,20 @@ describe('Multi Token Backing System', () => {
 
       // Test remaining concurrent withdrawals
       const remainingWithdrawals = await Promise.all(
-        identities.flatMap((identity) =>
-          [TOKEN_B, TOKEN_C].map((tokenId) =>
-            multiBackend(identity).withdraw({
-              token: tokenId,
-              amount: withdrawAmount, // Using same larger amount for consistency
-            })
-          )
-        )
-      );
+        identities.map(async (identity) => {
+          const mbInstance = await multiBackend(identity);
+          return Promise.all([
+            mbInstance.withdraw({
+              token: TOKEN_B,
+              amount: withdrawAmount,
+            }),
+            mbInstance.withdraw({
+              token: TOKEN_C,
+              amount: withdrawAmount,
+            }),
+          ]);
+        })
+      ).then((results) => results.flat());
 
       // Verify all remaining withdrawals succeeded
       remainingWithdrawals.forEach((result) => {
@@ -1088,7 +1127,6 @@ describe('Multi Token Backing System', () => {
     '10. should handle supply unit alignment correctly',
     { timeout: 15000 },
     async () => {
-      const backend = multiBackend(testIdentity);
       const fee = BigInt(10000);
       const testAmount = BigInt(20000);
 
@@ -1097,9 +1135,9 @@ describe('Multi Token Backing System', () => {
       const requiredAmount = BigInt(200); // More than we'll need for tests
 
       for (const { token, tokenId } of [
-        { token: tokenA(testIdentity), tokenId: TOKEN_A },
-        { token: tokenB(testIdentity), tokenId: TOKEN_B },
-        { token: tokenC(testIdentity), tokenId: TOKEN_C },
+        { token: tokenAInstance, tokenId: TOKEN_A },
+        { token: tokenBInstance, tokenId: TOKEN_B },
+        { token: tokenCInstance, tokenId: TOKEN_C },
       ]) {
         const virtualBalanceResult = await backend.getVirtualBalance(
           testIdentity.getPrincipal(),
@@ -1202,27 +1240,27 @@ describe('Multi Token Backing System', () => {
 
   test.sequential('11. should handle redeem operations correctly', { timeout: 60000 }, async () => {
     const testUser = newIdentity();
-    const backend = multiBackend(testUser);
+    const testBackend = await multiBackend(testUser);
 
     // Fund test account
     await Promise.all([
-      fundTestAccount(tokenA(minter), testUser, BigInt(100_000)),
-      fundTestAccount(tokenB(minter), testUser, BigInt(100_000)),
-      fundTestAccount(tokenC(minter), testUser, BigInt(100_000)),
+      fundTestAccount(await tokenA(minter), testUser, BigInt(100_000)),
+      fundTestAccount(await tokenB(minter), testUser, BigInt(100_000)),
+      fundTestAccount(await tokenC(minter), testUser, BigInt(100_000)),
     ]);
 
     // Get fees
     const [feeA, feeB, feeC] = await Promise.all([
-      tokenA(testUser).icrc1_fee(),
-      tokenB(testUser).icrc1_fee(),
-      tokenC(testUser).icrc1_fee(),
+      (await tokenA(testUser)).icrc1_fee(),
+      (await tokenB(testUser)).icrc1_fee(),
+      (await tokenC(testUser)).icrc1_fee(),
     ]);
 
     // Use amounts that match backing unit ratios and exceed fees
     const depositAmounts = [
-      { token: tokenA(testUser), tokenId: TOKEN_A, amount: BigInt(20_000) }, // Backing unit 100
-      { token: tokenB(testUser), tokenId: TOKEN_B, amount: BigInt(15_000) }, // Backing unit 50
-      { token: tokenC(testUser), tokenId: TOKEN_C, amount: BigInt(40_000) }, // Backing unit 200
+      { token: await tokenA(testUser), tokenId: TOKEN_A, amount: BigInt(20_000) }, // Backing unit 100
+      { token: await tokenB(testUser), tokenId: TOKEN_B, amount: BigInt(15_000) }, // Backing unit 50
+      { token: await tokenC(testUser), tokenId: TOKEN_C, amount: BigInt(40_000) }, // Backing unit 200
     ];
 
     // Deposit tokens
@@ -1238,13 +1276,13 @@ describe('Multi Token Backing System', () => {
         expires_at: [],
       });
 
-      const result = await backend.deposit({
+      const result = await testBackend.deposit({
         token: tokenId,
         amount,
       });
       expect(hasError(result)).toBe(false);
 
-      const virtualBalanceResult = await backend.getVirtualBalance(
+      const virtualBalanceResult = await testBackend.getVirtualBalance(
         testUser.getPrincipal(),
         tokenId
       );
@@ -1255,11 +1293,11 @@ describe('Multi Token Backing System', () => {
 
     // Initial issue
     const issueAmount = BigInt(500);
-    const issueResult = await backend.issue({ amount: issueAmount });
+    const issueResult = await testBackend.issue({ amount: issueAmount });
     expect(hasError(issueResult)).toBe(false);
 
     // Get initial state
-    const totalSupplyBeforeRedeemResult = await backend.getTotalSupply();
+    const totalSupplyBeforeRedeemResult = await testBackend.getTotalSupply();
     expect(hasError(totalSupplyBeforeRedeemResult)).toBe(false);
     const totalSupplyBeforeRedeem = unwrapResult(totalSupplyBeforeRedeemResult);
 
@@ -1267,22 +1305,22 @@ describe('Multi Token Backing System', () => {
     // verify the total supply matches between backend.getTotalSupply() and multi token's icrc1_total_supply
 
     // Get multi token balance from backend
-    const multiTokenBalanceResult = await backend.getMultiTokenBalance(testUser.getPrincipal());
+    const multiTokenBalanceResult = await testBackend.getMultiTokenBalance(testUser.getPrincipal());
     expect(hasError(multiTokenBalanceResult)).toBe(false);
     const balanceBeforeRedeem = unwrapResult(multiTokenBalanceResult);
 
-    const tokensBeforeRedeemResult = await backend.getBackingTokens();
+    const tokensBeforeRedeemResult = await testBackend.getBackingTokens();
     expect(hasError(tokensBeforeRedeemResult)).toBe(false);
     const tokensBeforeRedeem = unwrapResult(tokensBeforeRedeemResult);
 
     // Test error cases
     // 1. Test unaligned amount
-    const unalignedResult = await backend.redeem({ amount: BigInt(150) });
+    const unalignedResult = await testBackend.redeem({ amount: BigInt(150) });
     expect(hasError(unalignedResult)).toBe(true);
     expect(getErrorType(unalignedResult)).toBe('InvalidAmount');
 
     // 2. Test insufficient balance (more than total supply)
-    const tooLargeResult = await backend.redeem({
+    const tooLargeResult = await testBackend.redeem({
       amount: totalSupplyBeforeRedeem + BigInt(100),
     });
     expect(hasError(tooLargeResult)).toBe(true);
@@ -1290,17 +1328,17 @@ describe('Multi Token Backing System', () => {
 
     // Test successful redeem
     const redeemAmount = BigInt(100);
-    const redeemResult = await backend.redeem({ amount: redeemAmount });
+    const redeemResult = await testBackend.redeem({ amount: redeemAmount });
     expect(hasError(redeemResult)).toBe(false);
 
     // Verify state changes
-    const finalSupplyResult = await backend.getTotalSupply();
+    const finalSupplyResult = await testBackend.getTotalSupply();
     expect(hasError(finalSupplyResult)).toBe(false);
     const finalSupply = unwrapResult(finalSupplyResult);
     expect(finalSupply).toBe(totalSupplyBeforeRedeem - redeemAmount);
 
     // Get final multi token balance from backend
-    const finalMultiTokenBalanceResult = await backend.getMultiTokenBalance(
+    const finalMultiTokenBalanceResult = await testBackend.getMultiTokenBalance(
       testUser.getPrincipal()
     );
     expect(hasError(finalMultiTokenBalanceResult)).toBe(false);
@@ -1308,7 +1346,7 @@ describe('Multi Token Backing System', () => {
     expect(finalIcrc1Balance).toBe(balanceBeforeRedeem - redeemAmount);
 
     // Verify backing token changes
-    const finalTokensResult = await backend.getBackingTokens();
+    const finalTokensResult = await testBackend.getBackingTokens();
     expect(hasError(finalTokensResult)).toBe(false);
     const finalTokens = unwrapResult(finalTokensResult);
 
@@ -1325,23 +1363,23 @@ describe('Multi Token Backing System', () => {
     async () => {
       // Create fresh identities for concurrent test
       const testUsers = [newIdentity(), newIdentity(), newIdentity()];
-      const backend = multiBackend(testUsers[0]);
+      const testBackend = await multiBackend(testUsers[0]);
       const redeemAmount = BigInt(100);
 
       // Setup each identity
       for (const user of testUsers) {
         // Fund accounts
         await Promise.all([
-          fundTestAccount(tokenA(minter), user, BigInt(100_000)),
-          fundTestAccount(tokenB(minter), user, BigInt(100_000)),
-          fundTestAccount(tokenC(minter), user, BigInt(100_000)),
+          fundTestAccount(await tokenA(minter), user, BigInt(100_000)),
+          fundTestAccount(await tokenB(minter), user, BigInt(100_000)),
+          fundTestAccount(await tokenC(minter), user, BigInt(100_000)),
         ]);
 
         // Use same deposit amounts as test 11
         const depositAmounts = [
-          { token: tokenA(user), tokenId: TOKEN_A, amount: BigInt(20_000) },
-          { token: tokenB(user), tokenId: TOKEN_B, amount: BigInt(15_000) },
-          { token: tokenC(user), tokenId: TOKEN_C, amount: BigInt(40_000) },
+          { token: await tokenA(user), tokenId: TOKEN_A, amount: BigInt(20_000) },
+          { token: await tokenB(user), tokenId: TOKEN_B, amount: BigInt(15_000) },
+          { token: await tokenC(user), tokenId: TOKEN_C, amount: BigInt(40_000) },
         ];
 
         // Deposit tokens
@@ -1359,7 +1397,9 @@ describe('Multi Token Backing System', () => {
             expires_at: [],
           });
 
-          const result = await multiBackend(user).deposit({
+          const result = await (
+            await multiBackend(user)
+          ).deposit({
             token: tokenId,
             amount,
           });
@@ -1367,24 +1407,26 @@ describe('Multi Token Backing System', () => {
         }
 
         // Issue tokens
-        const issueResult = await multiBackend(user).issue({
+        const issueResult = await (
+          await multiBackend(user)
+        ).issue({
           amount: redeemAmount,
         });
         expect(hasError(issueResult)).toBe(false);
       }
 
       // Record initial state
-      const initialSupplyResult = await backend.getTotalSupply();
+      const initialSupplyResult = await testBackend.getTotalSupply();
       expect(hasError(initialSupplyResult)).toBe(false);
       const initialSupply = unwrapResult(initialSupplyResult);
 
-      const initialTokensResult = await backend.getBackingTokens();
+      const initialTokensResult = await testBackend.getBackingTokens();
       expect(hasError(initialTokensResult)).toBe(false);
       const initialTokens = unwrapResult(initialTokensResult);
 
       // Execute concurrent redeem operations
       const results = await Promise.all(
-        testUsers.map((user) => multiBackend(user).redeem({ amount: redeemAmount }))
+        testUsers.map(async (user) => (await multiBackend(user)).redeem({ amount: redeemAmount }))
       );
 
       // Verify all operations succeeded
@@ -1396,13 +1438,13 @@ describe('Multi Token Backing System', () => {
       const totalRedeemed = BigInt(testUsers.length) * redeemAmount;
 
       // Verify final state
-      const finalSupplyResult = await backend.getTotalSupply();
+      const finalSupplyResult = await testBackend.getTotalSupply();
       expect(hasError(finalSupplyResult)).toBe(false);
       const finalSupply = unwrapResult(finalSupplyResult);
       expect(finalSupply).toBe(initialSupply - totalRedeemed);
 
       // Verify backing token reserves
-      const finalTokensResult = await backend.getBackingTokens();
+      const finalTokensResult = await testBackend.getBackingTokens();
       expect(hasError(finalTokensResult)).toBe(false);
       const finalTokens = unwrapResult(finalTokensResult);
 

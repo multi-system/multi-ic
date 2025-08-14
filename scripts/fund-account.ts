@@ -13,8 +13,13 @@ async function fundPrincipalWithTokens(
       `Funding ${targetPrincipal.toText()} with ${Number(amountPerToken) / 1e8} tokens each...`
     );
 
+    // Create actor instances
+    const tokenAInstance = await tokenA(minter);
+    const tokenBInstance = await tokenB(minter);
+    const tokenCInstance = await tokenC(minter);
+
     const transfers = await Promise.all([
-      tokenA(minter)
+      tokenAInstance
         .icrc1_transfer({
           to: { owner: targetPrincipal, subaccount: [] },
           amount: amountPerToken,
@@ -25,7 +30,7 @@ async function fundPrincipalWithTokens(
         })
         .catch((err) => ({ err })),
 
-      tokenB(minter)
+      tokenBInstance
         .icrc1_transfer({
           to: { owner: targetPrincipal, subaccount: [] },
           amount: amountPerToken,
@@ -36,7 +41,7 @@ async function fundPrincipalWithTokens(
         })
         .catch((err) => ({ err })),
 
-      tokenC(minter)
+      tokenCInstance
         .icrc1_transfer({
           to: { owner: targetPrincipal, subaccount: [] },
           amount: amountPerToken,

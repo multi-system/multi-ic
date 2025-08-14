@@ -27,7 +27,7 @@ export interface CreateActorOptions {
 const dfxPort = execSync('dfx info webserver-port', { encoding: 'utf-8' }).trim();
 
 // Create base agent
-export function createAgent(identity?: Identity) {
+export async function createAgent(identity?: Identity): Promise<HttpAgent> {
   const agent = new HttpAgent({
     identity,
     host: `http://127.0.0.1:${dfxPort}`,
@@ -35,10 +35,12 @@ export function createAgent(identity?: Identity) {
   });
 
   if (process.env.DFX_NETWORK !== 'ic') {
-    agent.fetchRootKey().catch((err) => {
+    try {
+      await agent.fetchRootKey();
+    } catch (err) {
       console.warn('Unable to fetch root key. Check to ensure that your local replica is running');
       console.error(err);
-    });
+    }
   }
 
   return agent;
@@ -87,41 +89,35 @@ export const MULTI_TOKEN_ID = getCanisterId('multi_token');
 export const GOVERNANCE_TOKEN_ID = getCanisterId('governance_token');
 
 // Token actor creation functions
-export function tokenA(identity?: Identity) {
-  return createActor<TokenService>(TOKEN_A, tokenIdl, {
-    agent: createAgent(identity),
-  });
+export async function tokenA(identity?: Identity) {
+  const agent = await createAgent(identity);
+  return createActor<TokenService>(TOKEN_A, tokenIdl, { agent });
 }
 
-export function tokenB(identity?: Identity) {
-  return createActor<TokenService>(TOKEN_B, tokenIdl, {
-    agent: createAgent(identity),
-  });
+export async function tokenB(identity?: Identity) {
+  const agent = await createAgent(identity);
+  return createActor<TokenService>(TOKEN_B, tokenIdl, { agent });
 }
 
-export function tokenC(identity?: Identity) {
-  return createActor<TokenService>(TOKEN_C, tokenIdl, {
-    agent: createAgent(identity),
-  });
+export async function tokenC(identity?: Identity) {
+  const agent = await createAgent(identity);
+  return createActor<TokenService>(TOKEN_C, tokenIdl, { agent });
 }
 
-export function multiToken(identity?: Identity) {
-  return createActor<TokenService>(MULTI_TOKEN_ID, tokenIdl, {
-    agent: createAgent(identity),
-  });
+export async function multiToken(identity?: Identity) {
+  const agent = await createAgent(identity);
+  return createActor<TokenService>(MULTI_TOKEN_ID, tokenIdl, { agent });
 }
 
-export function governanceToken(identity?: Identity) {
-  return createActor<TokenService>(GOVERNANCE_TOKEN_ID, tokenIdl, {
-    agent: createAgent(identity),
-  });
+export async function governanceToken(identity?: Identity) {
+  const agent = await createAgent(identity);
+  return createActor<TokenService>(GOVERNANCE_TOKEN_ID, tokenIdl, { agent });
 }
 
 // Multi backend actor creation
-export function multiBackend(identity?: Identity) {
-  return createActor<MultiService>(MULTI_BACKEND_ID, multiTokenIdl, {
-    agent: createAgent(identity),
-  });
+export async function multiBackend(identity?: Identity) {
+  const agent = await createAgent(identity);
+  return createActor<MultiService>(MULTI_BACKEND_ID, multiTokenIdl, { agent });
 }
 
 // Helper for funding test accounts
