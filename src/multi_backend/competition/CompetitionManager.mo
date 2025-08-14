@@ -97,10 +97,6 @@ module {
       // Create the staking manager for this competition
       let stakingManager = createStakingManager(entryStore);
 
-      // Process all queued submissions first
-      stakingManager.processQueue();
-
-      // Then finalize all submissions
       switch (stakingManager.finalizeRound()) {
         case (#err(e)) {
           return #err(e);
@@ -137,26 +133,6 @@ module {
           #ok(result);
         };
       };
-    };
-
-    /**
-     * Process all queued submissions for a competition.
-     *
-     * @param entryStore The entry store for the competition
-     */
-    public func processQueue(
-      entryStore : CompetitionEntryStore.CompetitionEntryStore
-    ) : () {
-      // Queue processing should only happen in the AcceptingStakes phase
-      // Trap if called in any other state as it indicates a system bug
-      let status = entryStore.getStatus();
-      if (status != #AcceptingStakes) {
-        Debug.trap("Critical error: Cannot process queue for competition not in AcceptingStakes state. Current state: " # debug_show (status));
-      };
-
-      // Create the staking manager and process the queue
-      let stakingManager = createStakingManager(entryStore);
-      stakingManager.processQueue();
     };
 
     /**

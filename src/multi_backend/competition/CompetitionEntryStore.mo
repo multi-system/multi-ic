@@ -130,8 +130,17 @@ module {
       let updated = {
         competitionData with
         submissions = Buffer.toArray(buffer);
-        totalGovStake = if (submission.status == #Queued) competitionData.totalGovStake else competitionData.totalGovStake + submission.govStake.value;
-        totalMultiStake = if (submission.status == #Queued) competitionData.totalMultiStake else competitionData.totalMultiStake + submission.multiStake.value;
+        // Only add to totals if status is #Staked (tokens actually locked)
+        totalGovStake = if (submission.status == #Staked) {
+          competitionData.totalGovStake + submission.govStake.value;
+        } else {
+          competitionData.totalGovStake;
+        };
+        totalMultiStake = if (submission.status == #Staked) {
+          competitionData.totalMultiStake + submission.multiStake.value;
+        } else {
+          competitionData.totalMultiStake;
+        };
       };
       competitionData := updated;
       persistChanges(updated);
@@ -186,8 +195,17 @@ module {
           let updatedData = {
             competitionData with
             submissions = Buffer.toArray(buffer);
-            totalGovStake = if (submission.status == #Queued) competitionData.totalGovStake else competitionData.totalGovStake - submission.govStake.value;
-            totalMultiStake = if (submission.status == #Queued) competitionData.totalMultiStake else competitionData.totalMultiStake - submission.multiStake.value;
+            // Only subtract from totals if status was #Staked
+            totalGovStake = if (submission.status == #Staked) {
+              competitionData.totalGovStake - submission.govStake.value;
+            } else {
+              competitionData.totalGovStake;
+            };
+            totalMultiStake = if (submission.status == #Staked) {
+              competitionData.totalMultiStake - submission.multiStake.value;
+            } else {
+              competitionData.totalMultiStake;
+            };
           };
           competitionData := updatedData;
           persistChanges(updatedData);

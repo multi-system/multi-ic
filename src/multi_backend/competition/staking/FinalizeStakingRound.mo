@@ -18,8 +18,8 @@ import SystemStakeOperations "./SystemStakeOperations";
 
 /**
  * FinalizeStakingRound handles the end of a staking competition round.
- * It processes submissions in the Queued status, adjusts stake rates based on
- * total stakes and volume limit, then updates Staked submissions to Finalized status.
+ * It adjusts stake rates based on total stakes and volume limit,
+ * then updates Staked submissions to Finalized status.
  * Additionally, it calculates the system's stake for the competition.
  */
 module {
@@ -37,44 +37,14 @@ module {
     stakedSubmissionsCount : Nat;
     adjustmentSuccessCount : Nat;
     adjustmentFailureCount : Nat;
-    queuedProcessedCount : Nat;
-    queuedSuccessCount : Nat;
-    queuedFailureCount : Nat;
     systemStake : SystemStakeTypes.SystemStake;
   };
 
   /**
-   * Helper function to determine the rejection reason from an error
-   */
-  private func determineRejectionReason(error : Error.CompetitionError) : SubmissionTypes.RejectionReason {
-    switch (error) {
-      case (#InsufficientStake(_)) {
-        #InsufficientBalance;
-      };
-      case (#TokenNotApproved(_)) {
-        #InvalidToken;
-      };
-      case (#CompetitionNotActive) {
-        #CompetitionNotActive;
-      };
-      case (#OperationFailed(reason)) {
-        #Other(reason);
-      };
-      case (#InvalidPhase(_)) {
-        #Other("Invalid phase");
-      };
-      case (_) {
-        #Other("Unknown error");
-      };
-    };
-  };
-
-  /**
    * Finalizes the staking round by:
-   * 1. Processing all Queued submissions
-   * 2. Calculating adjusted stake rates based on total stakes and volume limit
-   * 3. Processing all Staked submissions with the adjusted rates
-   * 4. Calculating the system's stake and phantom positions
+   * 1. Calculating adjusted stake rates based on total stakes and volume limit
+   * 2. Processing all Staked submissions with the adjusted rates
+   * 3. Calculating the system's stake and phantom positions
    *
    * @param competitionEntry The competition entry store with configuration and submissions
    * @param getCirculatingSupply Function to get current circulating supply
@@ -92,28 +62,6 @@ module {
     // Validate competition state
     if (competitionEntry.getStatus() != #AcceptingStakes) {
       return #err(#InvalidPhase({ current = debug_show (competitionEntry.getStatus()); required = "AcceptingStakes" }));
-    };
-
-    // Process all Queued submissions
-    var queuedProcessedCount = 0;
-    var queuedSuccessCount = 0;
-    var queuedFailureCount = 0;
-
-    let queuedSubmissions = competitionEntry.getSubmissionsByStatus(#Queued);
-
-    // Process each Queued submission
-    for (submission in queuedSubmissions.vals()) {
-      queuedProcessedCount += 1;
-
-      // Process the submission and track results
-      switch (SubmissionOperations.processSubmission(competitionEntry, stakeVault, submission)) {
-        case (#err(_)) {
-          queuedFailureCount += 1;
-        };
-        case (#ok(_)) {
-          queuedSuccessCount += 1;
-        };
-      };
     };
 
     // Get the volume limit (theta * M_start)
@@ -192,9 +140,6 @@ module {
       stakedSubmissionsCount;
       adjustmentSuccessCount;
       adjustmentFailureCount;
-      queuedProcessedCount;
-      queuedSuccessCount;
-      queuedFailureCount;
       systemStake;
     });
   };

@@ -148,7 +148,7 @@ suite(
     );
 
     test(
-      "getQueuedSubmissions returns correct submissions",
+      "getStakedSubmissions returns correct submissions",
       func() {
         // Create test environment
         let (entryStore, _, userAccount, getCirculatingSupply, getBackingTokens, _) = CompetitionTestUtils.createTestEnvironment();
@@ -166,12 +166,12 @@ suite(
           startSettlement,
         );
 
-        // Create submissions with queued status directly
+        // Create submissions with Staked status directly
         let submission1Id = entryStore.generateSubmissionId();
         let submission1 = CompetitionTestUtils.createTestSubmission(
           submission1Id,
           userAccount,
-          #Queued,
+          #Staked,
           mockTokenA,
         );
         entryStore.addSubmission(submission1);
@@ -180,14 +180,14 @@ suite(
         let submission2 = CompetitionTestUtils.createTestSubmission(
           submission2Id,
           mockUser2, // Use a different user
-          #Queued,
+          #Staked,
           mockTokenB // Use a different token
         );
         entryStore.addSubmission(submission2);
 
-        // Verify correct number of queued submissions
-        let queuedSubmissions = entryStore.getSubmissionsByStatus(#Queued);
-        expect.nat(queuedSubmissions.size()).equal(2);
+        // Verify correct number of staked submissions
+        let stakedSubmissions = entryStore.getSubmissionsByStatus(#Staked);
+        expect.nat(stakedSubmissions.size()).equal(2);
       },
     );
 

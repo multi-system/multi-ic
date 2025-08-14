@@ -41,7 +41,7 @@ suite(
 
     // Test direct stake processing
     test(
-      "acceptStakeRequest - processes direct stake request successfully",
+      "acceptStakeRequest - processes stake request successfully",
       func() {
         let (competitionEntry, stakingManager, user) = setupTest();
         let stakeVault = competitionEntry.getStakeVault();
@@ -52,14 +52,12 @@ suite(
           value = 1000;
         };
         let testToken = CompetitionTestUtils.getTestToken1();
-        let shouldQueue = false; // Process immediately
 
         // Call the function under test
         let result = stakingManager.acceptStakeRequest(
           govStake,
           user,
           testToken,
-          shouldQueue,
         );
 
         // Verify the result
@@ -79,9 +77,6 @@ suite(
             // tokenQuantity = 200 / (1% * 1.0) = 20,000
             assert (output.tokenQuantity.value == 20_000);
 
-            // Verify it was not queued
-            assert (output.isQueued == false);
-
             // Check stake vault has received the tokens
             let stakeAccounts = stakeVault.getStakeAccounts();
             assert (stakeAccounts.getBalance(user, CompetitionTestUtils.getGovToken()).value == 1000);
@@ -97,72 +92,14 @@ suite(
       },
     );
 
-    // Test queuing a stake request
+    // Test multiple stake processing
     test(
-      "acceptStakeRequest - queues stake request when shouldQueue is true",
+      "acceptStakeRequest - processes multiple stake requests",
       func() {
         let (competitionEntry, stakingManager, user) = setupTest();
         let stakeVault = competitionEntry.getStakeVault();
 
-        // Create test input
-        let govStake : Types.Amount = {
-          token = CompetitionTestUtils.getGovToken();
-          value = 1000;
-        };
-        let testToken = CompetitionTestUtils.getTestToken1();
-        let shouldQueue = true; // Queue instead of processing
-
-        // Call the function under test
-        let result = stakingManager.acceptStakeRequest(
-          govStake,
-          user,
-          testToken,
-          shouldQueue,
-        );
-
-        // Verify the result
-        switch (result) {
-          case (#err(error)) {
-            Debug.print("Unexpected error: " # debug_show (error));
-            assert (false); // Should not fail
-          };
-          case (#ok(output)) {
-            // Check submission ID was assigned
-            assert (output.submissionId == 0); // First submission should have ID 0
-
-            // Check token quantity calculation is correct
-            assert (output.tokenQuantity.value == 20_000);
-
-            // Verify it was queued
-            assert (output.isQueued == true);
-
-            // Check stake vault has NOT received the tokens yet
-            let stakeAccounts = stakeVault.getStakeAccounts();
-            assert (stakeAccounts.getBalance(user, CompetitionTestUtils.getGovToken()).value == 0);
-            assert (stakeAccounts.getBalance(user, CompetitionTestUtils.getMultiToken()).value == 0);
-            assert (stakeAccounts.getBalance(user, testToken).value == 0);
-
-            // Check submission was added to store with Queued status
-            let submissions = competitionEntry.getAllSubmissions();
-            assert (submissions.size() == 1);
-            assert (submissions[0].status == #Queued);
-
-            // Check queue methods report correct state
-            assert (stakingManager.getQueueSize() == 1);
-            assert (stakingManager.getQueuedSubmissions().size() == 1);
-          };
-        };
-      },
-    );
-
-    // Test processing the queue
-    test(
-      "processQueue - processes queued submissions correctly",
-      func() {
-        let (competitionEntry, stakingManager, user) = setupTest();
-        let stakeVault = competitionEntry.getStakeVault();
-
-        // Queue two submissions
+        // Process two submissions
         let govStake1 : Types.Amount = {
           token = CompetitionTestUtils.getGovToken();
           value = 1000;
@@ -175,25 +112,15 @@ suite(
         };
         let testToken2 = CompetitionTestUtils.getTestToken2();
 
-        // Queue both submissions
-        ignore stakingManager.acceptStakeRequest(govStake1, user, testToken1, true);
-        ignore stakingManager.acceptStakeRequest(govStake2, user, testToken2, true);
-
-        // Verify queue state before processing
-        assert (stakingManager.getQueueSize() == 2);
-
-        // Process the queue
-        stakingManager.processQueue();
-
-        // Verify queue is now empty
-        assert (stakingManager.getQueueSize() == 0);
-        assert (stakingManager.getQueuedSubmissions().size() == 0);
+        // Process both submissions immediately
+        ignore stakingManager.acceptStakeRequest(govStake1, user, testToken1);
+        ignore stakingManager.acceptStakeRequest(govStake2, user, testToken2);
 
         // Check submissions were processed
         let submissions = competitionEntry.getAllSubmissions();
         assert (submissions.size() == 2);
 
-        // All submissions should now be Staked
+        // All submissions should be Staked
         for (submission in submissions.vals()) {
           assert (submission.status == #Staked);
         };
@@ -232,7 +159,6 @@ suite(
           govStake,
           user,
           testToken,
-          false // Direct processing
         );
 
         // Verify the error
@@ -241,7 +167,7 @@ suite(
             assert (false); // Should not succeed
           };
           case (#err(#InvalidPhase(_))) {
-            // Expected error in new architecture
+            // Expected error
           };
           case (#err(error)) {
             Debug.print("Unexpected error type: " # debug_show (error));
@@ -268,7 +194,6 @@ suite(
           govStake,
           user,
           testToken,
-          false,
         );
 
         // Verify the error
@@ -304,7 +229,6 @@ suite(
           govStake,
           user,
           unapprovedToken,
-          false,
         );
 
         // Verify the error
@@ -340,7 +264,6 @@ suite(
           govStake,
           user,
           testToken,
-          false,
         );
 
         // Verify the error
@@ -374,12 +297,11 @@ suite(
         };
         let testToken = CompetitionTestUtils.getTestToken1();
 
-        // Process the stake request directly
+        // Process the stake request
         let result = stakingManager.acceptStakeRequest(
           govStake,
           user,
           testToken,
-          false,
         );
 
         switch (result) {

@@ -115,12 +115,11 @@ suite(
           value = 1000;
         };
 
-        // Test accepting a stake request (not queued)
+        // Test accepting a stake request
         let result = userOps.acceptStakeRequest(
           govStake,
           userAccount,
           mockTokenA,
-          false // not queued
         );
 
         // Verify results
@@ -130,7 +129,6 @@ suite(
             expect.bool(false).isTrue(); // Force test failure
           };
           case (#ok(data)) {
-            expect.bool(data.isQueued).isFalse();
             expect.principal(data.tokenQuantity.token).equal(mockTokenA);
             expect.nat(data.submissionId).equal(0); // In our test env, first ID is 0
           };
@@ -173,7 +171,6 @@ suite(
           govStake,
           userAccount,
           mockTokenA,
-          false,
         );
 
         // Verify results
@@ -248,7 +245,6 @@ suite(
           govStake,
           mockUser, // Using the principal directly as account
           mockTokenA,
-          false,
         );
 
         // Verify results
@@ -265,7 +261,7 @@ suite(
     );
 
     test(
-      "accepts and queues stake requests properly",
+      "accepts and processes stake requests immediately",
       func() {
         // Create test environment with registry
         let (registryStore, userAccounts, userAccount, getCirculatingSupply, getBackingTokens) = createTestEnvironmentWithRegistry();
@@ -294,12 +290,11 @@ suite(
               value = 1000;
             };
 
-            // Submit a stake request as queued
+            // Submit a stake request - now processed immediately
             let result = userOps.acceptStakeRequest(
               govStake,
               userAccount,
               mockTokenA,
-              true // queued
             );
 
             // Verify results
@@ -309,7 +304,6 @@ suite(
                 expect.bool(false).isTrue(); // Force test failure
               };
               case (#ok(data)) {
-                expect.bool(data.isQueued).isTrue();
                 expect.principal(data.tokenQuantity.token).equal(mockTokenA);
 
                 // Get a fresh entry store to check submissions
@@ -320,9 +314,9 @@ suite(
                     expect.bool(false).isTrue();
                   };
                   case (?freshEntryStore) {
-                    // Verify the submission was added with Queued status
-                    let queuedSubmissions = freshEntryStore.getSubmissionsByStatus(#Queued);
-                    Debug.print("Number of queued submissions: " # Nat.toText(queuedSubmissions.size()));
+                    // Verify the submission was added with Staked status
+                    let stakedSubmissions = freshEntryStore.getSubmissionsByStatus(#Staked);
+                    Debug.print("Number of staked submissions: " # Nat.toText(stakedSubmissions.size()));
 
                     // Also check all submissions
                     let allSubmissions = freshEntryStore.getAllSubmissions();
@@ -331,13 +325,13 @@ suite(
                       Debug.print("Submission " # Nat.toText(sub.id) # " status: " # debug_show (sub.status));
                     };
 
-                    expect.nat(queuedSubmissions.size()).equal(1);
+                    expect.nat(stakedSubmissions.size()).equal(1);
 
                     // Verify the submission has the expected properties
-                    let submission = queuedSubmissions[0];
+                    let submission = stakedSubmissions[0];
                     expect.nat(submission.id).equal(data.submissionId);
                     expect.principal(submission.token).equal(mockTokenA);
-                    expect.bool(submission.status == #Queued).isTrue();
+                    expect.bool(submission.status == #Staked).isTrue();
                   };
                 };
               };

@@ -158,7 +158,6 @@ suite(
           case (#ok(finalization)) {
             // Check counts
             assert finalization.stakedSubmissionsCount == 0;
-            assert finalization.queuedProcessedCount == 0;
             assert finalization.adjustmentSuccessCount == 0;
 
             // System stake should still be calculated

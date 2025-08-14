@@ -55,7 +55,7 @@ module {
       timestamp = Time.now();
 
       // Current state
-      status = #Queued;
+      status = #Staked;
       rejectionReason = null;
 
       // Adjustment results after round closure
@@ -113,14 +113,8 @@ module {
         return #err(error);
       };
       case (#ok(_)) {
-        // Submission is valid, update status to Staked
-        let activeSubmission = {
-          submission with
-          status = #Staked;
-        };
-
         // Store the submission in the competition entry
-        competitionEntry.addSubmission(activeSubmission);
+        competitionEntry.addSubmission(submission);
 
         // Update total stakes in the entry
         competitionEntry.updateTotalStakes(
@@ -128,7 +122,7 @@ module {
           stakeVault.getTotalMultiStake(),
         );
 
-        return #ok(activeSubmission);
+        return #ok(submission);
       };
     };
   };

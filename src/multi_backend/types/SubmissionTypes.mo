@@ -8,7 +8,6 @@ module {
 
   // Status of a submission
   public type SubmissionStatus = {
-    #Queued; // Pre-submission
     #Staked; // Active in competition
     #Finalized; // Calculations complete
     #Settled; // After settlement (final state)
