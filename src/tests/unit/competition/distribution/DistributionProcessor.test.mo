@@ -33,14 +33,22 @@ suite(
     ) : RewardTypes.Position {
       {
         quantity = { token = token; value = quantity };
-        govStake = {
-          token = CompetitionTestUtils.getGovToken();
-          value = govStake;
-        };
-        multiStake = {
-          token = CompetitionTestUtils.getMultiToken();
-          value = multiStake;
-        };
+        stakes = [
+          (
+            CompetitionTestUtils.getGovToken(),
+            {
+              token = CompetitionTestUtils.getGovToken();
+              value = govStake;
+            },
+          ),
+          (
+            CompetitionTestUtils.getMultiToken(),
+            {
+              token = CompetitionTestUtils.getMultiToken();
+              value = multiStake;
+            },
+          ),
+        ];
         submissionId = submissionId;
         isSystem = isSystem;
         distributionPayouts = []; // Empty payout history
@@ -61,7 +69,6 @@ suite(
         completionTime = null;
         status = #Distribution;
         config = {
-          govToken = CompetitionTestUtils.getGovToken();
           multiToken = CompetitionTestUtils.getMultiToken();
           approvedTokens = [
             CompetitionTestUtils.getTestToken1(),
@@ -69,10 +76,7 @@ suite(
             CompetitionTestUtils.getTestToken3(),
           ];
           theta = { value = 50_000_000 }; // 5%
-          govRate = { value = 100_000_000 }; // 10%
-          multiRate = { value = 200_000_000 }; // 20%
-          systemStakeGov = { value = 1_000_000_000 }; // 100%
-          systemStakeMulti = { value = 1_000_000_000 }; // 100%
+          stakeTokenConfigs = CompetitionTestUtils.createDefaultStakeTokenConfigs();
           competitionCycleDuration = 86400_000_000_000; // 1 day
           preAnnouncementDuration = 3600_000_000_000; // 1 hour
           rewardDistributionDuration = 86400_000_000_000; // 1 day
@@ -82,10 +86,11 @@ suite(
         submissions = submissions;
         submissionCounter = submissions.size();
         stakeAccounts = StableHashMap.init<Types.Account, AccountTypes.BalanceMap>();
-        totalGovStake = 0; // Will be calculated from positions
-        totalMultiStake = 0; // Will be calculated from positions
-        adjustedGovRate = null;
-        adjustedMultiRate = null;
+        totalStakes = [
+          (CompetitionTestUtils.getGovToken(), 0), // Will be calculated from positions
+          (CompetitionTestUtils.getMultiToken(), 0), // Will be calculated from positions
+        ];
+        adjustedRates = null;
         volumeLimit = 1_000_000;
         systemStake = null;
         lastDistributionIndex = null;
@@ -121,16 +126,12 @@ suite(
       let stakeAccountsMap = StableHashMap.init<Types.Account, AccountTypes.BalanceMap>();
       let stakeVault = StakeVault.StakeVault(
         userAccounts,
-        CompetitionTestUtils.getMultiToken(),
-        CompetitionTestUtils.getGovToken(),
+        CompetitionTestUtils.createDefaultStakeTokenConfigs(),
         stakeAccountsMap,
       );
 
       // Create processor
-      let processor = DistributionProcessor.DistributionProcessor(
-        CompetitionTestUtils.getGovToken(),
-        CompetitionTestUtils.getMultiToken(),
-      );
+      let processor = DistributionProcessor.DistributionProcessor();
 
       // Define accounts
       let systemAccount = Principal.fromText("rdmx6-jaaaa-aaaaa-aaadq-cai");
@@ -157,14 +158,22 @@ suite(
           {
             id = 1;
             participant = user1;
-            govStake = {
-              token = CompetitionTestUtils.getGovToken();
-              value = 1000;
-            };
-            multiStake = {
-              token = CompetitionTestUtils.getMultiToken();
-              value = 2000;
-            };
+            stakes = [
+              (
+                CompetitionTestUtils.getGovToken(),
+                {
+                  token = CompetitionTestUtils.getGovToken();
+                  value = 1000;
+                },
+              ),
+              (
+                CompetitionTestUtils.getMultiToken(),
+                {
+                  token = CompetitionTestUtils.getMultiToken();
+                  value = 2000;
+                },
+              ),
+            ];
             token = CompetitionTestUtils.getTestToken1();
             proposedQuantity = {
               token = CompetitionTestUtils.getTestToken1();
@@ -187,14 +196,22 @@ suite(
           {
             id = 2;
             participant = user2;
-            govStake = {
-              token = CompetitionTestUtils.getGovToken();
-              value = 1000;
-            };
-            multiStake = {
-              token = CompetitionTestUtils.getMultiToken();
-              value = 2000;
-            };
+            stakes = [
+              (
+                CompetitionTestUtils.getGovToken(),
+                {
+                  token = CompetitionTestUtils.getGovToken();
+                  value = 1000;
+                },
+              ),
+              (
+                CompetitionTestUtils.getMultiToken(),
+                {
+                  token = CompetitionTestUtils.getMultiToken();
+                  value = 2000;
+                },
+              ),
+            ];
             token = CompetitionTestUtils.getTestToken2();
             proposedQuantity = {
               token = CompetitionTestUtils.getTestToken2();
@@ -327,14 +344,22 @@ suite(
           {
             id = 1;
             participant = user1;
-            govStake = {
-              token = CompetitionTestUtils.getGovToken();
-              value = 600;
-            };
-            multiStake = {
-              token = CompetitionTestUtils.getMultiToken();
-              value = 1200;
-            };
+            stakes = [
+              (
+                CompetitionTestUtils.getGovToken(),
+                {
+                  token = CompetitionTestUtils.getGovToken();
+                  value = 600;
+                },
+              ),
+              (
+                CompetitionTestUtils.getMultiToken(),
+                {
+                  token = CompetitionTestUtils.getMultiToken();
+                  value = 1200;
+                },
+              ),
+            ];
             token = CompetitionTestUtils.getTestToken1();
             proposedQuantity = {
               token = CompetitionTestUtils.getTestToken1();
@@ -357,14 +382,22 @@ suite(
           {
             id = 2;
             participant = user2;
-            govStake = {
-              token = CompetitionTestUtils.getGovToken();
-              value = 400;
-            };
-            multiStake = {
-              token = CompetitionTestUtils.getMultiToken();
-              value = 800;
-            };
+            stakes = [
+              (
+                CompetitionTestUtils.getGovToken(),
+                {
+                  token = CompetitionTestUtils.getGovToken();
+                  value = 400;
+                },
+              ),
+              (
+                CompetitionTestUtils.getMultiToken(),
+                {
+                  token = CompetitionTestUtils.getMultiToken();
+                  value = 800;
+                },
+              ),
+            ];
             token = CompetitionTestUtils.getTestToken2();
             proposedQuantity = {
               token = CompetitionTestUtils.getTestToken2();
@@ -472,14 +505,22 @@ suite(
           {
             id = 1;
             participant = user1;
-            govStake = {
-              token = CompetitionTestUtils.getGovToken();
-              value = 333;
-            };
-            multiStake = {
-              token = CompetitionTestUtils.getMultiToken();
-              value = 667;
-            };
+            stakes = [
+              (
+                CompetitionTestUtils.getGovToken(),
+                {
+                  token = CompetitionTestUtils.getGovToken();
+                  value = 333;
+                },
+              ),
+              (
+                CompetitionTestUtils.getMultiToken(),
+                {
+                  token = CompetitionTestUtils.getMultiToken();
+                  value = 667;
+                },
+              ),
+            ];
             token = CompetitionTestUtils.getTestToken1();
             proposedQuantity = {
               token = CompetitionTestUtils.getTestToken1();
@@ -502,14 +543,22 @@ suite(
           {
             id = 2;
             participant = user2;
-            govStake = {
-              token = CompetitionTestUtils.getGovToken();
-              value = 334;
-            };
-            multiStake = {
-              token = CompetitionTestUtils.getMultiToken();
-              value = 666;
-            };
+            stakes = [
+              (
+                CompetitionTestUtils.getGovToken(),
+                {
+                  token = CompetitionTestUtils.getGovToken();
+                  value = 334;
+                },
+              ),
+              (
+                CompetitionTestUtils.getMultiToken(),
+                {
+                  token = CompetitionTestUtils.getMultiToken();
+                  value = 666;
+                },
+              ),
+            ];
             token = CompetitionTestUtils.getTestToken2();
             proposedQuantity = {
               token = CompetitionTestUtils.getTestToken2();

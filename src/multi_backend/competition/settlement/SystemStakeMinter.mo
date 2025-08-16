@@ -1,15 +1,16 @@
 import Principal "mo:base/Principal";
 import Debug "mo:base/Debug";
-
+import Buffer "mo:base/Buffer";
 import Types "../../types/Types";
 import SystemStakeTypes "../../types/SystemStakeTypes";
 import VirtualAccounts "../../custodial/VirtualAccounts";
 import BackingOperations "../../backing/BackingOperations";
 import BackingStore "../../backing/BackingStore";
 import BackingMath "../../backing/BackingMath";
+import TokenAccessHelper "../../helper/TokenAccessHelper";
 
 /**
- * SystemStakeMinter handles minting Multi and Gov tokens for system stake
+ * SystemStakeMinter handles minting stake tokens for system stake
  * participation as a single operation.
  */
 module {
@@ -17,72 +18,62 @@ module {
     userAccounts : VirtualAccounts.VirtualAccounts,
     backingOps : BackingOperations.BackingOperations,
     backingStore : BackingStore.BackingStore,
-    govToken : Types.Token,
+    stakeTokenConfigs : [(Types.Token, Types.Ratio)], // Support n stake tokens
     systemAccount : Types.Account,
   ) {
     private let multiToken = backingStore.getMultiToken();
 
     /**
-     * Mint both Multi and Gov tokens for system stake in a single operation.
-     * The Multi tokens go through supply increase processing.
+     * Mint all stake tokens for system stake in a single operation.
+     * The Multi tokens go through supply increase processing and alignment.
      *
      * @param systemStake The system stake information
-     * @returns The minted Multi amount and Gov amount
+     * @returns The minted amounts for each stake token
      */
     public func mintSystemStake(
       systemStake : SystemStakeTypes.SystemStake
     ) : {
-      multiAmount : Types.Amount;
-      govAmount : Types.Amount;
+      mintedAmounts : [(Types.Token, Types.Amount)];
     } {
-      // Get supply unit from backing store
       let supplyUnit = backingStore.getSupplyUnit();
 
-      // Verify system stake is valid
-      if (systemStake.multiSystemStake.value == 0) {
-        Debug.trap("Critical error: System Multi stake is zero");
+      if (systemStake.systemStakes.size() == 0) {
+        Debug.trap("Critical error: System stake has no tokens");
       };
 
-      if (not Principal.equal(systemStake.multiSystemStake.token, multiToken)) {
-        Debug.trap("Critical error: System Multi stake token mismatch");
-      };
+      var mintedAmounts = Buffer.Buffer<(Types.Token, Types.Amount)>(systemStake.systemStakes.size());
 
-      if (not Principal.equal(systemStake.govSystemStake.token, govToken)) {
-        Debug.trap("Critical error: System Gov stake token mismatch");
-      };
-
-      let multiAmount = systemStake.multiSystemStake;
-      let govAmount = systemStake.govSystemStake;
-
-      // Align Multi amount to supply units using BackingMath
-      let rawValue = multiAmount.value;
-      let alignedValue = BackingMath.alignToSupplyUnit(rawValue, supplyUnit);
-
-      let alignedMultiAmount : Types.Amount = {
-        token = multiToken;
-        value = alignedValue;
-      };
-
-      // Process supply increase for Multi tokens only
-      switch (backingOps.processSupplyIncrease(alignedMultiAmount)) {
-        case (#err(e)) {
-          Debug.trap(
-            "Critical error: Failed to increase supply for system stake: " #
-            debug_show (e)
-          );
-        };
-        case (#ok()) {
-          // Mint Multi tokens to the system account
-          userAccounts.mint(systemAccount, alignedMultiAmount);
-
-          // Mint Gov tokens to the system account
-          userAccounts.mint(systemAccount, govAmount);
-
-          {
-            multiAmount = alignedMultiAmount;
-            govAmount = govAmount;
+      // Process each stake token
+      for ((token, amount) in systemStake.systemStakes.vals()) {
+        if (Principal.equal(token, multiToken)) {
+          // Multi token needs alignment and supply increase
+          let alignedValue = BackingMath.alignToSupplyUnit(amount.value, supplyUnit);
+          let alignedAmount : Types.Amount = {
+            token = multiToken;
+            value = alignedValue;
           };
+
+          switch (backingOps.processSupplyIncrease(alignedAmount)) {
+            case (#err(e)) {
+              Debug.trap(
+                "Critical error: Failed to increase supply for system stake: " #
+                debug_show (e)
+              );
+            };
+            case (#ok()) {
+              userAccounts.mint(systemAccount, alignedAmount);
+              mintedAmounts.add((token, alignedAmount)); // Return aligned amount
+            };
+          };
+        } else {
+          // Other stake tokens don't need alignment or supply processing
+          userAccounts.mint(systemAccount, amount);
+          mintedAmounts.add((token, amount));
         };
+      };
+
+      {
+        mintedAmounts = Buffer.toArray(mintedAmounts);
       };
     };
   };

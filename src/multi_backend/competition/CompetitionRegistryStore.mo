@@ -12,6 +12,7 @@ import Error "../error/Error";
 import CompetitionRegistryTypes "../types/CompetitionRegistryTypes";
 import CompetitionEntryTypes "../types/CompetitionEntryTypes";
 import AccountTypes "../types/AccountTypes";
+import StakeTokenTypes "../types/StakeTokenTypes";
 import VirtualAccounts "../custodial/VirtualAccounts";
 import StakeVault "./staking/StakeVault";
 import CompetitionEntryStore "./CompetitionEntryStore";
@@ -42,6 +43,12 @@ module {
           // Initialize empty stake accounts
           let stakeAccounts = StableHashMap.init<Types.Account, AccountTypes.BalanceMap>();
 
+          // Initialize total stakes array based on configured stake tokens
+          let totalStakes = Array.map<StakeTokenTypes.StakeTokenConfig, (Types.Token, Nat)>(
+            state.globalConfig.stakeTokenConfigs,
+            func(config) = (config.token, 0),
+          );
+
           // Create new competition using global config
           let newCompetition : CompetitionEntryTypes.Competition = {
             id = newId;
@@ -49,14 +56,10 @@ module {
             completionTime = null;
             status = #PreAnnouncement;
             config = {
-              govToken = state.globalConfig.govToken;
               multiToken = state.globalConfig.multiToken;
               approvedTokens = state.globalConfig.approvedTokens;
               theta = state.globalConfig.theta;
-              govRate = state.globalConfig.govRate;
-              multiRate = state.globalConfig.multiRate;
-              systemStakeGov = state.globalConfig.systemStakeGov;
-              systemStakeMulti = state.globalConfig.systemStakeMulti;
+              stakeTokenConfigs = state.globalConfig.stakeTokenConfigs;
               competitionCycleDuration = state.globalConfig.competitionCycleDuration;
               preAnnouncementDuration = state.globalConfig.preAnnouncementDuration;
               rewardDistributionDuration = state.globalConfig.rewardDistributionDuration;
@@ -65,10 +68,8 @@ module {
             competitionPrices = priceEventId;
             submissions = [];
             submissionCounter = 0;
-            totalGovStake = 0;
-            totalMultiStake = 0;
-            adjustedGovRate = null;
-            adjustedMultiRate = null;
+            totalStakes = totalStakes;
+            adjustedRates = null;
             volumeLimit = 0;
             systemStake = null;
             stakeAccounts = stakeAccounts;
@@ -128,8 +129,7 @@ module {
         case (?competition) {
           let stakeVault = StakeVault.StakeVault(
             userAccounts,
-            competition.config.multiToken,
-            competition.config.govToken,
+            competition.config.stakeTokenConfigs,
             competition.stakeAccounts,
           );
 
@@ -255,8 +255,7 @@ module {
           // Create a StakeVault for this competition
           let stakeVault = StakeVault.StakeVault(
             userAccounts,
-            competition.config.multiToken,
-            competition.config.govToken,
+            competition.config.stakeTokenConfigs,
             competition.stakeAccounts,
           );
 

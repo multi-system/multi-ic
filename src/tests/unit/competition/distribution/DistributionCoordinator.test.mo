@@ -36,17 +36,13 @@ suite(
         completionTime = null;
         status = #Distribution;
         config = {
-          govToken = CompetitionTestUtils.getGovToken();
           multiToken = CompetitionTestUtils.getMultiToken();
           approvedTokens = [
             CompetitionTestUtils.getTestToken1(),
             CompetitionTestUtils.getTestToken2(),
           ];
           theta = { value = 50_000_000 };
-          govRate = { value = 100_000_000 };
-          multiRate = { value = 200_000_000 };
-          systemStakeGov = { value = 1_000_000_000 };
-          systemStakeMulti = { value = 1_000_000_000 };
+          stakeTokenConfigs = CompetitionTestUtils.createDefaultStakeTokenConfigs();
           competitionCycleDuration = 86400_000_000_000;
           preAnnouncementDuration = 3600_000_000_000;
           rewardDistributionDuration = 86400_000_000_000;
@@ -56,10 +52,11 @@ suite(
         submissions = submissions;
         submissionCounter = submissions.size();
         stakeAccounts = StableHashMap.init<Types.Account, AccountTypes.BalanceMap>();
-        totalGovStake = 1000;
-        totalMultiStake = 2000;
-        adjustedGovRate = null;
-        adjustedMultiRate = null;
+        totalStakes = [
+          (CompetitionTestUtils.getGovToken(), 1000),
+          (CompetitionTestUtils.getMultiToken(), 2000),
+        ];
+        adjustedRates = null;
         volumeLimit = 1_000_000;
         systemStake = null;
         lastDistributionIndex = null;
@@ -70,8 +67,7 @@ suite(
 
       let stakeVault = StakeVault.StakeVault(
         userAccounts,
-        competition.config.multiToken,
-        competition.config.govToken,
+        competition.config.stakeTokenConfigs,
         competition.stakeAccounts,
       );
 
@@ -111,11 +107,10 @@ suite(
     ) : RewardTypes.Position {
       {
         quantity = { token = token; value = 1000 };
-        govStake = { token = CompetitionTestUtils.getGovToken(); value = 100 };
-        multiStake = {
-          token = CompetitionTestUtils.getMultiToken();
-          value = 200;
-        };
+        stakes = [
+          (CompetitionTestUtils.getGovToken(), { token = CompetitionTestUtils.getGovToken(); value = 100 }),
+          (CompetitionTestUtils.getMultiToken(), { token = CompetitionTestUtils.getMultiToken(); value = 200 }),
+        ];
         submissionId = submissionId;
         isSystem = isSystem;
         distributionPayouts = [];
@@ -131,11 +126,10 @@ suite(
       {
         id = id;
         participant = participant;
-        govStake = { token = CompetitionTestUtils.getGovToken(); value = 100 };
-        multiStake = {
-          token = CompetitionTestUtils.getMultiToken();
-          value = 200;
-        };
+        stakes = [
+          (CompetitionTestUtils.getGovToken(), { token = CompetitionTestUtils.getGovToken(); value = 100 }),
+          (CompetitionTestUtils.getMultiToken(), { token = CompetitionTestUtils.getMultiToken(); value = 200 }),
+        ];
         token = token;
         proposedQuantity = { token = token; value = 1000 };
         timestamp = 0;
@@ -159,8 +153,7 @@ suite(
         let coordinator = DistributionCoordinator.DistributionCoordinator(
           userAccounts,
           systemAccount,
-          CompetitionTestUtils.getGovToken(),
-          CompetitionTestUtils.getMultiToken(),
+          CompetitionTestUtils.createDefaultStakeTokenConfigs(),
         );
 
         // Create positions with different types
@@ -229,8 +222,7 @@ suite(
         let coordinator = DistributionCoordinator.DistributionCoordinator(
           userAccounts,
           systemAccount,
-          CompetitionTestUtils.getGovToken(),
-          CompetitionTestUtils.getMultiToken(),
+          CompetitionTestUtils.createDefaultStakeTokenConfigs(),
         );
 
         // Create positions with specific submission IDs
@@ -307,8 +299,7 @@ suite(
         let coordinator = DistributionCoordinator.DistributionCoordinator(
           userAccounts,
           systemAccount,
-          CompetitionTestUtils.getGovToken(),
-          CompetitionTestUtils.getMultiToken(),
+          CompetitionTestUtils.createDefaultStakeTokenConfigs(),
         );
 
         let positions = [
@@ -356,8 +347,7 @@ suite(
         let coordinator = DistributionCoordinator.DistributionCoordinator(
           userAccounts,
           systemAccount,
-          CompetitionTestUtils.getGovToken(),
-          CompetitionTestUtils.getMultiToken(),
+          CompetitionTestUtils.createDefaultStakeTokenConfigs(),
         );
 
         // Create multiple positions to test payout recording
@@ -414,15 +404,38 @@ suite(
         let pos0Payouts = positionsAfter0[0].distributionPayouts;
         assert pos0Payouts.size() == 1;
         assert pos0Payouts[0].distributionNumber == 0;
-        assert pos0Payouts[0].govPayout > 0;
-        assert pos0Payouts[0].multiPayout > 0;
+
+        // Access payouts through the array structure
+        var pos0GovPayout = 0;
+        var pos0MultiPayout = 0;
+        for ((token, amount) in pos0Payouts[0].payouts.vals()) {
+          if (Principal.equal(token, CompetitionTestUtils.getGovToken())) {
+            pos0GovPayout := amount;
+          };
+          if (Principal.equal(token, CompetitionTestUtils.getMultiToken())) {
+            pos0MultiPayout := amount;
+          };
+        };
+        assert pos0GovPayout > 0;
+        assert pos0MultiPayout > 0;
 
         // Check position 1 (system position) payout history
         let pos1Payouts = positionsAfter0[1].distributionPayouts;
         assert pos1Payouts.size() == 1;
         assert pos1Payouts[0].distributionNumber == 0;
-        assert pos1Payouts[0].govPayout > 0;
-        assert pos1Payouts[0].multiPayout > 0;
+
+        var pos1GovPayout = 0;
+        var pos1MultiPayout = 0;
+        for ((token, amount) in pos1Payouts[0].payouts.vals()) {
+          if (Principal.equal(token, CompetitionTestUtils.getGovToken())) {
+            pos1GovPayout := amount;
+          };
+          if (Principal.equal(token, CompetitionTestUtils.getMultiToken())) {
+            pos1MultiPayout := amount;
+          };
+        };
+        assert pos1GovPayout > 0;
+        assert pos1MultiPayout > 0;
 
         // Fund pool again for second distribution (20 GOV, 40 MULTI needed)
         entryStore.getStakeVault().getStakeAccounts().mint(
@@ -450,19 +463,41 @@ suite(
         let pos0PayoutsAfter = positionsAfter1[0].distributionPayouts;
         assert pos0PayoutsAfter.size() == 2;
         assert pos0PayoutsAfter[1].distributionNumber == 1;
-        assert pos0PayoutsAfter[1].govPayout > 0;
-        assert pos0PayoutsAfter[1].multiPayout > 0;
+
+        var pos0GovPayout2 = 0;
+        var pos0MultiPayout2 = 0;
+        for ((token, amount) in pos0PayoutsAfter[1].payouts.vals()) {
+          if (Principal.equal(token, CompetitionTestUtils.getGovToken())) {
+            pos0GovPayout2 := amount;
+          };
+          if (Principal.equal(token, CompetitionTestUtils.getMultiToken())) {
+            pos0MultiPayout2 := amount;
+          };
+        };
+        assert pos0GovPayout2 > 0;
+        assert pos0MultiPayout2 > 0;
 
         // Position 1 should also have 2 payout records
         let pos1PayoutsAfter = positionsAfter1[1].distributionPayouts;
         assert pos1PayoutsAfter.size() == 2;
         assert pos1PayoutsAfter[1].distributionNumber == 1;
-        assert pos1PayoutsAfter[1].govPayout > 0;
-        assert pos1PayoutsAfter[1].multiPayout > 0;
+
+        var pos1GovPayout2 = 0;
+        var pos1MultiPayout2 = 0;
+        for ((token, amount) in pos1PayoutsAfter[1].payouts.vals()) {
+          if (Principal.equal(token, CompetitionTestUtils.getGovToken())) {
+            pos1GovPayout2 := amount;
+          };
+          if (Principal.equal(token, CompetitionTestUtils.getMultiToken())) {
+            pos1MultiPayout2 := amount;
+          };
+        };
+        assert pos1GovPayout2 > 0;
+        assert pos1MultiPayout2 > 0;
 
         // Verify total rewards sum matches pool amount
-        let totalGovRewards = pos0PayoutsAfter[0].govPayout + pos1PayoutsAfter[0].govPayout;
-        let totalMultiRewards = pos0PayoutsAfter[0].multiPayout + pos1PayoutsAfter[0].multiPayout;
+        let totalGovRewards = pos0GovPayout + pos1GovPayout;
+        let totalMultiRewards = pos0MultiPayout + pos1MultiPayout;
 
         // Each distribution should distribute 1/10 of total stakes
         // Total stakes: 200 GOV, 400 MULTI

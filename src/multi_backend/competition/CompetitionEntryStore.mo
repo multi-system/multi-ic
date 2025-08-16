@@ -14,11 +14,13 @@ import CompetitionEntryTypes "../types/CompetitionEntryTypes";
 import SubmissionTypes "../types/SubmissionTypes";
 import RatioOperations "../financial/RatioOperations";
 import SystemStakeTypes "../types/SystemStakeTypes";
+import StakeTokenTypes "../types/StakeTokenTypes";
 import StakeVault "./staking/StakeVault";
 import VirtualAccounts "../custodial/VirtualAccounts";
 import Error "../error/Error";
 import EventTypes "../types/EventTypes";
 import RewardTypes "../types/RewardTypes";
+import TokenAccessHelper "../helper/TokenAccessHelper";
 
 module {
   // The CompetitionEntryStore class manages a single competition
@@ -36,7 +38,6 @@ module {
     private var competitionData : CompetitionEntryTypes.Competition = competitionDataParam;
 
     // Reference to external method to retrieve price event data
-    // Using an optional type for the function
     private var getPriceEventByIdFunc : ?(Nat -> ?EventTypes.PriceEvent) = null;
 
     // Set the price event retrieval method
@@ -44,74 +45,201 @@ module {
       getPriceEventByIdFunc := ?retriever;
     };
 
+    // Helper to persist competition data changes
+    private func persist(updated : CompetitionEntryTypes.Competition) {
+      competitionData := updated;
+      persistChanges(updated);
+    };
+
+    // === STAKE TOKEN HELPER FUNCTIONS ===
+
+    // Get stake token configuration for a specific token
+    public func getStakeTokenConfig(token : Types.Token) : ?StakeTokenTypes.StakeTokenConfig {
+      Array.find<StakeTokenTypes.StakeTokenConfig>(
+        competitionData.config.stakeTokenConfigs,
+        func(config) = Principal.equal(config.token, token),
+      );
+    };
+
+    // Get all stake token configurations
+    public func getStakeTokenConfigs() : [StakeTokenTypes.StakeTokenConfig] {
+      competitionData.config.stakeTokenConfigs;
+    };
+
+    // Check if a token is configured as a stake token
+    public func isStakeToken(token : Types.Token) : Bool {
+      Option.isSome(getStakeTokenConfig(token));
+    };
+
+    // Get all configured stake tokens
+    public func getStakeTokens() : [Types.Token] {
+      Array.map<StakeTokenTypes.StakeTokenConfig, Types.Token>(
+        competitionData.config.stakeTokenConfigs,
+        func(config) = config.token,
+      );
+    };
+
+    // Get base rate for a specific stake token
+    public func getBaseRate(token : Types.Token) : Types.Ratio {
+      switch (getStakeTokenConfig(token)) {
+        case (?config) { config.baseRate };
+        case (null) { Debug.trap("Token not configured: " # Principal.toText(token)) };
+      };
+    };
+
+    // Get system multiplier for a specific stake token
+    public func getSystemMultiplier(token : Types.Token) : Types.Ratio {
+      switch (getStakeTokenConfig(token)) {
+        case (?config) { config.systemMultiplier };
+        case (null) { Debug.trap("Token not configured: " # Principal.toText(token)) };
+      };
+    };
+
+    // Get total stake for a specific token
+    public func getTotalStake(token : Types.Token) : Nat {
+      TokenAccessHelper.getWithDefault(competitionData.totalStakes, token, 0);
+    };
+
+    // Get all total stakes
+    public func getAllTotalStakes() : [(Types.Token, Nat)] {
+      competitionData.totalStakes;
+    };
+
+    // Update total stake for a specific token
+    public func updateTotalStake(token : Types.Token, amount : Nat) : Bool {
+      persist({
+        competitionData with
+        totalStakes = TokenAccessHelper.updateInTokenArray(competitionData.totalStakes, token, amount);
+      });
+      true;
+    };
+
+    // Add to total stake for a specific token
+    public func addToTotalStake(token : Types.Token, amount : Nat) : Bool {
+      updateTotalStake(token, getTotalStake(token) + amount);
+    };
+
+    // Subtract from total stake for a specific token
+    public func subtractFromTotalStake(token : Types.Token, amount : Nat) : Bool {
+      let current = getTotalStake(token);
+      if (current >= amount) {
+        updateTotalStake(token, current - amount);
+      } else {
+        false;
+      };
+    };
+
+    // Get adjusted rate for a specific token
+    public func getAdjustedRate(token : Types.Token) : ?Types.Ratio {
+      switch (competitionData.adjustedRates) {
+        case (null) { null };
+        case (?rates) { TokenAccessHelper.findInTokenArray(rates, token) };
+      };
+    };
+
+    // Get the effective rate for a token (adjusted if exists, otherwise base)
+    public func getEffectiveRate(token : Types.Token) : Types.Ratio {
+      switch (getAdjustedRate(token)) {
+        case (?rate) { rate };
+        case (null) { getBaseRate(token) };
+      };
+    };
+
+    // Update stake rate for a specific token
+    public func updateStakeRate(token : Types.Token, newRate : Types.Ratio) : Bool {
+      // Verify rate only increases
+      let baseRate = getBaseRate(token);
+      if (RatioOperations.compare(newRate, baseRate) == #less) {
+        Debug.trap("Critical error: Stake rate cannot decrease - violates design principle");
+      };
+
+      let adjustedRates = switch (competitionData.adjustedRates) {
+        case (null) {
+          // First adjustment - initialize with base rates, then update
+          let initial = Array.map<StakeTokenTypes.StakeTokenConfig, (Types.Token, Types.Ratio)>(
+            competitionData.config.stakeTokenConfigs,
+            func(config) = (config.token, config.baseRate),
+          );
+          TokenAccessHelper.updateInTokenArray(initial, token, newRate);
+        };
+        case (?rates) {
+          TokenAccessHelper.updateInTokenArray(rates, token, newRate);
+        };
+      };
+
+      persist({
+        competitionData with
+        adjustedRates = ?adjustedRates;
+      });
+      true;
+    };
+
+    // Update all stake rates at once
+    public func updateAllStakeRates(newRates : [(Types.Token, Types.Ratio)]) : Bool {
+      // Verify all rates only increase
+      for ((token, newRate) in newRates.vals()) {
+        let baseRate = getBaseRate(token);
+        if (RatioOperations.compare(newRate, baseRate) == #less) {
+          Debug.trap("Critical error: Stake rate cannot decrease for token " # Principal.toText(token));
+        };
+      };
+
+      persist({
+        competitionData with
+        adjustedRates = ?newRates;
+      });
+      true;
+    };
+
+    // Get stake amount from a submission for a specific token
+    public func getSubmissionStake(submission : SubmissionTypes.Submission, token : Types.Token) : ?Types.Amount {
+      TokenAccessHelper.findInTokenArray(submission.stakes, token);
+    };
+
+    // Get all stakes from a submission
+    public func getSubmissionStakes(submission : SubmissionTypes.Submission) : [(Types.Token, Types.Amount)] {
+      submission.stakes;
+    };
+
+    // Get system stake amount for a specific token
+    public func getSystemStakeAmount(token : Types.Token) : Types.Amount {
+      switch (competitionData.systemStake) {
+        case (null) { { token = token; value = 0 } };
+        case (?systemStake) {
+          TokenAccessHelper.getWithDefault(
+            systemStake.systemStakes,
+            token,
+            { token = token; value = 0 },
+          );
+        };
+      };
+    };
+
+    // === CORE OPERATIONS ===
+
     // Update competition status
     public func updateStatus(status : CompetitionEntryTypes.CompetitionStatus) {
-      // Add logging to track status changes
       Debug.print(
         "CompetitionEntryStore: Updating competition #" # Nat.toText(competitionData.id) #
         " status from " # debug_show (competitionData.status) #
         " to " # debug_show (status)
       );
 
-      let updated = {
+      persist({
         competitionData with
         status = status;
         completionTime = if (status == #Completed or status == #Distribution) ?Time.now() else competitionData.completionTime;
-      };
-      competitionData := updated;
-      persistChanges(updated);
-    };
-
-    // Update stake rates - rates can only increase
-    public func updateStakeRates(govRate : Types.Ratio, multiRate : Types.Ratio) {
-      // Verify that gov rate only increases or stays the same
-      if (RatioOperations.compare(govRate, competitionData.config.govRate) == #less) {
-        Debug.trap("Critical error: Gov stake rate cannot decrease - violates design principle");
-      };
-
-      // Verify that multi rate only increases or stays the same
-      if (RatioOperations.compare(multiRate, competitionData.config.multiRate) == #less) {
-        Debug.trap("Critical error: Multi stake rate cannot decrease - violates design principle");
-      };
-
-      let updated = {
-        competitionData with
-        adjustedGovRate = ?govRate;
-        adjustedMultiRate = ?multiRate;
-      };
-      competitionData := updated;
-      persistChanges(updated);
-    };
-
-    // Update total stakes
-    public func updateTotalStakes(govStake : Nat, multiStake : Nat) {
-      let updated = {
-        competitionData with
-        totalGovStake = govStake;
-        totalMultiStake = multiStake;
-      };
-      competitionData := updated;
-      persistChanges(updated);
+      });
     };
 
     // Set volume limit
     public func setVolumeLimit(limit : Nat) {
-      let updated = {
-        competitionData with
-        volumeLimit = limit;
-      };
-      competitionData := updated;
-      persistChanges(updated);
+      persist({ competitionData with volumeLimit = limit });
     };
 
     // Set system stake
     public func setSystemStake(systemStake : SystemStakeTypes.SystemStake) {
-      let updated = {
-        competitionData with
-        systemStake = ?systemStake;
-      };
-      competitionData := updated;
-      persistChanges(updated);
+      persist({ competitionData with systemStake = ?systemStake });
     };
 
     // Add a submission to the competition
@@ -127,23 +255,17 @@ module {
       let buffer = Buffer.fromArray<SubmissionTypes.Submission>(competitionData.submissions);
       buffer.add(submission);
 
-      let updated = {
-        competitionData with
-        submissions = Buffer.toArray(buffer);
-        // Only add to totals if status is #Staked (tokens actually locked)
-        totalGovStake = if (submission.status == #Staked) {
-          competitionData.totalGovStake + submission.govStake.value;
-        } else {
-          competitionData.totalGovStake;
-        };
-        totalMultiStake = if (submission.status == #Staked) {
-          competitionData.totalMultiStake + submission.multiStake.value;
-        } else {
-          competitionData.totalMultiStake;
+      // Update total stakes if status is #Staked
+      if (submission.status == #Staked) {
+        for ((token, amount) in submission.stakes.vals()) {
+          ignore addToTotalStake(token, amount.value);
         };
       };
-      competitionData := updated;
-      persistChanges(updated);
+
+      persist({
+        competitionData with
+        submissions = Buffer.toArray(buffer);
+      });
     };
 
     // Update an existing submission
@@ -159,12 +281,10 @@ module {
       };
 
       if (updated) {
-        let updatedData = {
+        persist({
           competitionData with
           submissions = Buffer.toArray(buffer);
-        };
-        competitionData := updatedData;
-        persistChanges(updatedData);
+        });
       };
 
       updated;
@@ -186,31 +306,22 @@ module {
       };
 
       switch (indexToRemove, removedSubmission) {
-        case (null, _) {
-          return false;
-        };
+        case (null, _) { false };
         case (?index, ?submission) {
           ignore buffer.remove(index);
 
-          let updatedData = {
-            competitionData with
-            submissions = Buffer.toArray(buffer);
-            // Only subtract from totals if status was #Staked
-            totalGovStake = if (submission.status == #Staked) {
-              competitionData.totalGovStake - submission.govStake.value;
-            } else {
-              competitionData.totalGovStake;
-            };
-            totalMultiStake = if (submission.status == #Staked) {
-              competitionData.totalMultiStake - submission.multiStake.value;
-            } else {
-              competitionData.totalMultiStake;
+          // Subtract from total stakes if status was #Staked
+          if (submission.status == #Staked) {
+            for ((token, amount) in submission.stakes.vals()) {
+              ignore subtractFromTotalStake(token, amount.value);
             };
           };
-          competitionData := updatedData;
-          persistChanges(updatedData);
 
-          return true;
+          persist({
+            competitionData with
+            submissions = Buffer.toArray(buffer);
+          });
+          true;
         };
         case (_, _) {
           Debug.trap("Critical error: Inconsistent state - index found but submission missing");
@@ -261,14 +372,10 @@ module {
     // Generate a new submission ID
     public func generateSubmissionId() : SubmissionTypes.SubmissionId {
       let id = competitionData.submissionCounter;
-
-      let updated = {
+      persist({
         competitionData with
         submissionCounter = id + 1;
-      };
-      competitionData := updated;
-      persistChanges(updated);
-
+      });
       id;
     };
 
@@ -280,62 +387,39 @@ module {
         competitionData.config.theta,
       ).value;
 
-      // Update the competition's volume limit
-      let updated = {
-        competitionData with
-        volumeLimit = volumeLimit;
-      };
-      competitionData := updated;
-      persistChanges(updated);
-
+      persist({ competitionData with volumeLimit = volumeLimit });
       volumeLimit;
     };
 
     /**
      * Add a distribution event and update the last distribution index
-     *
-     * @param distributionEvent The event to add
      */
     public func addDistributionEvent(distributionEvent : CompetitionEntryTypes.DistributionEvent) {
-      // Add to events array
       let buffer = Buffer.fromArray<CompetitionEntryTypes.DistributionEvent>(competitionData.distributionHistory);
       buffer.add(distributionEvent);
 
-      // The distribution event already contains the distribution number
-      // We should use that as the last distribution index
-      let updated = {
+      persist({
         competitionData with
         distributionHistory = Buffer.toArray(buffer);
         lastDistributionIndex = ?distributionEvent.distributionNumber;
-      };
-
-      competitionData := updated;
-      persistChanges(updated);
+      });
     };
 
     /**
      * Add a position to the competition
-     *
-     * @param position The position to add
      */
     public func addPosition(position : RewardTypes.Position) {
       let buffer = Buffer.fromArray<RewardTypes.Position>(competitionData.positions);
       buffer.add(position);
 
-      let updated = {
+      persist({
         competitionData with
         positions = Buffer.toArray(buffer);
-      };
-
-      competitionData := updated;
-      persistChanges(updated);
+      });
     };
 
     /**
      * Get position by submission ID
-     *
-     * @param submissionId The submission ID to search for
-     * @return The position if found
      */
     public func getPositionBySubmissionId(submissionId : SubmissionTypes.SubmissionId) : ?RewardTypes.Position {
       Array.find<RewardTypes.Position>(
@@ -351,18 +435,11 @@ module {
 
     /**
      * Update a position with distribution payout information
-     *
-     * @param positionIndex Index of the position to update
-     * @param distributionNumber The distribution event number
-     * @param govPayout Amount of gov tokens paid out
-     * @param multiPayout Amount of multi tokens paid out
-     * @return True if update successful
      */
     public func updatePositionPayout(
       positionIndex : Nat,
       distributionNumber : Nat,
-      govPayout : Nat,
-      multiPayout : Nat,
+      payouts : [(Types.Token, Nat)],
     ) : Bool {
       if (positionIndex < competitionData.positions.size()) {
         let oldPosition = competitionData.positions[positionIndex];
@@ -370,8 +447,7 @@ module {
         // Create new payout record
         let newPayout : RewardTypes.DistributionPayout = {
           distributionNumber = distributionNumber;
-          govPayout = govPayout;
-          multiPayout = multiPayout;
+          payouts = payouts;
         };
 
         // Add to existing payouts
@@ -388,13 +464,10 @@ module {
         let positionsBuffer = Buffer.fromArray<RewardTypes.Position>(competitionData.positions);
         positionsBuffer.put(positionIndex, updatedPosition);
 
-        let updated = {
+        persist({
           competitionData with
           positions = Buffer.toArray(positionsBuffer);
-        };
-
-        competitionData := updated;
-        persistChanges(updated);
+        });
         true;
       } else {
         false;
@@ -403,8 +476,6 @@ module {
 
     /**
      * Get the last distribution index
-     *
-     * @return The last processed distribution index (null if none)
      */
     public func getLastDistributionIndex() : ?Nat {
       competitionData.lastDistributionIndex;
@@ -412,8 +483,6 @@ module {
 
     /**
      * Get all positions in the competition
-     *
-     * @return Array of all positions
      */
     public func getPositions() : [RewardTypes.Position] {
       competitionData.positions;
@@ -446,44 +515,9 @@ module {
       competitionData.submissions;
     };
 
-    // Get total governance stake
-    public func getTotalGovStake() : Nat {
-      competitionData.totalGovStake;
-    };
-
-    // Get total multi stake
-    public func getTotalMultiStake() : Nat {
-      competitionData.totalMultiStake;
-    };
-
-    // Get the governance token
-    public func getGovToken() : Types.Token {
-      competitionData.config.govToken;
-    };
-
     // Get the multi token
     public func getMultiToken() : Types.Token {
       competitionData.config.multiToken;
-    };
-
-    // Get the base governance rate
-    public func getGovRate() : Types.Ratio {
-      competitionData.config.govRate;
-    };
-
-    // Get the adjusted governance rate (if any)
-    public func getAdjustedGovRate() : Types.Ratio {
-      Option.get(competitionData.adjustedGovRate, competitionData.config.govRate);
-    };
-
-    // Get the base multi rate
-    public func getMultiRate() : Types.Ratio {
-      competitionData.config.multiRate;
-    };
-
-    // Get the adjusted multi rate (if any)
-    public func getAdjustedMultiRate() : Types.Ratio {
-      Option.get(competitionData.adjustedMultiRate, competitionData.config.multiRate);
     };
 
     // Get approved tokens
@@ -498,7 +532,6 @@ module {
           Debug.trap("Price event retriever not set - call setPriceEventRetriever first");
         };
         case (?retriever) {
-          // Get the price event using the competition's price event ID
           let priceEventOpt = retriever(competitionData.competitionPrices);
           switch (priceEventOpt) {
             case (null) {

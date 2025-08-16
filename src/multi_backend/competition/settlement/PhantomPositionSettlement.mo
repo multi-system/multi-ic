@@ -33,8 +33,7 @@ module {
       // Create and return a Position for reward tracking
       {
         quantity = amount;
-        govStake = systemStake.govSystemStake;
-        multiStake = systemStake.multiSystemStake;
+        stakes = systemStake.systemStakes;
         submissionId = null; // System positions don't have a submission ID
         isSystem = true;
         distributionPayouts = [];

@@ -10,6 +10,7 @@ import StakeVault "../../../../multi_backend/competition/staking/StakeVault";
 import AmountOperations "../../../../multi_backend/financial/AmountOperations";
 import SubmissionTypes "../../../../multi_backend/types/SubmissionTypes";
 import AccountTypes "../../../../multi_backend/types/AccountTypes";
+import StakeTokenTypes "../../../../multi_backend/types/StakeTokenTypes";
 
 suite(
   "Stake Vault",
@@ -26,6 +27,22 @@ suite(
     // Helper to create amount objects
     let amount = func(token : Types.Token, value : Nat) : Types.Amount {
       { token; value };
+    };
+
+    // Create stake token configurations
+    let createStakeTokenConfigs = func() : [StakeTokenTypes.StakeTokenConfig] {
+      [
+        {
+          token = govToken;
+          baseRate = { value = 50_000_000 }; // 5%
+          systemMultiplier = { value = 200_000_000 }; // 20%
+        },
+        {
+          token = multiToken;
+          baseRate = { value = 10_000_000 }; // 1%
+          systemMultiplier = { value = 500_000_000 }; // 50%
+        },
+      ];
     };
 
     // Helper to setup fresh accounts and staking for each test
@@ -47,8 +64,7 @@ suite(
 
       let staking = StakeVault.StakeVault(
         userAccounts,
-        multiToken,
-        govToken,
+        createStakeTokenConfigs(),
         initStakeState,
       );
 
@@ -85,12 +101,17 @@ suite(
         assert (userAccounts.getBalance(user1, multiToken).value == 2000);
         assert (userAccounts.getBalance(user1, proposedToken).value == 3000);
 
+        // Create stakes array
+        let stakes : [(Types.Token, Types.Amount)] = [
+          (govToken, amount(govToken, 200)),
+          (multiToken, amount(multiToken, 300)),
+        ];
+
         // Perform executeStakeTransfers
         let result = staking.executeStakeTransfers(
           user1,
           amount(proposedToken, 1000),
-          amount(govToken, 200),
-          amount(multiToken, 300),
+          stakes,
         );
 
         // Staking should succeed
@@ -120,12 +141,17 @@ suite(
         let (userAccounts, staking) = setupTest();
         let stakeAccounts = staking.getStakeAccounts();
 
+        // Create stakes array with excessive governance tokens
+        let stakes : [(Types.Token, Types.Amount)] = [
+          (govToken, amount(govToken, 2000)), // User only has 1000
+          (multiToken, amount(multiToken, 100)),
+        ];
+
         // Try to stake more governance tokens than available
         let result = staking.executeStakeTransfers(
           user1,
           amount(proposedToken, 100),
-          amount(govToken, 2000), // User only has 1000
-          amount(multiToken, 100),
+          stakes,
         );
 
         // Submission should fail
@@ -164,12 +190,17 @@ suite(
         let (userAccounts, staking) = setupTest();
         let stakeAccounts = staking.getStakeAccounts();
 
+        // Create stakes array with excessive multi tokens
+        let stakes : [(Types.Token, Types.Amount)] = [
+          (govToken, amount(govToken, 100)),
+          (multiToken, amount(multiToken, 3000)), // User only has 2000
+        ];
+
         // Try to stake more multi tokens than available
         let result = staking.executeStakeTransfers(
           user1,
           amount(proposedToken, 100),
-          amount(govToken, 100),
-          amount(multiToken, 3000) // User only has 2000
+          stakes,
         );
 
         // Submission should fail
@@ -208,12 +239,17 @@ suite(
         let (userAccounts, staking) = setupTest();
         let stakeAccounts = staking.getStakeAccounts();
 
+        // Create stakes array
+        let stakes : [(Types.Token, Types.Amount)] = [
+          (govToken, amount(govToken, 100)),
+          (multiToken, amount(multiToken, 100)),
+        ];
+
         // Try to stake more proposed tokens than available
         let result = staking.executeStakeTransfers(
           user1,
           amount(proposedToken, 4000), // User only has 3000
-          amount(govToken, 100),
-          amount(multiToken, 100),
+          stakes,
         );
 
         // Submission should fail
@@ -269,36 +305,54 @@ suite(
     );
 
     test(
-      "getTotalGovernanceStake returns sum of all governance stakes",
+      "getTotalStakeForToken returns sum of all stakes for specific token",
       func() {
         let (userAccounts, staking) = setupTest();
 
         // Initially zero
-        assert (staking.getTotalGovernanceStake() == 0);
+        assert (staking.getTotalStakeForToken(govToken) == 0);
 
         // Stake for user1 and user2
         staking.stake(user1, amount(govToken, 200));
         staking.stake(user2, amount(govToken, 100));
 
         // Check total governance stake: 200 + 100 = 300
-        assert (staking.getTotalGovernanceStake() == 300);
+        assert (staking.getTotalStakeForToken(govToken) == 300);
       },
     );
 
     test(
-      "getTotalMultiStake returns sum of all multi stakes",
+      "getAllTotalStakes returns sum of all configured stake tokens",
       func() {
         let (userAccounts, staking) = setupTest();
 
-        // Initially zero
-        assert (staking.getTotalMultiStake() == 0);
+        // Initially all zero
+        let initialStakes = staking.getAllTotalStakes();
+        assert (initialStakes.size() == 2); // Two configured stake tokens
+        for ((token, total) in initialStakes.vals()) {
+          assert (total == 0);
+        };
 
         // Stake for user1 and user2
+        staking.stake(user1, amount(govToken, 200));
         staking.stake(user1, amount(multiToken, 300));
+        staking.stake(user2, amount(govToken, 100));
         staking.stake(user2, amount(multiToken, 200));
 
-        // Check total multi stake: 300 + 200 = 500
-        assert (staking.getTotalMultiStake() == 500);
+        // Check total stakes
+        let totalStakes = staking.getAllTotalStakes();
+        assert (totalStakes.size() == 2);
+
+        // Find and verify each token's total
+        for ((token, total) in totalStakes.vals()) {
+          if (Principal.equal(token, govToken)) {
+            assert (total == 300); // 200 + 100
+          } else if (Principal.equal(token, multiToken)) {
+            assert (total == 500); // 300 + 200
+          } else {
+            assert (false); // Unexpected token
+          };
+        };
       },
     );
 
@@ -340,8 +394,7 @@ suite(
         // Create a new stake vault with the saved map
         let newStaking = StakeVault.StakeVault(
           userAccounts,
-          multiToken,
-          govToken,
+          createStakeTokenConfigs(),
           stakeAccountsMap,
         );
 

@@ -16,13 +16,9 @@ import SubmissionOperations "./SubmissionOperations";
 import FinalizeStakingRound "./FinalizeStakingRound";
 
 module {
-  /**
-   * Helper type for submission quantities
-   */
   public type SubmissionQuantities = {
     tokenQuantity : Types.Amount;
-    govStake : Types.Amount;
-    multiStake : Types.Amount;
+    stakes : [(Types.Token, Types.Amount)];
   };
 
   public class StakingManager(
@@ -30,12 +26,11 @@ module {
     getCirculatingSupply : () -> Nat,
     getBackingTokens : () -> [BackingTypes.BackingPair],
   ) {
-    // Get the StakeVault from the competition entry
+
     private func getStakeVault() : StakeVault.StakeVault {
       competitionEntry.getStakeVault();
     };
 
-    // Create a submission using SubmissionOperations
     private func createSubmission(
       account : Types.Account,
       quantities : SubmissionQuantities,
@@ -46,25 +41,40 @@ module {
         account,
         token,
         quantities.tokenQuantity.value,
-        quantities.govStake,
-        quantities.multiStake,
+        quantities.stakes,
       );
     };
 
-    // Handle stake requests - calculate and process immediately
+    /**
+     * Accept a stake request with fully agnostic stake token support.
+     * User stakes with the first configured stake token.
+     *
+     * @param inputStake The stake amount in the first configured stake token
+     * @param account The account making the submission
+     * @param proposedToken The token to add to the reserve
+     * @returns Submission ID and calculated token quantity
+     */
     public func acceptStakeRequest(
-      govStake : Types.Amount,
+      inputStake : Types.Amount,
       account : Types.Account,
       proposedToken : Types.Token,
     ) : Result.Result<{ submissionId : SubmissionTypes.SubmissionId; tokenQuantity : Types.Amount }, Error.CompetitionError> {
-      // Calculate the submission quantities using StakeOperations
-      switch (StakeOperations.calculateSubmission(competitionEntry, govStake, proposedToken)) {
+
+      // Calculate submission quantities for all stake tokens
+      switch (StakeOperations.calculateSubmission(competitionEntry, inputStake, proposedToken)) {
         case (#err(e)) return #err(e);
         case (#ok(quantities)) {
-          // Create a submission object for direct processing
-          let submission = createSubmission(account, quantities, proposedToken);
+          // Create submission with all calculated stakes
+          let submission = createSubmission(
+            account,
+            {
+              tokenQuantity = quantities.tokenQuantity;
+              stakes = quantities.stakes;
+            },
+            proposedToken,
+          );
 
-          // Process directly using SubmissionOperations
+          // Process the submission
           switch (SubmissionOperations.processSubmission(competitionEntry, getStakeVault(), submission)) {
             case (#err(e)) return #err(e);
             case (#ok(_)) {
@@ -78,22 +88,30 @@ module {
       };
     };
 
-    // Finalize a single submission (for testing)
+    /**
+     * Finalize a single submission with updated rates for all stake tokens.
+     *
+     * @param submissionId The submission to finalize
+     * @param updatedRates Array of updated rates for all stake tokens
+     * @returns The finalized submission
+     */
     public func finalizeSubmission(
       submissionId : SubmissionTypes.SubmissionId,
-      updatedGovRate : Types.Ratio,
-      updatedMultiRate : Types.Ratio,
+      updatedRates : [(Types.Token, Types.Ratio)],
     ) : Result.Result<SubmissionTypes.Submission, Error.CompetitionError> {
       SubmissionOperations.adjustSubmissionPostRound(
         competitionEntry,
         getStakeVault(),
         submissionId,
-        updatedGovRate,
-        updatedMultiRate,
+        updatedRates,
       );
     };
 
-    // Finalize the current staking round
+    /**
+     * Finalize the current staking round.
+     *
+     * @returns Finalization result with stats for all stake tokens
+     */
     public func finalizeRound() : Result.Result<FinalizeStakingRound.FinalizationResult, Error.CompetitionError> {
       FinalizeStakingRound.finalizeRound(
         competitionEntry,

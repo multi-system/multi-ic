@@ -27,9 +27,8 @@ module {
     id : SubmissionId;
     participant : Types.Account;
 
-    // Stake information
-    govStake : Types.Amount; // Governance tokens staked
-    multiStake : Types.Amount; // Multi tokens staked
+    // Stake information - stakes for all configured stake tokens
+    stakes : [(Types.Token, Types.Amount)]; // Staked amounts per token type
 
     // Token information
     token : Types.Token; // Token the user wants to acquire

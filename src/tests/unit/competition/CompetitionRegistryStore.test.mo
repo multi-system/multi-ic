@@ -10,6 +10,7 @@ import Error "../../../multi_backend/error/Error";
 import CompetitionRegistryTypes "../../../multi_backend/types/CompetitionRegistryTypes";
 import CompetitionEntryTypes "../../../multi_backend/types/CompetitionEntryTypes";
 import RewardTypes "../../../multi_backend/types/RewardTypes";
+import StakeTokenTypes "../../../multi_backend/types/StakeTokenTypes";
 import CompetitionRegistryStore "../../../multi_backend/competition/CompetitionRegistryStore";
 import CompetitionTestUtils "./CompetitionTestUtils";
 
@@ -34,9 +35,9 @@ suite(
 
         // Get global config
         let config = registry.getGlobalConfig();
-        expect.principal(config.govToken).equal(mockGovToken);
         expect.principal(config.multiToken).equal(mockSystemToken);
         expect.nat(config.approvedTokens.size()).equal(3); // From test utils
+        expect.nat(config.stakeTokenConfigs.size()).equal(2); // Gov and Multi tokens
       },
     );
 
@@ -69,9 +70,7 @@ suite(
             // Check competition was created and is active
             expect.bool(registry.hasActiveCompetition()).isTrue();
 
-            // FIXED: getCurrentCompetitionId now returns the NEXT competition ID after increment
-            // The created competition has ID = competitionId
-            // After creation, currentCompetitionId is incremented to competitionId + 1
+            // getCurrentCompetitionId returns the NEXT competition ID after increment
             expect.nat(registry.getCurrentCompetitionId()).equal(competitionId + 1);
 
             // Get competition entry
@@ -279,8 +278,10 @@ suite(
                 let testToken = CompetitionTestUtils.getTestToken1();
                 let position : RewardTypes.Position = {
                   quantity = { token = testToken; value = 1000 };
-                  govStake = { token = mockGovToken; value = 200 };
-                  multiStake = { token = mockSystemToken; value = 100 };
+                  stakes = [
+                    (mockGovToken, { token = mockGovToken; value = 200 }),
+                    (mockSystemToken, { token = mockSystemToken; value = 100 }),
+                  ];
                   submissionId = ?0;
                   isSystem = false;
                   distributionPayouts = [];
@@ -309,14 +310,44 @@ suite(
                     // 9. Verify the position data
                     let pos = refreshedPositions[0];
                     expect.nat(pos.quantity.value).equal(1000);
-                    expect.nat(pos.govStake.value).equal(200);
-                    expect.nat(pos.multiStake.value).equal(100);
+
+                    // Verify stakes using the array structure
+                    expect.nat(pos.stakes.size()).equal(2);
+                    let (token0, amount0) = pos.stakes[0];
+                    let (token1, amount1) = pos.stakes[1];
+                    expect.principal(token0).equal(mockGovToken);
+                    expect.nat(amount0.value).equal(200);
+                    expect.principal(token1).equal(mockSystemToken);
+                    expect.nat(amount1.value).equal(100);
                   };
                 };
               };
             };
           };
         };
+      },
+    );
+
+    test(
+      "verifies stake token configurations",
+      func() {
+        let registry = CompetitionTestUtils.createCompetitionRegistryStore();
+        let config = registry.getGlobalConfig();
+
+        // Check that we have stake token configurations
+        expect.nat(config.stakeTokenConfigs.size()).equal(2);
+
+        // Verify the first stake token config (Gov token)
+        let govConfig = config.stakeTokenConfigs[0];
+        expect.principal(govConfig.token).equal(mockGovToken);
+        expect.nat(govConfig.baseRate.value).equal(CompetitionTestUtils.getFIVE_PERCENT());
+        expect.nat(govConfig.systemMultiplier.value).equal(CompetitionTestUtils.getTWENTY_PERCENT());
+
+        // Verify the second stake token config (Multi token)
+        let multiConfig = config.stakeTokenConfigs[1];
+        expect.principal(multiConfig.token).equal(mockSystemToken);
+        expect.nat(multiConfig.baseRate.value).equal(CompetitionTestUtils.getONE_PERCENT());
+        expect.nat(multiConfig.systemMultiplier.value).equal(CompetitionTestUtils.getFIFTY_PERCENT());
       },
     );
   },

@@ -15,6 +15,7 @@ import SystemStakeTypes "../../../multi_backend/types/SystemStakeTypes";
 import CompetitionManager "../../../multi_backend/competition/CompetitionManager";
 import FinalizeStakingRound "../../../multi_backend/competition/staking/FinalizeStakingRound";
 import CompetitionTestUtils "./CompetitionTestUtils";
+import TokenAccessHelper "../../../multi_backend/helper/TokenAccessHelper";
 
 // Advanced test suite for the CompetitionManager with settlement integration
 suite(
@@ -50,8 +51,10 @@ suite(
         // Add submission with non-zero stake values
         let updatedSubmission = {
           submission with
-          govStake = { token = mockGovToken; value = 5000 };
-          multiStake = { token = mockSystemToken; value = 1000 };
+          stakes = [
+            (mockGovToken, { token = mockGovToken; value = 5000 }),
+            (mockSystemToken, { token = mockSystemToken; value = 1000 }),
+          ];
         };
 
         entryStore.addSubmission(updatedSubmission);
@@ -72,11 +75,12 @@ suite(
           mockSettlement,
         );
 
-        // MANUALLY create a FinalizeStakingRound.FinalizationResult
-        // This simulates the result of endStakingRound without calling it directly
+        // Manually create a system stake to simulate the result of endStakingRound
         let systemStake : SystemStakeTypes.SystemStake = {
-          govSystemStake = { token = mockGovToken; value = 10000 };
-          multiSystemStake = { token = mockSystemToken; value = 2000 };
+          systemStakes = [
+            (mockGovToken, { token = mockGovToken; value = 10000 }),
+            (mockSystemToken, { token = mockSystemToken; value = 2000 }),
+          ];
           phantomPositions = [
             (mockTokenA, { token = mockTokenA; value = 5000 }),
             (mockTokenB, { token = mockTokenB; value = 3000 }),
@@ -99,12 +103,14 @@ suite(
         // Move to settlement state
         entryStore.updateStatus(#Settlement);
 
-        // Create StakingRoundOutput directly
+        // Create StakingRoundOutput for settlement
         let stakingOutput : CompetitionManager.StakingRoundOutput = {
           finalizedSubmissions = [finalizedSubmission];
           systemStake = systemStake;
-          govRate = entryStore.getGovRate();
-          multiRate = entryStore.getMultiRate();
+          adjustedRates = [
+            (mockGovToken, entryStore.getEffectiveRate(mockGovToken)),
+            (mockSystemToken, entryStore.getEffectiveRate(mockSystemToken)),
+          ];
           volumeLimit = entryStore.getVolumeLimit();
         };
 
@@ -118,10 +124,32 @@ suite(
             expect.bool(false).isTrue(); // Should not happen
           };
           case (?receivedStake) {
-            expect.principal(receivedStake.govSystemStake.token).equal(mockGovToken);
-            expect.principal(receivedStake.multiSystemStake.token).equal(mockSystemToken);
-            expect.nat(receivedStake.govSystemStake.value).equal(systemStake.govSystemStake.value);
-            expect.nat(receivedStake.multiSystemStake.value).equal(systemStake.multiSystemStake.value);
+            // Check system stakes array
+            expect.nat(receivedStake.systemStakes.size()).equal(2);
+
+            // Find gov stake in the array
+            let govStake = TokenAccessHelper.findInTokenArray(receivedStake.systemStakes, mockGovToken);
+            switch (govStake) {
+              case (?stake) {
+                expect.principal(stake.token).equal(mockGovToken);
+                expect.nat(stake.value).equal(10000);
+              };
+              case null {
+                expect.bool(false).isTrue(); // Should have gov stake
+              };
+            };
+
+            // Find multi stake in the array
+            let multiStake = TokenAccessHelper.findInTokenArray(receivedStake.systemStakes, mockSystemToken);
+            switch (multiStake) {
+              case (?stake) {
+                expect.principal(stake.token).equal(mockSystemToken);
+                expect.nat(stake.value).equal(2000);
+              };
+              case null {
+                expect.bool(false).isTrue(); // Should have multi stake
+              };
+            };
 
             // Verify phantom positions were passed correctly
             expect.nat(receivedStake.phantomPositions.size()).equal(3);
@@ -139,9 +167,29 @@ suite(
             expect.bool(false).isTrue(); // Should not be null
           };
           case (?storedStake) {
-            expect.nat(storedStake.multiSystemStake.value).equal(systemStake.multiSystemStake.value);
-            expect.nat(storedStake.govSystemStake.value).equal(systemStake.govSystemStake.value);
-            expect.nat(storedStake.phantomPositions.size()).equal(systemStake.phantomPositions.size());
+            // Check stored system stakes
+            let storedGovStake = TokenAccessHelper.findInTokenArray(storedStake.systemStakes, mockGovToken);
+            let storedMultiStake = TokenAccessHelper.findInTokenArray(storedStake.systemStakes, mockSystemToken);
+
+            switch (storedMultiStake) {
+              case (?stake) {
+                expect.nat(stake.value).equal(2000);
+              };
+              case null {
+                expect.bool(false).isTrue();
+              };
+            };
+
+            switch (storedGovStake) {
+              case (?stake) {
+                expect.nat(stake.value).equal(10000);
+              };
+              case null {
+                expect.bool(false).isTrue();
+              };
+            };
+
+            expect.nat(storedStake.phantomPositions.size()).equal(3);
           };
         };
       },

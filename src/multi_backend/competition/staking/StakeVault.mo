@@ -2,6 +2,7 @@ import Principal "mo:base/Principal";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Debug "mo:base/Debug";
 import Result "mo:base/Result";
+import Array "mo:base/Array";
 
 import Types "../../types/Types";
 import VirtualAccounts "../../custodial/VirtualAccounts";
@@ -9,24 +10,21 @@ import VirtualAccountBridge "../../custodial/VirtualAccountBridge";
 import StakeValidation "./StakeValidation";
 import Error "../../error/Error";
 import AccountTypes "../../types/AccountTypes";
+import StakeTokenTypes "../../types/StakeTokenTypes";
 
 module {
   public class StakeVault(
     userAccounts : VirtualAccounts.VirtualAccounts,
-    multiToken : Types.Token,
-    governanceToken : Types.Token,
+    stakeTokenConfigs : [StakeTokenTypes.StakeTokenConfig],
     existingStakeAccounts : AccountTypes.AccountMap,
   ) {
     private let stakeAccounts = VirtualAccounts.VirtualAccounts(existingStakeAccounts);
-
-    // Define the pool account for reward distribution
     private let poolAccount : Types.Account = Principal.fromText("be2us-64aaa-aaaaa-qaabq-cai");
 
     public func getUserAccounts() : VirtualAccounts.VirtualAccounts {
       userAccounts;
     };
 
-    // Get the stake accounts map for persistence
     public func getStakeAccountsMap() : AccountTypes.AccountMap {
       existingStakeAccounts;
     };
@@ -45,7 +43,6 @@ module {
     };
 
     // Unstaking function - moves tokens from stake account back to user account
-    // Note: This is only used as a consequence of reward distribution
     public func unstake(
       account : Types.Account,
       amount : Types.Amount,
@@ -58,13 +55,6 @@ module {
       );
     };
 
-    /**
-     * Transfer tokens to the pool account within stake accounts.
-     * Used to collect all stakes before distribution.
-     *
-     * @param fromAccount The account to transfer from
-     * @param amount The amount to transfer to pool
-     */
     public func transferToPool(
       fromAccount : Types.Account,
       amount : Types.Amount,
@@ -76,35 +66,18 @@ module {
       });
     };
 
-    /**
-     * Transfer from pool account back to a user account.
-     * Used during reward distribution.
-     *
-     * @param toAccount The account to transfer to
-     * @param amount The amount to transfer from pool
-     */
     public func transferFromPoolToUser(
       toAccount : Types.Account,
       amount : Types.Amount,
     ) {
-      // Step 1: Transfer from pool to user's account within stakeAccounts
       stakeAccounts.transfer({
         from = poolAccount;
         to = toAccount;
         amount = amount;
       });
-
-      // Step 2: Use unstake to move from stakeAccounts to userAccounts
       unstake(toAccount, amount);
     };
 
-    /**
-     * Returns excess tokens from the stake account back to the user account.
-     * This is used when the final quantity is adjusted due to stake rate changes.
-     *
-     * @param account The account to return tokens to
-     * @param amount The amount of tokens to return
-     */
     public func returnExcessTokens(
       account : Types.Account,
       amount : Types.Amount,
@@ -113,50 +86,58 @@ module {
     };
 
     /**
-     * Validates balances and performs the staking operations required for a submission.
-     * This validates that the user has sufficient balances for all tokens and then
-     * transfers the tokens from the user account to the stake account.
+     * Validates balances and performs the staking operations for all stake tokens.
      *
      * @param account The account performing the staking
-     * @param tokenAmount The token amount to stake
-     * @param govStake The governance token stake
-     * @param multiStake The multi token stake
+     * @param tokenAmount The proposed token amount to stake
+     * @param stakes Array of all stake token amounts
      * @returns Result with success or error
      */
     public func executeStakeTransfers(
       account : Types.Account,
       tokenAmount : Types.Amount,
-      govStake : Types.Amount,
-      multiStake : Types.Amount,
+      stakes : [(Types.Token, Types.Amount)],
     ) : Result.Result<(), Error.CompetitionError> {
-      // Validate balances
-      switch (
-        StakeValidation.validateSubmissionBalances(
-          account,
-          tokenAmount,
-          govStake,
-          multiStake,
-          userAccounts,
-        )
-      ) {
+      // Validate balance for proposed token
+      switch (StakeValidation.validateStakeBalance(account, tokenAmount, userAccounts)) {
         case (#err(error)) return #err(error);
         case (#ok()) {};
       };
 
-      // Perform the staking operations
-      stake(account, govStake);
-      stake(account, multiStake);
+      // Validate balances for all stake tokens
+      for ((token, amount) in stakes.vals()) {
+        switch (StakeValidation.validateStakeBalance(account, amount, userAccounts)) {
+          case (#err(error)) return #err(error);
+          case (#ok()) {};
+        };
+      };
+
+      // Perform staking for proposed token
       stake(account, tokenAmount);
+
+      // Perform staking for all stake tokens
+      for ((token, amount) in stakes.vals()) {
+        stake(account, amount);
+      };
 
       #ok(());
     };
 
-    public func getTotalGovernanceStake() : Nat {
-      stakeAccounts.getTotalBalance(governanceToken).value;
+    /**
+     * Get total stake for a specific token
+     */
+    public func getTotalStakeForToken(token : Types.Token) : Nat {
+      stakeAccounts.getTotalBalance(token).value;
     };
 
-    public func getTotalMultiStake() : Nat {
-      stakeAccounts.getTotalBalance(multiToken).value;
+    /**
+     * Get all total stakes for configured stake tokens
+     */
+    public func getAllTotalStakes() : [(Types.Token, Nat)] {
+      Array.map<StakeTokenTypes.StakeTokenConfig, (Types.Token, Nat)>(
+        stakeTokenConfigs,
+        func(config) = (config.token, getTotalStakeForToken(config.token)),
+      );
     };
 
     public func getStakeAccounts() : VirtualAccounts.VirtualAccounts {
@@ -167,9 +148,6 @@ module {
       poolAccount;
     };
 
-    /**
-     * Get the current balance of the pool for a specific token
-     */
     public func getPoolBalance(token : Types.Token) : Types.Amount {
       stakeAccounts.getBalance(poolAccount, token);
     };

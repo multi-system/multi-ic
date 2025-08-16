@@ -2,7 +2,7 @@ import Principal "mo:base/Principal";
 import Nat "mo:base/Nat";
 import Time "mo:base/Time";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
-import Hash "mo:base/Hash"; // Add Hash module import
+import Hash "mo:base/Hash";
 
 import Types "../../../multi_backend/types/Types";
 import Error "../../../multi_backend/error/Error";
@@ -16,6 +16,7 @@ import CompetitionEntryStore "../../../multi_backend/competition/CompetitionEntr
 import CompetitionRegistryStore "../../../multi_backend/competition/CompetitionRegistryStore";
 import StakeVault "../../../multi_backend/competition/staking/StakeVault";
 import AccountTypes "../../../multi_backend/types/AccountTypes";
+import StakeTokenTypes "../../../multi_backend/types/StakeTokenTypes";
 
 module {
   // Define constants for common percentage values using the same SCALING_FACTOR as in RatioOperations
@@ -63,6 +64,22 @@ module {
     if (a > b) { a - b } else { b - a };
   };
 
+  // Create default stake token configurations for testing
+  public func createDefaultStakeTokenConfigs() : [StakeTokenTypes.StakeTokenConfig] {
+    [
+      {
+        token = getGovToken();
+        baseRate = { value = getFIVE_PERCENT() };
+        systemMultiplier = { value = getTWENTY_PERCENT() };
+      },
+      {
+        token = getMultiToken();
+        baseRate = { value = getONE_PERCENT() };
+        systemMultiplier = { value = getFIFTY_PERCENT() };
+      },
+    ];
+  };
+
   // Create a test submission for use in tests
   public func createTestSubmission(
     id : SubmissionTypes.SubmissionId,
@@ -73,9 +90,11 @@ module {
     {
       id = id;
       participant = account;
-      // Stake information
-      govStake = { token = getGovToken(); value = 100 };
-      multiStake = { token = getMultiToken(); value = 200 };
+      // Stake information - now using array structure
+      stakes = [
+        (getGovToken(), { token = getGovToken(); value = 100 }),
+        (getMultiToken(), { token = getMultiToken(); value = 200 }),
+      ];
       // Token information
       token = token;
       // Initial submission
@@ -150,7 +169,7 @@ module {
       prices = createTestPrices();
     };
 
-    // Store events in maps - Fix: Use Hash.hash instead of Nat.hash
+    // Store events in maps
     StableHashMap.put(heartbeats, Nat.equal, Hash.hash, 1, heartbeatEvent);
     StableHashMap.put(priceEvents, Nat.equal, Hash.hash, 1, priceEvent);
 
@@ -176,14 +195,10 @@ module {
     let state : CompetitionRegistryTypes.CompetitionRegistryState = {
       var hasInitialized = true;
       var globalConfig = {
-        govToken = getGovToken();
+        stakeTokenConfigs = createDefaultStakeTokenConfigs();
         multiToken = getMultiToken();
         approvedTokens = [getTestToken1(), getTestToken2(), getTestToken3()];
         theta = { value = getTWENTY_PERCENT() };
-        govRate = { value = getFIVE_PERCENT() };
-        multiRate = { value = getONE_PERCENT() };
-        systemStakeGov = { value = getTWENTY_PERCENT() };
-        systemStakeMulti = { value = getFIFTY_PERCENT() };
         competitionCycleDuration = defaultTime;
         preAnnouncementDuration = defaultTime / 10; // 10% of cycle is pre-announcement
         rewardDistributionDuration = defaultTime;
@@ -209,14 +224,10 @@ module {
 
     // Configuration for the competition
     let config : CompetitionEntryTypes.CompetitionConfig = {
-      govToken = getGovToken();
+      stakeTokenConfigs = createDefaultStakeTokenConfigs();
       multiToken = getMultiToken();
       approvedTokens = [getTestToken1(), getTestToken2(), getTestToken3()];
-      govRate = { value = getFIVE_PERCENT() };
-      multiRate = { value = getONE_PERCENT() };
       theta = { value = getTWENTY_PERCENT() };
-      systemStakeGov = { value = getTWENTY_PERCENT() };
-      systemStakeMulti = { value = getFIFTY_PERCENT() };
       competitionCycleDuration = defaultTime;
       preAnnouncementDuration = defaultTime / 10;
       rewardDistributionDuration = defaultTime;
@@ -225,6 +236,12 @@ module {
 
     // Initialize empty stake accounts
     let stakeAccounts = StableHashMap.init<Types.Account, AccountTypes.BalanceMap>();
+
+    // Initialize total stakes array based on configured stake tokens
+    let totalStakes = [
+      (getGovToken(), 0),
+      (getMultiToken(), 0),
+    ];
 
     // Create the competition
     {
@@ -236,10 +253,8 @@ module {
       competitionPrices = 1; // Reference to test price event with ID 1
       submissions = [];
       submissionCounter = 0;
-      totalGovStake = 0;
-      totalMultiStake = 0;
-      adjustedGovRate = null;
-      adjustedMultiRate = null;
+      totalStakes = totalStakes;
+      adjustedRates = null;
       volumeLimit = 0;
       systemStake = null;
       stakeAccounts = stakeAccounts;
@@ -252,7 +267,6 @@ module {
 
   // Helper function to get a price event by ID from a test registry
   public func getPriceEventById(registry : CompetitionRegistryTypes.EventRegistry, id : Nat) : ?EventTypes.PriceEvent {
-    // Fix: Use Hash.hash instead of Nat.hash
     StableHashMap.get(registry.priceEvents, Nat.equal, Hash.hash, id);
   };
 
@@ -264,8 +278,7 @@ module {
 
     let stakeVault = StakeVault.StakeVault(
       userAccounts,
-      competition.config.multiToken,
-      competition.config.govToken,
+      competition.config.stakeTokenConfigs, // Pass the whole stake token configs array
       competition.stakeAccounts,
     );
 

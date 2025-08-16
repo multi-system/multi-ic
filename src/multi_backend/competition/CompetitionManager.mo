@@ -25,8 +25,7 @@ module {
   public type StakingRoundOutput = {
     finalizedSubmissions : [SubmissionTypes.Submission];
     systemStake : SystemStakeTypes.SystemStake;
-    govRate : Types.Ratio;
-    multiRate : Types.Ratio;
+    adjustedRates : [(Types.Token, Types.Ratio)];
     volumeLimit : Nat;
   };
 
@@ -111,8 +110,7 @@ module {
           let stakingOutput : StakingRoundOutput = {
             finalizedSubmissions = entryStore.getSubmissionsByStatus(#Finalized);
             systemStake = result.systemStake;
-            govRate = result.finalGovRate;
-            multiRate = result.finalMultiRate;
+            adjustedRates = result.finalRates;
             volumeLimit = result.volumeLimit;
           };
 

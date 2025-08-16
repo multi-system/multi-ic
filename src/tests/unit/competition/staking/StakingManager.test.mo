@@ -272,9 +272,14 @@ suite(
             assert (false); // Should not succeed
           };
           case (#err(#InsufficientStake({ token; required; available }))) {
-            assert (Principal.equal(token, CompetitionTestUtils.getGovToken()));
-            assert (required == 1_000_000);
-            assert (available == 100_000); // From test setup
+            // The validation checks proposed token FIRST, then stake tokens
+            // With 1M gov stake at 5% rate and 1% multi rate:
+            // multiStake = 1M * (1%/5%) = 200,000
+            // tokenQuantity = 200,000 / (1% * 1.0) = 20,000,000
+            // User has only 10,000,000 of testToken1, so this fails first
+            assert (Principal.equal(token, CompetitionTestUtils.getTestToken1()));
+            assert (required == 20_000_000);
+            assert (available == 10_000_000);
           };
           case (#err(error)) {
             Debug.print("Unexpected error type: " # debug_show (error));
@@ -312,18 +317,15 @@ suite(
           case (#ok(output)) {
             let submissionId = output.submissionId;
 
-            // Now finalize the submission with doubled rates
-            let updatedGovRate = {
-              value = CompetitionTestUtils.getTEN_PERCENT();
-            }; // 10% (double initial 5%)
-            let updatedMultiRate = {
-              value = CompetitionTestUtils.getTWO_PERCENT();
-            }; // 2% (double initial 1%)
+            // Finalize the submission with doubled rates
+            let updatedRates : [(Types.Token, Types.Ratio)] = [
+              (CompetitionTestUtils.getGovToken(), { value = CompetitionTestUtils.getTEN_PERCENT() }), // 10% (double initial 5%)
+              (CompetitionTestUtils.getMultiToken(), { value = CompetitionTestUtils.getTWO_PERCENT() }), // 2% (double initial 1%)
+            ];
 
             let finalizeResult = stakingManager.finalizeSubmission(
               submissionId,
-              updatedGovRate,
-              updatedMultiRate,
+              updatedRates,
             );
 
             switch (finalizeResult) {

@@ -118,16 +118,12 @@ suite(
         func(index : Nat) : SubmissionTypes.Submission {
           let token = withTokens[index];
           let quantity = withQuantities[index];
-          // Create stakes for this submission
-          let govStake : Types.Amount = {
-            token = govToken;
-            value = 1000 * (index + 1);
-          };
 
-          let multiStake : Types.Amount = {
-            token = multiToken;
-            value = 200 * (index + 1);
-          };
+          // Create stakes array for this submission
+          let stakes : [(Types.Token, Types.Amount)] = [
+            (govToken, { token = govToken; value = 1000 * (index + 1) }),
+            (multiToken, { token = multiToken; value = 200 * (index + 1) }),
+          ];
 
           // Create adjusted quantity
           let adjustedQuantity : Types.Amount = {
@@ -138,8 +134,7 @@ suite(
           {
             id = index;
             participant = testUser;
-            govStake = govStake;
-            multiStake = multiStake;
+            stakes = stakes;
             token = token;
             proposedQuantity = adjustedQuantity;
             timestamp = 0;
@@ -426,7 +421,7 @@ suite(
       func() {
         let (acquisitionMinter, userAccounts, systemAccount, backingStore, priceMap) = setupTest();
 
-        // Create a new price with a non-standard ratio (1.5)
+        // Create a price with a non-standard ratio (1.5)
         let token1 = CompetitionTestUtils.getTestToken1();
         let nonStandardPrice : Types.Price = {
           baseToken = token1;

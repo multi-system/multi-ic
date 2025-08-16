@@ -1,13 +1,13 @@
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Debug "mo:base/Debug";
+import Array "mo:base/Array";
 
 import Types "../../types/Types";
 import Error "../../error/Error";
 import BackingValidation "../../backing/BackingValidation";
 import VirtualAccounts "../../custodial/VirtualAccounts";
 
-// StakeValidation provides validation functions for stake operations
 module {
   // Validates that a user has sufficient balance for a stake
   public func validateStakeBalance(
@@ -60,24 +60,20 @@ module {
     };
   };
 
-  // Validates all balances required for a submission
+  // Validates all balances required for a submission with flexible stake tokens
   public func validateSubmissionBalances(
     account : Types.Account,
     proposedQuantity : Types.Amount,
-    govStake : Types.Amount,
-    multiStake : Types.Amount,
+    stakes : [(Types.Token, Types.Amount)],
     virtualAccounts : VirtualAccounts.VirtualAccounts,
   ) : Result.Result<(), Error.CompetitionError> {
-    // Check governance stake balance
-    switch (validateStakeBalance(account, govStake, virtualAccounts)) {
-      case (#err(e)) return #err(e);
-      case (#ok()) {};
-    };
 
-    // Check multi stake balance
-    switch (validateStakeBalance(account, multiStake, virtualAccounts)) {
-      case (#err(e)) return #err(e);
-      case (#ok()) {};
+    // Check balance for each stake token
+    for ((token, amount) in stakes.vals()) {
+      switch (validateStakeBalance(account, amount, virtualAccounts)) {
+        case (#err(e)) return #err(e);
+        case (#ok()) {};
+      };
     };
 
     // Check proposed token balance

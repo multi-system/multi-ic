@@ -12,6 +12,7 @@ import CompetitionRegistryTypes "../../../multi_backend/types/CompetitionRegistr
 import CompetitionEntryTypes "../../../multi_backend/types/CompetitionEntryTypes";
 import SubmissionTypes "../../../multi_backend/types/SubmissionTypes";
 import BackingTypes "../../../multi_backend/types/BackingTypes";
+import StakeTokenTypes "../../../multi_backend/types/StakeTokenTypes";
 import CompetitionUserOperations "../../../multi_backend/competition/CompetitionUserOperations";
 import CompetitionRegistryStore "../../../multi_backend/competition/CompetitionRegistryStore";
 import VirtualAccounts "../../../multi_backend/custodial/VirtualAccounts";
@@ -52,18 +53,10 @@ suite(
       // Create registry state
       let registryState : CompetitionRegistryTypes.CompetitionRegistryState = {
         var globalConfig = {
-          govToken = mockGovToken;
           multiToken = mockSystemToken;
           approvedTokens = [mockTokenA];
           theta = { value = CompetitionTestUtils.getFIVE_PERCENT() };
-          govRate = { value = CompetitionTestUtils.getTEN_PERCENT() };
-          multiRate = { value = CompetitionTestUtils.getTWENTY_PERCENT() };
-          systemStakeGov = {
-            value = CompetitionTestUtils.getONE_HUNDRED_PERCENT();
-          };
-          systemStakeMulti = {
-            value = CompetitionTestUtils.getONE_HUNDRED_PERCENT();
-          };
+          stakeTokenConfigs = CompetitionTestUtils.createDefaultStakeTokenConfigs();
           competitionCycleDuration = 86_400_000_000_000;
           preAnnouncementDuration = 3_600_000_000_000;
           rewardDistributionDuration = 7_200_000_000_000;
@@ -195,18 +188,10 @@ suite(
         // Create a registry with no competitions
         let registryState : CompetitionRegistryTypes.CompetitionRegistryState = {
           var globalConfig = {
-            govToken = mockGovToken;
             multiToken = mockSystemToken;
             approvedTokens = [mockTokenA];
             theta = { value = CompetitionTestUtils.getFIVE_PERCENT() };
-            govRate = { value = CompetitionTestUtils.getTEN_PERCENT() };
-            multiRate = { value = CompetitionTestUtils.getTWENTY_PERCENT() };
-            systemStakeGov = {
-              value = CompetitionTestUtils.getONE_HUNDRED_PERCENT();
-            };
-            systemStakeMulti = {
-              value = CompetitionTestUtils.getONE_HUNDRED_PERCENT();
-            };
+            stakeTokenConfigs = CompetitionTestUtils.createDefaultStakeTokenConfigs();
             competitionCycleDuration = 86_400_000_000_000;
             preAnnouncementDuration = 3_600_000_000_000;
             rewardDistributionDuration = 7_200_000_000_000;

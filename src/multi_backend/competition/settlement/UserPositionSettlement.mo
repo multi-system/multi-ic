@@ -108,8 +108,7 @@ module {
       // Create and return a Position for reward tracking
       {
         quantity = tokenAmount;
-        govStake = submission.govStake;
-        multiStake = submission.multiStake;
+        stakes = submission.stakes; // Use flexible stakes array
         submissionId = ?submission.id;
         isSystem = false;
         distributionPayouts = [];

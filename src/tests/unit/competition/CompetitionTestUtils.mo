@@ -1,5 +1,7 @@
 import Principal "mo:base/Principal";
 import Nat "mo:base/Nat";
+import Nat8 "mo:base/Nat8";
+import Blob "mo:base/Blob";
 import Time "mo:base/Time";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import Hash "mo:base/Hash";
@@ -12,6 +14,7 @@ import EventTypes "../../../multi_backend/types/EventTypes";
 import SubmissionTypes "../../../multi_backend/types/SubmissionTypes";
 import BackingTypes "../../../multi_backend/types/BackingTypes";
 import RewardTypes "../../../multi_backend/types/RewardTypes";
+import StakeTokenTypes "../../../multi_backend/types/StakeTokenTypes";
 import VirtualAccounts "../../../multi_backend/custodial/VirtualAccounts";
 import CompetitionEntryStore "../../../multi_backend/competition/CompetitionEntryStore";
 import CompetitionRegistryStore "../../../multi_backend/competition/CompetitionRegistryStore";
@@ -64,6 +67,44 @@ module {
     if (a > b) { a - b } else { b - a };
   };
 
+  // Generate a unique test principal from an index
+  public func generateTestPrincipal(index : Nat) : Types.Account {
+    // Create a unique byte array for each index
+    // Principal blobs can be 1-29 bytes
+    let bytes = if (index == 0) {
+      // Special case: anonymous principal
+      [0x04] : [Nat8];
+    } else {
+      // Create a simple unique byte pattern for each index
+      let byte1 = Nat8.fromNat((index / 256) % 256);
+      let byte2 = Nat8.fromNat(index % 256);
+      [0x01, byte1, byte2] : [Nat8];
+    };
+
+    Principal.fromBlob(Blob.fromArray(bytes));
+  };
+
+  // Generate valid test principals for testing (alternative method using known valid principals)
+  public func getValidTestPrincipal(index : Nat) : Types.Account {
+    generateTestPrincipal(index);
+  };
+
+  // Create default stake token configurations for testing
+  public func createDefaultStakeTokenConfigs() : [StakeTokenTypes.StakeTokenConfig] {
+    [
+      {
+        token = getGovToken();
+        baseRate = { value = getFIVE_PERCENT() };
+        systemMultiplier = { value = getTWENTY_PERCENT() };
+      },
+      {
+        token = getMultiToken();
+        baseRate = { value = getONE_PERCENT() };
+        systemMultiplier = { value = getFIFTY_PERCENT() };
+      },
+    ];
+  };
+
   // Create a test submission for use in tests
   public func createTestSubmission(
     id : SubmissionTypes.SubmissionId,
@@ -75,8 +116,10 @@ module {
       id = id;
       participant = account;
       // Stake information
-      govStake = { token = getGovToken(); value = 100 };
-      multiStake = { token = getMultiToken(); value = 200 };
+      stakes = [
+        (getGovToken(), { token = getGovToken(); value = 100 }),
+        (getMultiToken(), { token = getMultiToken(); value = 200 }),
+      ];
       // Token information
       token = token;
       // Initial submission
@@ -106,8 +149,10 @@ module {
   ) : RewardTypes.Position {
     {
       quantity = { token = token; value = quantity };
-      govStake = { token = getGovToken(); value = govStake };
-      multiStake = { token = getMultiToken(); value = multiStake };
+      stakes = [
+        (getGovToken(), { token = getGovToken(); value = govStake }),
+        (getMultiToken(), { token = getMultiToken(); value = multiStake }),
+      ];
       submissionId = submissionId;
       isSystem = isSystem;
       distributionPayouts = []; // Always starts empty for tests
@@ -121,8 +166,7 @@ module {
   ) : RewardTypes.Position {
     {
       quantity = adjustedQuantity;
-      govStake = submission.govStake;
-      multiStake = submission.multiStake;
+      stakes = submission.stakes;
       submissionId = ?submission.id;
       isSystem = false;
       distributionPayouts = [];
@@ -195,7 +239,7 @@ module {
       prices = createTestPrices();
     };
 
-    // Store events in maps - Fix: Use Hash.hash instead of Nat.hash
+    // Store events in maps
     StableHashMap.put(heartbeats, Nat.equal, Hash.hash, 1, heartbeatEvent);
     StableHashMap.put(priceEvents, Nat.equal, Hash.hash, 1, priceEvent);
 
@@ -221,14 +265,10 @@ module {
     let state : CompetitionRegistryTypes.CompetitionRegistryState = {
       var hasInitialized = true;
       var globalConfig = {
-        govToken = getGovToken();
         multiToken = getMultiToken();
         approvedTokens = [getTestToken1(), getTestToken2(), getTestToken3()];
         theta = { value = getTWENTY_PERCENT() };
-        govRate = { value = getFIVE_PERCENT() };
-        multiRate = { value = getONE_PERCENT() };
-        systemStakeGov = { value = getTWENTY_PERCENT() };
-        systemStakeMulti = { value = getFIFTY_PERCENT() };
+        stakeTokenConfigs = createDefaultStakeTokenConfigs();
         competitionCycleDuration = defaultTime;
         preAnnouncementDuration = defaultTime / 10; // 10% of cycle is pre-announcement
         rewardDistributionDuration = defaultTime;
@@ -254,14 +294,10 @@ module {
 
     // Configuration for the competition
     let config : CompetitionEntryTypes.CompetitionConfig = {
-      govToken = getGovToken();
       multiToken = getMultiToken();
       approvedTokens = [getTestToken1(), getTestToken2(), getTestToken3()];
-      govRate = { value = getFIVE_PERCENT() };
-      multiRate = { value = getONE_PERCENT() };
       theta = { value = getTWENTY_PERCENT() };
-      systemStakeGov = { value = getTWENTY_PERCENT() };
-      systemStakeMulti = { value = getFIFTY_PERCENT() };
+      stakeTokenConfigs = createDefaultStakeTokenConfigs();
       competitionCycleDuration = defaultTime;
       preAnnouncementDuration = defaultTime / 10;
       rewardDistributionDuration = defaultTime;
@@ -281,10 +317,11 @@ module {
       competitionPrices = 1; // Reference to test price event with ID 1
       submissions = [];
       submissionCounter = 0;
-      totalGovStake = 0;
-      totalMultiStake = 0;
-      adjustedGovRate = null;
-      adjustedMultiRate = null;
+      totalStakes = [
+        (getGovToken(), 0),
+        (getMultiToken(), 0),
+      ];
+      adjustedRates = null;
       volumeLimit = 0;
       systemStake = null;
       stakeAccounts = stakeAccounts;
@@ -297,7 +334,6 @@ module {
 
   // Helper function to get a price event by ID from a test registry
   public func getPriceEventById(registry : CompetitionRegistryTypes.EventRegistry, id : Nat) : ?EventTypes.PriceEvent {
-    // Fix: Use Hash.hash instead of Nat.hash
     StableHashMap.get(registry.priceEvents, Nat.equal, Hash.hash, id);
   };
 
@@ -309,8 +345,7 @@ module {
 
     let stakeVault = StakeVault.StakeVault(
       userAccounts,
-      competition.config.multiToken,
-      competition.config.govToken,
+      competition.config.stakeTokenConfigs,
       competition.stakeAccounts,
     );
 
