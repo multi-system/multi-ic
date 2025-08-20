@@ -12,6 +12,7 @@ import PriceHistoryChart from './PriceHistoryChart';
 import { PriceDisplay, ValuePercentage } from '../utils/types';
 import { useSystemInfo } from '../contexts/SystemInfoContext';
 import { Loader } from './Loader';
+import { IncrementalInput } from './IncrementalInput';
 
 const MemoizedPriceHistoryChart = memo(PriceHistoryChart, (prevProps, nextProps) => {
   return prevProps.backingTokens.length === nextProps.backingTokens.length;
@@ -247,13 +248,11 @@ const BasketDisplay: React.FC = () => {
         <Section title="Redemption Calculator">
           <div className="">
             <div className="flex items-center gap-3 mb-4">
-              <input
-                type="number"
+              <IncrementalInput
                 value={multiAmount}
                 onChange={(e) => setMultiAmount(e.target.value)}
-                className="w-32 px-3 py-2 rounded-md bg-white bg-opacity-10 text-white border border-white border-opacity-20 focus:outline-none focus:ring-2 focus:ring-[#586CE1]"
-                step="0.01"
-                min="0"
+                step={0.01}
+                min={0}
               />
               <span className="text-gray-300">MULTI tokens can be redeemed for:</span>
               <span className="ml-auto text-lg font-semibold text-white">

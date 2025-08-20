@@ -1,6 +1,6 @@
 import { twMerge } from 'tailwind-merge';
 
-type LoaderSize = 'md' | 'sm' | 'lg';
+type LoaderSize = 'md' | 'sm' | 'lg' | 'xl';
 
 export function Loader({ size = 'md' }: { size?: LoaderSize }) {
   return (
@@ -18,12 +18,15 @@ export function Loader({ size = 'md' }: { size?: LoaderSize }) {
 function getLoaderSizeStyle(size: LoaderSize) {
   switch (size) {
     case 'md':
-      return 'w-8 h-8 border-4';
+      return 'w-6 h-6 border-[3px]';
 
     case 'sm':
       return 'w-4 h-4 border-2';
 
     case 'lg':
+      return 'w-8 h-8 border-4';
+
+    case 'xl':
       return 'w-16 h-16 border-8';
   }
 }

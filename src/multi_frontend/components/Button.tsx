@@ -1,4 +1,5 @@
 import { twMerge } from 'tailwind-merge';
+import { Loader } from './Loader';
 
 type ButtonType = 'primary' | 'neutral' | 'destructive' | 'ghost';
 
@@ -6,10 +7,12 @@ export function Button({
   type = 'neutral',
   onClick,
   children,
+  loading = false,
 }: {
   type?: ButtonType;
   onClick: () => void;
   children: React.ReactNode;
+  loading?: boolean;
 }) {
   return (
     <button
@@ -19,7 +22,11 @@ export function Button({
         getButtonStyle(type)
       )}
     >
-      {children}
+      <div className={loading ? 'invisible' : ''}>{children}</div>
+
+      <div className={loading ? 'absolute' : 'invisible absolute'}>
+        <Loader size="md" />
+      </div>
     </button>
   );
 }
@@ -30,7 +37,7 @@ function getButtonStyle(type: ButtonType) {
       return ' bg-[#586CE1] hover:bg-[#4056C7] text-white';
 
     case 'neutral':
-      return 'bg-gray-800 hover:bg-gray-700 text-white';
+      return 'bg-white/15 hover:bg-white/25 text-white';
 
     case 'destructive':
       return 'bg-rose-700 hover:bg-rose-600 text-white';

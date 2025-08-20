@@ -15,6 +15,10 @@ import { getTokenInfo } from '../config/tokenPrices';
 import { showError, logError, safeStringify } from '../utils/errorHandler';
 import { TokenBalance } from '../utils/types';
 import { Loader } from './Loader';
+import { IncrementalInput } from './IncrementalInput';
+import { MultiLogo } from './MultiLogo/MultiLogo';
+import CopyText from './CopyText';
+import { Button } from './Button';
 
 type WalletSidebarProps = {
   isOpen: boolean;
@@ -337,24 +341,25 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
           ) : (
             <div className="p-6 space-y-6">
               {/* MULTI Balance and Operations at the top */}
-              <div className="bg-gray-800 rounded-lg p-6 space-y-4">
+              <div className="rounded-lg pb-6 space-y-4">
                 <div>
                   <p className="text-sm text-gray-400 mb-1">MULTI Token Balance</p>
-                  <p className="text-3xl font-bold text-white">
-                    {formatBalance(multiBalance, 8)} MULTI
-                  </p>
+                  <div className="flex items-end flex-row gap-1">
+                    <p className="text-3xl font-bold text-white">
+                      {formatBalance(multiBalance, 8)}
+                    </p>
+                    <MultiLogo className="mb-1" />
+                  </div>
                 </div>
 
                 {/* Issue MULTI */}
                 <div className="pt-4 border-t border-gray-700">
                   <p className="text-sm font-medium text-gray-300 mb-2">Issue MULTI Tokens</p>
                   <div className="flex gap-2">
-                    <input
-                      type="number"
+                    <IncrementalInput
                       value={issueAmount}
                       onChange={(e) => setIssueAmount(e.target.value)}
                       placeholder="Amount"
-                      className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-[#586CE1] focus:outline-none text-sm"
                     />
                     <button
                       onClick={handleIssue}
@@ -370,12 +375,10 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
                 <div>
                   <p className="text-sm font-medium text-gray-300 mb-2">Redeem MULTI Tokens</p>
                   <div className="flex gap-2">
-                    <input
-                      type="number"
+                    <IncrementalInput
                       value={redeemAmount}
                       onChange={(e) => setRedeemAmount(e.target.value)}
                       placeholder="Amount"
-                      className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-[#586CE1] focus:outline-none text-sm"
                     />
                     <button
                       onClick={handleRedeem}
@@ -397,11 +400,15 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
                 <div className="space-y-4">
                   {tokenBalances.map((token) => (
                     <div key={token.canisterId} className="bg-gray-800 rounded-lg p-5">
-                      <div className="mb-3">
+                      <div className="mb-3 flex flex-row gap-2 items-center">
                         <h4 className="font-semibold text-white text-lg">
                           {token.name} ({token.symbol})
                         </h4>
-                        <p className="text-xs text-gray-500">{token.canisterId}</p>
+                        <CopyText copyText={token.canisterId}>
+                          <p className="text-xs text-gray-500 hover:text-blue-500">
+                            {token.canisterId}
+                          </p>
+                        </CopyText>
                       </div>
 
                       {/* Balances */}
@@ -424,8 +431,7 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
                       <div className="pt-3 border-t border-gray-700">
                         <p className="text-sm font-medium text-gray-300 mb-2">Deposit to System</p>
                         <div className="flex gap-2">
-                          <input
-                            type="number"
+                          <IncrementalInput
                             value={depositAmounts[token.canisterId] || ''}
                             onChange={(e) =>
                               setDepositAmounts((prev) => ({
@@ -434,18 +440,19 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
                               }))
                             }
                             placeholder="Amount"
-                            className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-[#586CE1] focus:outline-none text-sm"
                           />
-                          <button
+                          <Button
+                            type="neutral"
                             onClick={() => handleDeposit(token.canisterId)}
+                            loading={depositingToken === token.canisterId}
                             disabled={
                               depositingToken === token.canisterId ||
                               !depositAmounts[token.canisterId]
                             }
                             className="px-4 py-2 bg-[#586CE1] hover:bg-[#4056C7] disabled:bg-gray-600 text-white font-medium rounded-lg transition-colors text-sm"
                           >
-                            {depositingToken === token.canisterId ? 'Processing...' : 'Deposit'}
-                          </button>
+                            Deposit
+                          </Button>
                         </div>
                         {token.walletBalance === 0n && (
                           <p className="text-xs text-yellow-400 mt-2">
