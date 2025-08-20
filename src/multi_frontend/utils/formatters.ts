@@ -8,7 +8,6 @@ const formatAmount = (amount: bigint, decimals: number = 8): string => {
   }
 
   const decimal = remainder.toString().padStart(decimals, '0');
-  // Remove trailing zeros
   const trimmedDecimal = decimal.replace(/0+$/, '');
   return trimmedDecimal ? `${whole}.${trimmedDecimal}` : whole.toString();
 };
@@ -22,10 +21,24 @@ const formatUSD = (amount: number): string => {
   }).format(amount);
 };
 
-const formatMultiPrice = (usdPrice: number, multiPrice = 0): string => {
-  if (multiPrice === 0) return '0 MULTI';
-  const priceInMulti = usdPrice / multiPrice;
-  return `${priceInMulti.toFixed(4)} MULTI`;
+const formatMultiPrice = (usdValue: number, multiPriceInUSD: number): string => {
+  if (!multiPriceInUSD || multiPriceInUSD === 0) return '0.0000 MULTI';
+
+  const valueInMulti = usdValue / multiPriceInUSD;
+
+  if (valueInMulti < 0.0001) {
+    return '<0.0001 MULTI';
+  }
+
+  if (valueInMulti < 1) {
+    return `${valueInMulti.toFixed(6)} MULTI`;
+  }
+
+  if (valueInMulti < 1000) {
+    return `${valueInMulti.toFixed(4)} MULTI`;
+  }
+
+  return `${valueInMulti.toFixed(2)} MULTI`;
 };
 
 export { formatAmount, formatUSD, formatMultiPrice };

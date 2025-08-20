@@ -116,7 +116,7 @@ export const SystemInfoProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   useEffect(() => {
     fetchBasketInfo(false);
-  }, [fetchBasketInfo]);
+  }, []);
 
   useEffect(() => {
     if (!autoRefresh) return;

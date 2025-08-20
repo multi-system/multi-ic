@@ -1,7 +1,9 @@
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { Principal } from '@dfinity/principal';
 // @ts-ignore
-import { idlFactory as tokenIdl } from '../../declarations/token_a'; // They all use the same ICRC-1 interface
+import { idlFactory as tokenIdl } from '../../declarations/token_a';
+// @ts-ignore
+import { idlFactory as historyIdl } from '../../declarations/multi_history';
 
 // Token price configuration
 export type TokenPrice = {
@@ -12,22 +14,84 @@ export type TokenPrice = {
   lastUpdated?: string;
 };
 
-// Cache for token metadata
+// Cache for token metadata and prices
 const tokenMetadataCache: Record<string, TokenPrice> = {};
-
-// Only hardcode the prices, everything else comes from the canister
-const TOKEN_PRICE_MAP: Record<string, number> = {
-  // These should match your actual canister IDs
-  'by6od-j4aaa-aaaaa-qaadq-cai': 0.85, // Token A
-  'avqkn-guaaa-aaaaa-qaaea-cai': 1.2, // Token B
-  'asrmz-lmaaa-aaaaa-qaaeq-cai': 3.4, // Token C
-};
+let latestPricesCache: Record<string, number> = {};
+let lastPriceFetch = 0;
+const PRICE_CACHE_DURATION = 60000; // 1 minute cache
 
 // ICRC-1 token interface
 interface ICRC1Token {
   icrc1_name: () => Promise<string>;
   icrc1_symbol: () => Promise<string>;
   icrc1_decimals: () => Promise<number>;
+}
+
+// Fetch latest prices from history canister
+async function fetchLatestPrices(): Promise<Record<string, number>> {
+  // Check cache
+  if (
+    Date.now() - lastPriceFetch < PRICE_CACHE_DURATION &&
+    Object.keys(latestPricesCache).length > 0
+  ) {
+    return latestPricesCache;
+  }
+
+  try {
+    const host =
+      import.meta.env.VITE_DFX_NETWORK === 'ic' ? 'https://icp-api.io' : 'http://localhost:4943';
+
+    const agent = new HttpAgent({ host });
+
+    if (import.meta.env.VITE_DFX_NETWORK !== 'ic') {
+      await agent.fetchRootKey();
+    }
+
+    // Connect to history canister
+    const historyActor = Actor.createActor(historyIdl, {
+      agent,
+      canisterId: import.meta.env.VITE_CANISTER_ID_MULTI_HISTORY,
+    });
+
+    // Get latest snapshot
+    const latestSnapshot = await historyActor.getLatest();
+
+    if (latestSnapshot && latestSnapshot.length > 0) {
+      const snapshot = latestSnapshot[0];
+      const prices: Record<string, number> = {};
+
+      // Convert prices from snapshot to our format
+      // Prices are stored as [Principal, nat] tuples
+      snapshot.prices.forEach(([token, price]: [any, bigint]) => {
+        const tokenId = token.toString();
+        // Assuming prices are stored with 8 decimals in the canister
+        prices[tokenId] = Number(price) / 100000000;
+      });
+
+      latestPricesCache = prices;
+      lastPriceFetch = Date.now();
+
+      console.log('Fetched latest prices from history canister:', prices);
+      return prices;
+    }
+
+    // Fallback to default prices if no snapshot exists
+    console.warn('No snapshot found in history canister, using fallback prices');
+    return {
+      'by6od-j4aaa-aaaaa-qaadq-cai': 0.85,
+      'avqkn-guaaa-aaaaa-qaaea-cai': 1.2,
+      'asrmz-lmaaa-aaaaa-qaaeq-cai': 3.4,
+    };
+  } catch (error) {
+    console.error('Failed to fetch prices from history canister:', error);
+
+    // Fallback prices
+    return {
+      'by6od-j4aaa-aaaaa-qaadq-cai': 0.85,
+      'avqkn-guaaa-aaaaa-qaaea-cai': 1.2,
+      'asrmz-lmaaa-aaaaa-qaaeq-cai': 3.4,
+    };
+  }
 }
 
 // Query token metadata from the canister
@@ -59,8 +123,9 @@ async function fetchTokenMetadata(canisterId: string): Promise<TokenPrice | unde
       actor.icrc1_decimals(),
     ]);
 
-    // Get price from our hardcoded map
-    const priceUSD = TOKEN_PRICE_MAP[canisterId] || 1.0;
+    // Get price from history canister
+    const prices = await fetchLatestPrices();
+    const priceUSD = prices[canisterId] || 1.0;
 
     const tokenInfo: TokenPrice = {
       name,
@@ -77,28 +142,39 @@ async function fetchTokenMetadata(canisterId: string): Promise<TokenPrice | unde
   } catch (error) {
     console.error(`Failed to fetch metadata for token ${canisterId}:`, error);
 
-    // Fallback to a default
+    // Get price from history canister even if metadata fails
+    const prices = await fetchLatestPrices();
+
+    // Fallback to a default with price from history
     return {
       name: `Token ${canisterId.slice(0, 5)}`,
       symbol: 'TKN',
       decimals: 8,
-      priceUSD: TOKEN_PRICE_MAP[canisterId] || 1.0,
+      priceUSD: prices[canisterId] || 1.0,
       lastUpdated: new Date().toISOString(),
     };
   }
 }
 
-// Synchronous helper that returns cached data or undefined
+// Synchronous helper that returns cached data or triggers async fetch
 export const getTokenInfo = (canisterId: string): TokenPrice | undefined => {
   // First check if we have it cached
   if (tokenMetadataCache[canisterId]) {
+    // Update price from latest snapshot if cache is stale
+    if (Date.now() - lastPriceFetch > PRICE_CACHE_DURATION) {
+      fetchLatestPrices().then((prices) => {
+        if (tokenMetadataCache[canisterId] && prices[canisterId]) {
+          tokenMetadataCache[canisterId].priceUSD = prices[canisterId];
+          tokenMetadataCache[canisterId].lastUpdated = new Date().toISOString();
+        }
+      });
+    }
     return tokenMetadataCache[canisterId];
   }
 
-  // If not cached, trigger the fetch (but return undefined for now)
+  // If not cached, trigger the fetch (but return placeholder for now)
   fetchTokenMetadata(canisterId).then((metadata) => {
     if (metadata) {
-      // This will update the cache for next time
       console.log(`Fetched metadata for ${canisterId}:`, metadata);
     }
   });
@@ -108,15 +184,25 @@ export const getTokenInfo = (canisterId: string): TokenPrice | undefined => {
     name: 'Loading...',
     symbol: '...',
     decimals: 8,
-    priceUSD: TOKEN_PRICE_MAP[canisterId] || 1.0,
+    priceUSD: 1.0,
     lastUpdated: new Date().toISOString(),
   };
 };
 
-// Preload all known tokens
+// Preload all tokens from the latest snapshot
 export async function preloadTokenMetadata() {
-  const tokenIds = Object.keys(TOKEN_PRICE_MAP);
-  await Promise.all(tokenIds.map((id) => fetchTokenMetadata(id)));
+  try {
+    // First get all prices from history canister
+    const prices = await fetchLatestPrices();
+    const tokenIds = Object.keys(prices);
+
+    // Then fetch metadata for all tokens
+    await Promise.all(tokenIds.map((id) => fetchTokenMetadata(id)));
+
+    console.log('Preloaded metadata for all tokens from history canister');
+  } catch (error) {
+    console.error('Failed to preload token metadata:', error);
+  }
 }
 
 // Calculate MULTI token price based on backing
@@ -146,3 +232,40 @@ export const calculateMultiPrice = (
   // Divide by supply unit to get price per MULTI
   return totalValue / (Number(supplyUnit) / 1e8);
 };
+
+// Function to record a new snapshot (to be called periodically)
+export async function recordPriceSnapshot(
+  prices: Record<string, number>,
+  approvedTokens: string[],
+  backingConfig: any
+): Promise<void> {
+  try {
+    const host =
+      import.meta.env.VITE_DFX_NETWORK === 'ic' ? 'https://icp-api.io' : 'http://localhost:4943';
+
+    const agent = new HttpAgent({ host });
+
+    if (import.meta.env.VITE_DFX_NETWORK !== 'ic') {
+      await agent.fetchRootKey();
+    }
+
+    const historyActor = Actor.createActor(historyIdl, {
+      agent,
+      canisterId: import.meta.env.VITE_CANISTER_ID_MULTI_HISTORY,
+    });
+
+    // Convert prices to the format expected by the canister
+    const priceEntries = Object.entries(prices).map(([tokenId, price]) => [
+      Principal.fromText(tokenId),
+      BigInt(Math.floor(price * 100000000)), // Convert to 8 decimals
+    ]);
+
+    const approvedPrincipals = approvedTokens.map((t) => Principal.fromText(t));
+
+    await historyActor.recordSnapshot(priceEntries, approvedPrincipals, backingConfig);
+
+    console.log('Successfully recorded price snapshot');
+  } catch (error) {
+    console.error('Failed to record price snapshot:', error);
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 // @ts-ignore
 import { idlFactory as backendIdl } from '../../declarations/multi_backend';
 // @ts-ignore
@@ -8,9 +8,14 @@ import MultiLogo from '../assets/multi_logo.svg';
 import { formatAmount, formatMultiPrice, formatUSD } from '../utils/formatters';
 import InfoCard from './InfoCard';
 import Section from './Section';
+import PriceHistoryChart from './PriceHistoryChart';
 import { PriceDisplay, ValuePercentage } from '../utils/types';
 import { useSystemInfo } from '../contexts/SystemInfoContext';
 import { Loader } from './Loader';
+
+const MemoizedPriceHistoryChart = memo(PriceHistoryChart, (prevProps, nextProps) => {
+  return prevProps.backingTokens.length === nextProps.backingTokens.length;
+});
 
 const BasketDisplay: React.FC = () => {
   const [priceDisplay, setPriceDisplay] = useState<PriceDisplay>('USD');
@@ -68,9 +73,28 @@ const BasketDisplay: React.FC = () => {
   const valuePercentages: ValuePercentage[] = calculateValuePercentages();
   const multiAmountNum = parseFloat(multiAmount) || 0;
 
+  const calculateMultiPrice = () => {
+    let totalValue = 0;
+    for (const token of systemInfo.backingTokens) {
+      const tokenInfo = getTokenInfo(token.tokenInfo.canisterId.toString());
+      const backingPerMulti = Number(token.backingUnit) / Number(systemInfo.supplyUnit);
+      const value = backingPerMulti * (tokenInfo?.priceUSD || 0);
+      totalValue += value;
+    }
+    return totalValue;
+  };
+
+  const actualMultiPrice = calculateMultiPrice() || multiPrice;
+
+  const formatValue = (usdValue: number): string => {
+    if (priceDisplay === 'USD') {
+      return formatUSD(usdValue);
+    }
+    return formatMultiPrice(usdValue, actualMultiPrice);
+  };
+
   return (
     <div className="space-y-6">
-      {/* Main Content */}
       <div className="flex-col flex gap-6">
         <div className="flex w-full items-center justify-between mb-6">
           <div className="flex item-center gap-4">
@@ -104,10 +128,7 @@ const BasketDisplay: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex relative  z-0 items-center gap-4">
-            {/* Price Display Toggle */}
-
-            {/* Refresh Controls */}
+          <div className="flex relative z-0 items-center gap-4">
             <div
               className="flex items-center gap-2 text-sm min-w-[60px]"
               title={refreshing ? 'Fetching latest data...' : 'Data is up to date'}
@@ -158,7 +179,6 @@ const BasketDisplay: React.FC = () => {
           </div>
         </div>
 
-        {/* System Overview */}
         <div className="flex flex-row gap-4">
           <InfoCard
             label="Total Supply"
@@ -166,12 +186,16 @@ const BasketDisplay: React.FC = () => {
             unitName="MULTI tokens"
           />
 
-          <InfoCard label="Multi Price" value={formatUSD(multiPrice)} unitName="per Multi token" />
+          <InfoCard 
+            label="Multi Price" 
+            value={formatUSD(actualMultiPrice)} 
+            unitName="per Multi token" 
+          />
 
           <InfoCard
             label="Total Value Locked"
-            value={formatUSD((Number(systemInfo.totalSupply) / 1e8) * multiPrice)}
-            unitName="USD equivalent"
+            value={formatValue((Number(systemInfo.totalSupply) / 1e8) * actualMultiPrice)}
+            unitName={priceDisplay === 'USD' ? 'USD equivalent' : 'MULTI equivalent'}
           />
 
           <InfoCard
@@ -181,7 +205,11 @@ const BasketDisplay: React.FC = () => {
           />
         </div>
 
-        {/* Value Composition Visual */}
+        <MemoizedPriceHistoryChart 
+          systemInfo={systemInfo} 
+          backingTokens={systemInfo.backingTokens}
+        />
+
         <Section title="Portfolio Value Composition">
           <div className="flex h-8 rounded-full overflow-hidden mb-4">
             {valuePercentages.map((vp, index) => {
@@ -208,7 +236,7 @@ const BasketDisplay: React.FC = () => {
                   <div className="w-3 h-3 rounded-full" style={style.badge} />
                   <span className="text-sm text-gray-300">
                     {vp.tokenInfo?.symbol}: {vp.percentage.toFixed(1)}% (
-                    {priceDisplay === 'USD' ? formatUSD(vp.value) : formatMultiPrice(vp.value)})
+                    {formatValue(vp.value)})
                   </span>
                 </div>
               );
@@ -216,7 +244,6 @@ const BasketDisplay: React.FC = () => {
           </div>
         </Section>
 
-        {/* Redemption Calculator */}
         <Section title="Redemption Calculator">
           <div className="">
             <div className="flex items-center gap-3 mb-4">
@@ -230,10 +257,7 @@ const BasketDisplay: React.FC = () => {
               />
               <span className="text-gray-300">MULTI tokens can be redeemed for:</span>
               <span className="ml-auto text-lg font-semibold text-white">
-                ≈{' '}
-                {priceDisplay === 'USD'
-                  ? formatUSD(multiAmountNum * multiPrice)
-                  : `${multiAmountNum.toFixed(4)} MULTI`}
+                ≈ {formatValue(multiAmountNum * actualMultiPrice)}
               </span>
             </div>
 
@@ -252,7 +276,7 @@ const BasketDisplay: React.FC = () => {
                     <div className="text-right">
                       <span className="font-mono text-white">{totalAmount.toFixed(8)}</span>
                       <span className="text-gray-400 ml-2">
-                        ({priceDisplay === 'USD' ? formatUSD(value) : formatMultiPrice(value)})
+                        ({formatValue(value)})
                       </span>
                     </div>
                   </div>
@@ -262,7 +286,6 @@ const BasketDisplay: React.FC = () => {
           </div>
         </Section>
 
-        {/* Detailed Token Information */}
         <Section title="Reserve Token Details">
           <div className="space-y-3">
             {systemInfo.backingTokens.map((token, index) => {
@@ -270,10 +293,9 @@ const BasketDisplay: React.FC = () => {
               const style = getTokenStyle(index);
               const backingPerMulti = Number(token.backingUnit) / Number(systemInfo.supplyUnit);
               const vp = valuePercentages[index];
-              const tokenPrice =
-                priceDisplay === 'USD'
-                  ? formatUSD(tokenInfo?.priceUSD || 0)
-                  : formatMultiPrice(tokenInfo?.priceUSD || 0);
+              const tokenPriceDisplay = priceDisplay === 'USD' 
+                ? formatUSD(tokenInfo?.priceUSD || 0)
+                : `${((tokenInfo?.priceUSD || 0) / actualMultiPrice).toFixed(6)} MULTI`;
 
               return (
                 <div
@@ -297,7 +319,7 @@ const BasketDisplay: React.FC = () => {
                         <p className="text-xs text-gray-400">
                           {token.tokenInfo.canisterId.toString().slice(0, 10)}...
                         </p>
-                        <p className="text-sm text-gray-300 mt-1">{tokenPrice} per token</p>
+                        <p className="text-sm text-gray-300 mt-1">{tokenPriceDisplay} per token</p>
                       </div>
                     </div>
 
@@ -310,7 +332,6 @@ const BasketDisplay: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Progress bar */}
                   <div className="w-full bg-white bg-opacity-10 rounded-full h-2 mb-3 overflow-hidden">
                     <div
                       className="h-2 rounded-full transition-all duration-1000 ease-out"
@@ -321,7 +342,6 @@ const BasketDisplay: React.FC = () => {
                     />
                   </div>
 
-                  {/* Token Details Grid */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                     <div>
                       <p className="text-gray-400">Per MULTI</p>
@@ -337,9 +357,7 @@ const BasketDisplay: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-gray-400">Total Value</p>
-                      <p className="text-white">
-                        {priceDisplay === 'USD' ? formatUSD(vp.value) : formatMultiPrice(vp.value)}
-                      </p>
+                      <p className="text-white">{formatValue(vp.value)}</p>
                     </div>
                   </div>
                 </div>
@@ -352,9 +370,7 @@ const BasketDisplay: React.FC = () => {
   );
 };
 
-// Helper function for token styling
 const getTokenStyle = (index: number): { badge: React.CSSProperties; bar: React.CSSProperties } => {
-  // Create variations of the brand color
   const styles = [
     {
       badge: { background: '#586CE1' },
