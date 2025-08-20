@@ -1,91 +1,94 @@
-import Result "mo:base/Result";
 import Debug "mo:base/Debug";
+import Principal "mo:base/Principal";
+import Nat "mo:base/Nat";
+import Result "mo:base/Result";
+import Array "mo:base/Array";
+import Iter "mo:base/Iter";
 
 import Types "../../types/Types";
-import Error "../../error/Error";
-import CompetitionEntryTypes "../../types/CompetitionEntryTypes";
-import CompetitionEntryStore "../CompetitionEntryStore";
-import EventTypes "../../types/EventTypes";
 import RewardTypes "../../types/RewardTypes";
-import DistributionProcessor "./DistributionProcessor";
+import EventTypes "../../types/EventTypes";
+import CompetitionEntryTypes "../../types/CompetitionEntryTypes";
+import SubmissionTypes "../../types/SubmissionTypes";
+import StakeTokenTypes "../../types/StakeTokenTypes";
+import Error "../../error/Error";
 import VirtualAccounts "../../custodial/VirtualAccounts";
+import DistributionProcessor "./DistributionProcessor";
+import CompetitionEntryStore "../CompetitionEntryStore";
 
-/**
- * DistributionCoordinator is the main entry point for processing distribution events.
- * It orchestrates the distribution of rewards.
- */
 module {
+  /// Coordinates the distribution of rewards during competition events
+  /// Manages the mapping between positions and accounts, and delegates
+  /// the actual distribution calculations to the DistributionProcessor
   public class DistributionCoordinator(
     userAccounts : VirtualAccounts.VirtualAccounts,
     systemAccount : Types.Account,
-    govToken : Types.Token,
-    multiToken : Types.Token,
+    stakeTokenConfigs : [StakeTokenTypes.StakeTokenConfig],
   ) {
-    private let processor = DistributionProcessor.DistributionProcessor(
-      govToken,
-      multiToken,
+    private let processor = DistributionProcessor.DistributionProcessor();
+
+    // Extract token list for internal use if needed
+    private let stakeTokens = Array.map<StakeTokenTypes.StakeTokenConfig, Types.Token>(
+      stakeTokenConfigs,
+      func(config) = config.token,
     );
 
-    /**
-     * Process a distribution event for a competition.
-     *
-     * @param entryStore The competition entry store
-     * @param distributionNumber The distribution event number (0-based)
-     * @param distributionEvent The distribution event details
-     * @return Result with success or error
-     */
+    /// Process a distribution event for a competition
+    /// This calculates and distributes rewards based on position performance
     public func processDistribution(
       entryStore : CompetitionEntryStore.CompetitionEntryStore,
-      distributionNumber : Nat,
-      distributionEvent : CompetitionEntryTypes.DistributionEvent,
-    ) : Result.Result<(), Error.CompetitionError> {
-      Debug.print("DistributionCoordinator: Processing distribution #" # debug_show (distributionNumber));
+      distributionIndex : Nat,
+      event : CompetitionEntryTypes.DistributionEvent,
+    ) : Result.Result<(), Error.ErrorType> {
 
-      // Get all positions from the competition
+      // Get current positions and submissions from the competition
       let positions = entryStore.getPositions();
-      if (positions.size() == 0) {
-        Debug.trap("No positions found during distribution");
-      };
+      let submissions = entryStore.getAllSubmissions();
 
-      // Get the price event using the ID from distributionEvent
-      let priceEventOpt = entryStore.getPriceEventById(distributionEvent.distributionPrices);
+      // Retrieve the price event for this distribution
+      let priceEventOpt = entryStore.getPriceEventById(event.distributionPrices);
+
       switch (priceEventOpt) {
-        case (null) {
-          Debug.trap(
-            "Price event not found for distribution #" # debug_show (distributionNumber) #
-            " with price event ID: " # debug_show (distributionEvent.distributionPrices)
-          );
+        case null {
+          return #err(#Operation(#NotInitialized));
         };
         case (?priceEvent) {
-          // Create position-to-account mapping function
+          // Create mapping function from positions to accounts
+          // System positions (no submissionId) return null
+          // User positions map through their submission to find the participant
           let getPositionAccount = func(position : RewardTypes.Position) : ?Types.Account {
             switch (position.submissionId) {
-              case (null) { null }; // System positions handled separately
-              case (?subId) {
-                switch (entryStore.getSubmission(subId)) {
-                  case (null) { null };
+              case null { null }; // System position
+              case (?submissionId) {
+                // Find the submission to get the participant account
+                let submissionOpt = Array.find<SubmissionTypes.Submission>(
+                  submissions,
+                  func(s) = s.id == submissionId,
+                );
+                switch (submissionOpt) {
+                  case null { null };
                   case (?submission) { ?submission.participant };
                 };
               };
             };
           };
 
-          // Process distribution for all positions
-          let stakeVault = entryStore.getStakeVault();
-          let config = entryStore.getConfig();
-
+          // Process the actual distribution
           processor.processDistribution(
             positions,
             priceEvent,
-            distributionNumber,
-            config.numberOfDistributionEvents,
-            stakeVault,
+            event.distributionNumber,
+            entryStore.getConfig().numberOfDistributionEvents,
+            entryStore.getStakeVault(),
             systemAccount,
             getPositionAccount,
             entryStore,
           );
 
-          #ok(());
+          // Record that this distribution event has been processed
+          entryStore.addDistributionEvent(event);
+
+          #ok();
         };
       };
     };

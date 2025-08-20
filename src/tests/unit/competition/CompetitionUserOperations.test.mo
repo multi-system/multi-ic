@@ -12,6 +12,7 @@ import CompetitionRegistryTypes "../../../multi_backend/types/CompetitionRegistr
 import CompetitionEntryTypes "../../../multi_backend/types/CompetitionEntryTypes";
 import SubmissionTypes "../../../multi_backend/types/SubmissionTypes";
 import BackingTypes "../../../multi_backend/types/BackingTypes";
+import StakeTokenTypes "../../../multi_backend/types/StakeTokenTypes";
 import CompetitionUserOperations "../../../multi_backend/competition/CompetitionUserOperations";
 import CompetitionRegistryStore "../../../multi_backend/competition/CompetitionRegistryStore";
 import VirtualAccounts "../../../multi_backend/custodial/VirtualAccounts";
@@ -52,18 +53,10 @@ suite(
       // Create registry state
       let registryState : CompetitionRegistryTypes.CompetitionRegistryState = {
         var globalConfig = {
-          govToken = mockGovToken;
           multiToken = mockSystemToken;
           approvedTokens = [mockTokenA];
           theta = { value = CompetitionTestUtils.getFIVE_PERCENT() };
-          govRate = { value = CompetitionTestUtils.getTEN_PERCENT() };
-          multiRate = { value = CompetitionTestUtils.getTWENTY_PERCENT() };
-          systemStakeGov = {
-            value = CompetitionTestUtils.getONE_HUNDRED_PERCENT();
-          };
-          systemStakeMulti = {
-            value = CompetitionTestUtils.getONE_HUNDRED_PERCENT();
-          };
+          stakeTokenConfigs = CompetitionTestUtils.createDefaultStakeTokenConfigs();
           competitionCycleDuration = 86_400_000_000_000;
           preAnnouncementDuration = 3_600_000_000_000;
           rewardDistributionDuration = 7_200_000_000_000;
@@ -115,12 +108,11 @@ suite(
           value = 1000;
         };
 
-        // Test accepting a stake request (not queued)
+        // Test accepting a stake request
         let result = userOps.acceptStakeRequest(
           govStake,
           userAccount,
           mockTokenA,
-          false // not queued
         );
 
         // Verify results
@@ -130,7 +122,6 @@ suite(
             expect.bool(false).isTrue(); // Force test failure
           };
           case (#ok(data)) {
-            expect.bool(data.isQueued).isFalse();
             expect.principal(data.tokenQuantity.token).equal(mockTokenA);
             expect.nat(data.submissionId).equal(0); // In our test env, first ID is 0
           };
@@ -173,7 +164,6 @@ suite(
           govStake,
           userAccount,
           mockTokenA,
-          false,
         );
 
         // Verify results
@@ -198,18 +188,10 @@ suite(
         // Create a registry with no competitions
         let registryState : CompetitionRegistryTypes.CompetitionRegistryState = {
           var globalConfig = {
-            govToken = mockGovToken;
             multiToken = mockSystemToken;
             approvedTokens = [mockTokenA];
             theta = { value = CompetitionTestUtils.getFIVE_PERCENT() };
-            govRate = { value = CompetitionTestUtils.getTEN_PERCENT() };
-            multiRate = { value = CompetitionTestUtils.getTWENTY_PERCENT() };
-            systemStakeGov = {
-              value = CompetitionTestUtils.getONE_HUNDRED_PERCENT();
-            };
-            systemStakeMulti = {
-              value = CompetitionTestUtils.getONE_HUNDRED_PERCENT();
-            };
+            stakeTokenConfigs = CompetitionTestUtils.createDefaultStakeTokenConfigs();
             competitionCycleDuration = 86_400_000_000_000;
             preAnnouncementDuration = 3_600_000_000_000;
             rewardDistributionDuration = 7_200_000_000_000;
@@ -248,7 +230,6 @@ suite(
           govStake,
           mockUser, // Using the principal directly as account
           mockTokenA,
-          false,
         );
 
         // Verify results
@@ -265,7 +246,7 @@ suite(
     );
 
     test(
-      "accepts and queues stake requests properly",
+      "accepts and processes stake requests immediately",
       func() {
         // Create test environment with registry
         let (registryStore, userAccounts, userAccount, getCirculatingSupply, getBackingTokens) = createTestEnvironmentWithRegistry();
@@ -294,12 +275,11 @@ suite(
               value = 1000;
             };
 
-            // Submit a stake request as queued
+            // Submit a stake request - now processed immediately
             let result = userOps.acceptStakeRequest(
               govStake,
               userAccount,
               mockTokenA,
-              true // queued
             );
 
             // Verify results
@@ -309,7 +289,6 @@ suite(
                 expect.bool(false).isTrue(); // Force test failure
               };
               case (#ok(data)) {
-                expect.bool(data.isQueued).isTrue();
                 expect.principal(data.tokenQuantity.token).equal(mockTokenA);
 
                 // Get a fresh entry store to check submissions
@@ -320,9 +299,9 @@ suite(
                     expect.bool(false).isTrue();
                   };
                   case (?freshEntryStore) {
-                    // Verify the submission was added with Queued status
-                    let queuedSubmissions = freshEntryStore.getSubmissionsByStatus(#Queued);
-                    Debug.print("Number of queued submissions: " # Nat.toText(queuedSubmissions.size()));
+                    // Verify the submission was added with Staked status
+                    let stakedSubmissions = freshEntryStore.getSubmissionsByStatus(#Staked);
+                    Debug.print("Number of staked submissions: " # Nat.toText(stakedSubmissions.size()));
 
                     // Also check all submissions
                     let allSubmissions = freshEntryStore.getAllSubmissions();
@@ -331,13 +310,13 @@ suite(
                       Debug.print("Submission " # Nat.toText(sub.id) # " status: " # debug_show (sub.status));
                     };
 
-                    expect.nat(queuedSubmissions.size()).equal(1);
+                    expect.nat(stakedSubmissions.size()).equal(1);
 
                     // Verify the submission has the expected properties
-                    let submission = queuedSubmissions[0];
+                    let submission = stakedSubmissions[0];
                     expect.nat(submission.id).equal(data.submissionId);
                     expect.principal(submission.token).equal(mockTokenA);
-                    expect.bool(submission.status == #Queued).isTrue();
+                    expect.bool(submission.status == #Staked).isTrue();
                   };
                 };
               };

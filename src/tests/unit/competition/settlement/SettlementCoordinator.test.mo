@@ -69,13 +69,19 @@ suite(
         systemAccount,
       );
 
-      // Create settlement coordinator
+      // Create stake token configs
+      let stakeTokenConfigs : [(Types.Token, Types.Ratio)] = [
+        (CompetitionTestUtils.getGovToken(), { value = CompetitionTestUtils.getFIVE_PERCENT() }),
+        (CompetitionTestUtils.getMultiToken(), { value = CompetitionTestUtils.getONE_PERCENT() }),
+      ];
+
+      // Create settlement coordinator with stake token configs
       let settlementCoordinator = SettlementCoordinator.SettlementCoordinator(
         userAccounts,
         stakeAccounts,
         backingOps,
         backingStore,
-        CompetitionTestUtils.getGovToken(),
+        stakeTokenConfigs,
         systemAccount,
       );
 
@@ -90,27 +96,6 @@ suite(
       let govToken = CompetitionTestUtils.getGovToken();
       let multiToken = CompetitionTestUtils.getMultiToken();
 
-      // Create gov and multi stakes
-      let govStake1 : Types.Amount = {
-        token = govToken;
-        value = 1000;
-      };
-
-      let multiStake1 : Types.Amount = {
-        token = multiToken;
-        value = 200;
-      };
-
-      let govStake2 : Types.Amount = {
-        token = govToken;
-        value = 2000;
-      };
-
-      let multiStake2 : Types.Amount = {
-        token = multiToken;
-        value = 400;
-      };
-
       // Create adjusted quantities
       let quantity1 : Types.Amount = {
         token = token1;
@@ -122,12 +107,14 @@ suite(
         value = 10_000;
       };
 
-      // Create two test submissions
+      // Create two test submissions with flexible stakes
       let submission1 : SubmissionTypes.Submission = {
         id = 0;
         participant = testUser;
-        govStake = govStake1;
-        multiStake = multiStake1;
+        stakes = [
+          (govToken, { token = govToken; value = 1000 }),
+          (multiToken, { token = multiToken; value = 200 }),
+        ];
         token = token1;
         proposedQuantity = quantity1;
         timestamp = 0;
@@ -142,8 +129,10 @@ suite(
       let submission2 : SubmissionTypes.Submission = {
         id = 1;
         participant = testUser;
-        govStake = govStake2;
-        multiStake = multiStake2;
+        stakes = [
+          (govToken, { token = govToken; value = 2000 }),
+          (multiToken, { token = multiToken; value = 400 }),
+        ];
         token = token2;
         proposedQuantity = quantity2;
         timestamp = 0;
@@ -162,39 +151,23 @@ suite(
     let createTestSystemStake = func() : SystemStakeTypes.SystemStake {
       let govToken = CompetitionTestUtils.getGovToken();
       let multiToken = CompetitionTestUtils.getMultiToken();
-
-      let govSystemStake : Types.Amount = {
-        token = govToken;
-        value = 5_000;
-      };
-
-      let multiSystemStake : Types.Amount = {
-        token = multiToken;
-        value = 3_000;
-      };
-
-      // Create phantom positions for test tokens
       let token1 = CompetitionTestUtils.getTestToken1();
       let token2 = CompetitionTestUtils.getTestToken2();
 
-      let phantomPos1 : Types.Amount = {
-        token = token1;
-        value = 5_000;
-      };
+      // Create system stakes array
+      let systemStakes : [(Types.Token, Types.Amount)] = [
+        (govToken, { token = govToken; value = 5_000 }),
+        (multiToken, { token = multiToken; value = 3_000 }),
+      ];
 
-      let phantomPos2 : Types.Amount = {
-        token = token2;
-        value = 3_000;
-      };
-
+      // Create phantom positions for test tokens
       let phantomPositions : [(Types.Token, Types.Amount)] = [
-        (token1, phantomPos1),
-        (token2, phantomPos2),
+        (token1, { token = token1; value = 5_000 }),
+        (token2, { token = token2; value = 3_000 }),
       ];
 
       {
-        govSystemStake;
-        multiSystemStake;
+        systemStakes;
         phantomPositions;
       };
     };
@@ -265,8 +238,10 @@ suite(
               Debug.trap("Unexpected null adjustedQuantity");
             };
           };
-          stakeAccounts.mint(submission.participant, submission.govStake);
-          stakeAccounts.mint(submission.participant, submission.multiStake);
+          // Mint all stakes
+          for ((_, amount) in submission.stakes.vals()) {
+            stakeAccounts.mint(submission.participant, amount);
+          };
         };
 
         // Create execution prices
@@ -370,8 +345,10 @@ suite(
               Debug.trap("Unexpected null adjustedQuantity");
             };
           };
-          stakeAccounts.mint(submission.participant, submission.govStake);
-          stakeAccounts.mint(submission.participant, submission.multiStake);
+          // Mint all stakes
+          for ((_, amount) in submission.stakes.vals()) {
+            stakeAccounts.mint(submission.participant, amount);
+          };
         };
 
         // Create execution prices with exact values that will result in clean division
@@ -474,18 +451,19 @@ suite(
         let testUser2 = CompetitionTestUtils.getUser2Principal();
         let token1 = CompetitionTestUtils.getTestToken1();
         let token2 = CompetitionTestUtils.getTestToken2();
+        let govToken = CompetitionTestUtils.getGovToken();
+        let multiToken = CompetitionTestUtils.getMultiToken();
 
         // PHASE 1: First settlement with two users and three tokens
 
-        // Create base submissions
+        // Create base submissions with flexible stakes
         let baseSubmission1 = {
           id = 0;
           participant = testUser;
-          govStake = { token = CompetitionTestUtils.getGovToken(); value = 100 };
-          multiStake = {
-            token = CompetitionTestUtils.getMultiToken();
-            value = 200;
-          };
+          stakes = [
+            (govToken, { token = govToken; value = 100 }),
+            (multiToken, { token = multiToken; value = 200 }),
+          ];
           token = token1;
           proposedQuantity = { token = token1; value = 1000 };
           timestamp = Time.now();
@@ -555,17 +533,18 @@ suite(
               Debug.trap("Unexpected null adjustedQuantity");
             };
           };
-          stakeAccounts.mint(submission.participant, submission.govStake);
-          stakeAccounts.mint(submission.participant, submission.multiStake);
+          // Mint all stakes
+          for ((_, amount) in submission.stakes.vals()) {
+            stakeAccounts.mint(submission.participant, amount);
+          };
         };
 
         // Create system stake with phantom positions for all three tokens
-        let govToken = CompetitionTestUtils.getGovToken();
-        let multiToken = CompetitionTestUtils.getMultiToken();
-
         let systemStake = {
-          govSystemStake = { token = govToken; value = 5_000 };
-          multiSystemStake = { token = multiToken; value = 3_000 };
+          systemStakes = [
+            (govToken, { token = govToken; value = 5_000 }),
+            (multiToken, { token = multiToken; value = 3_000 }),
+          ];
           phantomPositions = [
             (token1, { token = token1; value = 4_000 }),
             (token2, { token = token2; value = 2_000 }),
@@ -676,8 +655,9 @@ suite(
         };
 
         // Add tokens to stake accounts
-        stakeAccounts.mint(testUser, submission5.govStake);
-        stakeAccounts.mint(testUser, submission5.multiStake);
+        for ((_, amount) in submission5.stakes.vals()) {
+          stakeAccounts.mint(testUser, amount);
+        };
         switch (submission5.adjustedQuantity) {
           case (?adjustedQuantity) {
             stakeAccounts.mint(testUser, adjustedQuantity);
@@ -685,8 +665,9 @@ suite(
           case (null) { Debug.trap("Unexpected null adjustedQuantity") };
         };
 
-        stakeAccounts.mint(testUser2, submission6.govStake);
-        stakeAccounts.mint(testUser2, submission6.multiStake);
+        for ((_, amount) in submission6.stakes.vals()) {
+          stakeAccounts.mint(testUser2, amount);
+        };
         switch (submission6.adjustedQuantity) {
           case (?adjustedQuantity) {
             stakeAccounts.mint(testUser2, adjustedQuantity);
@@ -696,8 +677,10 @@ suite(
 
         // Create new system stake with updated phantom positions
         let newSystemStake = {
-          govSystemStake = { token = govToken; value = 4_000 };
-          multiSystemStake = { token = multiToken; value = 2_000 };
+          systemStakes = [
+            (govToken, { token = govToken; value = 4_000 }),
+            (multiToken, { token = multiToken; value = 2_000 }),
+          ];
           phantomPositions = [
             (token1, { token = token1; value = 3_000 }),
             (token2, { token = token2; value = 4_000 }),

@@ -1,69 +1,82 @@
 import Principal "mo:base/Principal";
 import Array "mo:base/Array";
 import Debug "mo:base/Debug";
+import Buffer "mo:base/Buffer";
+
 import Types "../../types/Types";
 import BackingTypes "../../types/BackingTypes";
 import SystemStakeTypes "../../types/SystemStakeTypes";
 import SystemStakeCalculator "./SystemStakeCalculator";
 import CompetitionEntryStore "../CompetitionEntryStore";
+import TokenAccessHelper "../../helper/TokenAccessHelper";
 
-/**
- * SystemStakeHelper provides higher-level functions for working with system stakes
- * that combine multiple calculations from SystemStakeCalculator.
- */
 module {
   /**
-   * Calculates both governance and multi token system stakes along with their phantom positions.
+   * Calculates system stakes for all configured stake tokens.
    *
    * @param competitionEntry The competition entry with current state
-   * @param govMultiplier The governance token system multiplier
-   * @param multiMultiplier The multi token system multiplier
-   * @param totalGovStake The total player governance stake
-   * @param totalMultiStake The total player multi stake
+   * @param totalStakes Array of total player stakes for each token
    * @param volumeLimit The calculated volume limit
    * @param backingPairs The current backing pairs representing token distribution
    * @returns Complete information about system stakes and phantom positions
    */
   public func calculateSystemStakes(
     competitionEntry : CompetitionEntryStore.CompetitionEntryStore,
-    govMultiplier : Types.Ratio,
-    multiMultiplier : Types.Ratio,
-    totalGovStake : Nat,
-    totalMultiStake : Nat,
+    totalStakes : [(Types.Token, Nat)],
     volumeLimit : Nat,
     backingPairs : [BackingTypes.BackingPair],
   ) : SystemStakeTypes.SystemStake {
 
-    // Calculate governance system stake
-    let govSystemStake = SystemStakeCalculator.calculateSystemStake(
-      totalGovStake,
-      govMultiplier,
-      competitionEntry.getGovRate(),
-      volumeLimit,
-      competitionEntry.getGovToken(),
-    );
+    let stakeConfigs = competitionEntry.getStakeTokenConfigs();
+    let systemStakesBuffer = Buffer.Buffer<(Types.Token, Types.Amount)>(stakeConfigs.size());
 
-    // Calculate multi system stake
-    let multiSystemStake = SystemStakeCalculator.calculateSystemStake(
-      totalMultiStake,
-      multiMultiplier,
-      competitionEntry.getMultiRate(),
-      volumeLimit,
-      competitionEntry.getMultiToken(),
-    );
+    // Calculate system stake for each configured token
+    for (config in stakeConfigs.vals()) {
+      // Find total stake for this token
+      let totalStake = switch (TokenAccessHelper.findInTokenArray(totalStakes, config.token)) {
+        case (null) { 0 };
+        case (?amount) { amount };
+      };
 
-    // Calculate phantom positions based on multi token
-    // (since these positions represent how the system would distribute assets)
+      // Calculate system stake for this token
+      let systemStake = SystemStakeCalculator.calculateSystemStake(
+        totalStake,
+        config.systemMultiplier,
+        config.baseRate,
+        volumeLimit,
+        config.token,
+      );
+
+      systemStakesBuffer.add((config.token, systemStake));
+    };
+
+    let systemStakes = Buffer.toArray(systemStakesBuffer);
+
+    // For phantom positions, use the first configured stake token
+    // (any would work due to rate normalization)
+    if (stakeConfigs.size() == 0) {
+      Debug.trap("No stake tokens configured");
+    };
+
+    let phantomBaseToken = stakeConfigs[0].token;
+    let phantomStakeOpt = TokenAccessHelper.findInTokenArray(systemStakes, phantomBaseToken);
+
+    let phantomSystemStake = switch (phantomStakeOpt) {
+      case (null) { { token = phantomBaseToken; value = 0 } };
+      case (?amount) { amount };
+    };
+
+    let phantomRate = competitionEntry.getEffectiveRate(phantomBaseToken);
+
     let phantomPositions = SystemStakeCalculator.calculatePhantomPositions(
-      multiSystemStake,
-      competitionEntry.getMultiRate(),
+      phantomSystemStake,
+      phantomRate,
       backingPairs,
     );
 
     {
-      govSystemStake;
-      multiSystemStake;
-      phantomPositions;
+      systemStakes = systemStakes;
+      phantomPositions = phantomPositions;
     };
   };
 };

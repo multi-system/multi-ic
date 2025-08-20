@@ -13,6 +13,7 @@ import RewardTypes "../../types/RewardTypes";
 import SubmissionTypes "../../types/SubmissionTypes";
 import SystemStakeTypes "../../types/SystemStakeTypes";
 import SettlementTypes "../../types/SettlementTypes";
+import TokenAccessHelper "../../helper/TokenAccessHelper";
 import UserPositionSettlement "./UserPositionSettlement";
 import PhantomPositionSettlement "./PhantomPositionSettlement";
 import AcquisitionMinter "./AcquisitionMinter";
@@ -31,7 +32,7 @@ module {
     stakeAccounts : VirtualAccounts.VirtualAccounts,
     backingOps : BackingOperations.BackingOperations,
     backingStore : BackingStore.BackingStore,
-    govToken : Types.Token,
+    stakeTokenConfigs : [(Types.Token, Types.Ratio)],
     systemAccount : Types.Account,
   ) {
     private let multiToken = backingStore.getMultiToken();
@@ -47,7 +48,7 @@ module {
       userAccounts,
       backingOps,
       backingStore,
-      govToken,
+      stakeTokenConfigs,
       systemAccount,
     );
 
@@ -214,11 +215,17 @@ module {
         tokenAmountsArray.add((token, amount));
       };
 
+      // Extract Multi token amount from system stake result
+      let systemStakeMinted = switch (TokenAccessHelper.findInTokenArray(systemStakeResult.mintedAmounts, multiToken)) {
+        case (?amount) { amount };
+        case (null) { { token = multiToken; value = 0 } };
+      };
+
       // Create the settlement record
       {
         tokenAmounts = Buffer.toArray(tokenAmountsArray);
         multiMinted = multiMinted;
-        systemStakeMinted = systemStakeResult.multiAmount;
+        systemStakeMinted = systemStakeMinted;
         timestamp = Time.now();
       };
     };

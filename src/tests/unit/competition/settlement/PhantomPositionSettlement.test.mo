@@ -8,6 +8,7 @@ import RewardTypes "../../../../multi_backend/types/RewardTypes";
 import SystemStakeTypes "../../../../multi_backend/types/SystemStakeTypes";
 import PhantomPositionSettlement "../../../../multi_backend/competition/settlement/PhantomPositionSettlement";
 import CompetitionTestUtils "../CompetitionTestUtils";
+import TokenAccessHelper "../../../../multi_backend/helper/TokenAccessHelper";
 
 suite(
   "Phantom Position Settlement",
@@ -26,6 +27,12 @@ suite(
         token = multiToken;
         value = 25_000;
       };
+
+      // System stakes array
+      let systemStakes : [(Types.Token, Types.Amount)] = [
+        (govToken, govSystemStake),
+        (multiToken, multiSystemStake),
+      ];
 
       // Create phantom positions for test tokens
       let token1 = CompetitionTestUtils.getTestToken1();
@@ -47,9 +54,8 @@ suite(
       ];
 
       {
-        govSystemStake;
-        multiSystemStake;
-        phantomPositions;
+        systemStakes = systemStakes;
+        phantomPositions = phantomPositions;
       };
     };
 
@@ -80,11 +86,31 @@ suite(
         assert (Principal.equal(position.quantity.token, testToken));
 
         // Verify system stake references
-        assert (position.govStake.value == 50_000);
-        assert (Principal.equal(position.govStake.token, CompetitionTestUtils.getGovToken()));
+        assert (position.stakes.size() == 2); // Should have two stake tokens
 
-        assert (position.multiStake.value == 25_000);
-        assert (Principal.equal(position.multiStake.token, CompetitionTestUtils.getMultiToken()));
+        // Find the gov stake in the stakes array
+        let govStake = TokenAccessHelper.findInTokenArray(position.stakes, CompetitionTestUtils.getGovToken());
+        switch (govStake) {
+          case (?stake) {
+            assert (stake.value == 50_000);
+            assert (Principal.equal(stake.token, CompetitionTestUtils.getGovToken()));
+          };
+          case null {
+            assert false; // Should have gov stake
+          };
+        };
+
+        // Find the multi stake in the stakes array
+        let multiStake = TokenAccessHelper.findInTokenArray(position.stakes, CompetitionTestUtils.getMultiToken());
+        switch (multiStake) {
+          case (?stake) {
+            assert (stake.value == 25_000);
+            assert (Principal.equal(stake.token, CompetitionTestUtils.getMultiToken()));
+          };
+          case null {
+            assert false; // Should have multi stake
+          };
+        };
       },
     );
 
@@ -111,11 +137,39 @@ suite(
         assert (positions[0].quantity.value == 10_000);
         assert (Principal.equal(positions[0].quantity.token, CompetitionTestUtils.getTestToken1()));
 
+        // Verify all positions have the same system stakes
+        assert (positions[0].stakes.size() == 2);
+
+        // Find gov stake in first position
+        let govStake0 = TokenAccessHelper.findInTokenArray(positions[0].stakes, CompetitionTestUtils.getGovToken());
+        switch (govStake0) {
+          case (?stake) {
+            assert (stake.value == 50_000);
+          };
+          case null {
+            assert false;
+          };
+        };
+
         // Verify second position
         assert (positions[1].isSystem == true);
         assert (positions[1].submissionId == null);
         assert (positions[1].quantity.value == 5_000);
         assert (Principal.equal(positions[1].quantity.token, CompetitionTestUtils.getTestToken2()));
+
+        // Verify second position has same system stakes
+        assert (positions[1].stakes.size() == 2);
+
+        // Find gov stake in second position
+        let govStake1 = TokenAccessHelper.findInTokenArray(positions[1].stakes, CompetitionTestUtils.getGovToken());
+        switch (govStake1) {
+          case (?stake) {
+            assert (stake.value == 50_000);
+          };
+          case null {
+            assert false;
+          };
+        };
       },
     );
 
@@ -143,6 +197,9 @@ suite(
         assert (zeroPosition.quantity.value == 0);
         assert (Principal.equal(zeroPosition.quantity.token, zeroToken));
 
+        // Verify it still has the system stakes
+        assert (zeroPosition.stakes.size() == 2);
+
         // Test with very large value
         let largeToken = CompetitionTestUtils.getTestToken2();
         let largeAmount : Types.Amount = {
@@ -160,6 +217,9 @@ suite(
         assert (largePosition.isSystem == true);
         assert (largePosition.quantity.value == 999_999_999_999);
         assert (Principal.equal(largePosition.quantity.token, largeToken));
+
+        // Verify it still has the system stakes
+        assert (largePosition.stakes.size() == 2);
       },
     );
   },

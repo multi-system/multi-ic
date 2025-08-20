@@ -37,18 +37,16 @@ module {
      * Accept a stake request from a user for the current active competition.
      * This method handles user input validation and returns appropriate errors.
      *
-     * @param govStake The governance token stake
+     * @param inputStake The stake token and amount
      * @param account The account making the stake
      * @param proposedToken The token being proposed
-     * @param shouldQueue Whether to queue the submission
      * @return Result with submission details or error
      */
     public func acceptStakeRequest(
-      govStake : Types.Amount,
+      inputStake : { token : Types.Token; value : Nat },
       account : Types.Account,
       proposedToken : Types.Token,
-      shouldQueue : Bool,
-    ) : Result.Result<{ submissionId : SubmissionTypes.SubmissionId; tokenQuantity : Types.Amount; isQueued : Bool }, Error.CompetitionError> {
+    ) : Result.Result<{ submissionId : SubmissionTypes.SubmissionId; tokenQuantity : Types.Amount }, Error.CompetitionError> {
       // Get the current active competition
       switch (registryStore.getCurrentCompetitionEntryStore()) {
         case (null) {
@@ -62,7 +60,7 @@ module {
 
           // Create the staking manager and process the stake request
           let stakingManager = createStakingManager(entryStore);
-          stakingManager.acceptStakeRequest(govStake, account, proposedToken, shouldQueue);
+          stakingManager.acceptStakeRequest(inputStake, account, proposedToken);
         };
       };
     };

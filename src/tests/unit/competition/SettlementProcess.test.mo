@@ -83,12 +83,18 @@ suite(
           systemAccount,
         );
 
+        // Create stake token configs
+        let stakeTokenConfigs : [(Types.Token, Types.Ratio)] = [
+          (CompetitionTestUtils.getGovToken(), { value = CompetitionTestUtils.getFIVE_PERCENT() }),
+          (CompetitionTestUtils.getMultiToken(), { value = CompetitionTestUtils.getONE_PERCENT() }),
+        ];
+
         let settlementCoordinator = SettlementCoordinator.SettlementCoordinator(
           userAccounts,
           stakeVault.getStakeAccounts(),
           backingOps,
           backingStore,
-          CompetitionTestUtils.getGovToken(),
+          stakeTokenConfigs,
           systemAccount,
         );
 
@@ -125,9 +131,9 @@ suite(
         // PHASE 1: Prepare the competition
         entryStore.updateStatus(#AcceptingStakes);
 
-        // Record initial stake rates
-        let initialGovRate = entryStore.getGovRate().value;
-        let initialMultiRate = entryStore.getMultiRate().value;
+        // Record initial stake rates for each token
+        let initialGovRate = entryStore.getBaseRate(CompetitionTestUtils.getGovToken()).value;
+        let initialMultiRate = entryStore.getBaseRate(CompetitionTestUtils.getMultiToken()).value;
 
         // PHASE 2: Create and add submissions
 
@@ -143,8 +149,10 @@ suite(
         let submission1 = {
           id = submission1Id;
           participant = user;
-          govStake = { token = govToken; value = 5000 };
-          multiStake = { token = multiToken; value = 1000 };
+          stakes = [
+            (govToken, { token = govToken; value = 5000 }),
+            (multiToken, { token = multiToken; value = 1000 }),
+          ];
           token = token1;
           proposedQuantity = { token = token1; value = 100000 };
           timestamp = Time.now();
@@ -160,8 +168,10 @@ suite(
         let submission2 = {
           id = submission2Id;
           participant = user2;
-          govStake = { token = govToken; value = 2500 };
-          multiStake = { token = multiToken; value = 500 };
+          stakes = [
+            (govToken, { token = govToken; value = 2500 }),
+            (multiToken, { token = multiToken; value = 500 }),
+          ];
           token = token2;
           proposedQuantity = { token = token2; value = 50000 };
           timestamp = Time.now();
@@ -174,12 +184,14 @@ suite(
         };
 
         // Add tokens to stake vault
-        stakeVault.stake(user, submission1.govStake);
-        stakeVault.stake(user, submission1.multiStake);
+        for ((token, amount) in submission1.stakes.vals()) {
+          stakeVault.stake(user, amount);
+        };
         stakeVault.stake(user, submission1.proposedQuantity);
 
-        stakeVault.stake(user2, submission2.govStake);
-        stakeVault.stake(user2, submission2.multiStake);
+        for ((token, amount) in submission2.stakes.vals()) {
+          stakeVault.stake(user2, amount);
+        };
         stakeVault.stake(user2, submission2.proposedQuantity);
 
         // Add submissions to store
@@ -201,8 +213,10 @@ suite(
 
         // Create system stake manually
         let systemStake : SystemStakeTypes.SystemStake = {
-          govSystemStake = { token = govToken; value = 10000 };
-          multiSystemStake = { token = multiToken; value = 2000 };
+          systemStakes = [
+            (govToken, { token = govToken; value = 10000 }),
+            (multiToken, { token = multiToken; value = 2000 }),
+          ];
           phantomPositions = [
             (token1, { token = token1; value = 5000 }),
             (token2, { token = token2; value = 3000 }),
@@ -240,7 +254,10 @@ suite(
         // Manually update rates to simulate rate adjustment during finalization
         let finalGovRate = { value = initialGovRate * 110 / 100 }; // 110% of original
         let finalMultiRate = { value = initialMultiRate * 110 / 100 }; // 110% of original
-        entryStore.updateStakeRates(finalGovRate, finalMultiRate);
+        ignore entryStore.updateAllStakeRates([
+          (govToken, finalGovRate),
+          (multiToken, finalMultiRate),
+        ]);
 
         // Move to Settlement
         entryStore.updateStatus(#Settlement);
@@ -251,8 +268,10 @@ suite(
         let settlementResult = settlementInitiator({
           finalizedSubmissions = finalizedSubmissions;
           systemStake = systemStake;
-          govRate = finalGovRate;
-          multiRate = finalMultiRate;
+          adjustedRates = [
+            (govToken, finalGovRate),
+            (multiToken, finalMultiRate),
+          ];
           volumeLimit = volumeLimit;
         });
 

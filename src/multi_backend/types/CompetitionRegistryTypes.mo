@@ -2,6 +2,7 @@ import Time "mo:base/Time";
 import Types "Types";
 import CompetitionEntryTypes "CompetitionEntryTypes";
 import EventTypes "EventTypes";
+import StakeTokenTypes "StakeTokenTypes";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 
 module {
@@ -18,14 +19,10 @@ module {
   // These parameters serve as the template for new competitions
   // and are inherited by each competition when it's created
   public type GlobalCompetitionConfig = {
-    govToken : Types.Token; // Governance token identifier
     multiToken : Types.Token; // Multi token identifier
     approvedTokens : [Types.Token]; // Tokens approved for submission
     theta : Types.Ratio; // Volume limit ratio
-    govRate : Types.Ratio; // Base stake rate for governance tokens
-    multiRate : Types.Ratio; // Base stake rate for multi tokens
-    systemStakeGov : Types.Ratio; // System stake multiplier for gov tokens
-    systemStakeMulti : Types.Ratio; // System stake multiplier for multi tokens
+    stakeTokenConfigs : [StakeTokenTypes.StakeTokenConfig]; // Configuration for all stake tokens
     competitionCycleDuration : Time.Time; // Total time until next competition starts
     preAnnouncementDuration : Time.Time; // Duration of initial buffer period
     rewardDistributionDuration : Time.Time; // Time between reward distributions

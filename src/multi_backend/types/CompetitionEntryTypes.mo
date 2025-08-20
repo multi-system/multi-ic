@@ -2,6 +2,7 @@ import Time "mo:base/Time";
 import Types "Types";
 import SystemStakeTypes "SystemStakeTypes";
 import SubmissionTypes "SubmissionTypes";
+import StakeTokenTypes "StakeTokenTypes";
 import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
 import AccountTypes "../types/AccountTypes";
 import EventTypes "EventTypes";
@@ -26,14 +27,10 @@ module {
 
   // Configuration parameters set by governance
   public type CompetitionConfig = {
-    govToken : Types.Token; // Governance token identifier
     multiToken : Types.Token; // Multi token identifier
     approvedTokens : [Types.Token]; // Tokens approved for submission
     theta : Types.Ratio; // Volume limit ratio
-    govRate : Types.Ratio; // Base stake rate for governance tokens
-    multiRate : Types.Ratio; // Base stake rate for multi tokens
-    systemStakeGov : Types.Ratio; // System stake multiplier for gov tokens
-    systemStakeMulti : Types.Ratio; // System stake multiplier for multi tokens
+    stakeTokenConfigs : [StakeTokenTypes.StakeTokenConfig]; // Configuration for all stake tokens
     competitionCycleDuration : Time.Time; // Total time until next competition starts
     preAnnouncementDuration : Time.Time; // Duration of initial buffer period
     rewardDistributionDuration : Time.Time; // Time between reward distributions
@@ -59,13 +56,11 @@ module {
     // Maps user accounts to token balances for staked tokens
     stakeAccounts : StableHashMap.StableHashMap<Types.Account, AccountTypes.BalanceMap>;
 
-    // Stake totals
-    totalGovStake : Nat; // Total governance tokens staked
-    totalMultiStake : Nat; // Total multi tokens staked
+    // Stake totals - one entry per configured stake token
+    totalStakes : [(Types.Token, Nat)]; // Total stakes per token type
 
     // Rate adjustments & limits
-    adjustedGovRate : ?Types.Ratio; // Adjusted stake rate after competition filled
-    adjustedMultiRate : ?Types.Ratio; // Adjusted stake rate after competition filled
+    adjustedRates : ?[(Types.Token, Types.Ratio)]; // Adjusted stake rates after competition filled
     volumeLimit : Nat; // Calculated volume limit for this competition
 
     // System participation

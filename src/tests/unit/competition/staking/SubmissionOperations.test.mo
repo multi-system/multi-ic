@@ -1,7 +1,8 @@
 import Principal "mo:base/Principal";
 import { test; suite } "mo:test";
 import Result "mo:base/Result";
-import StableHashMap "mo:stablehashmap/FunctionalStableHashMap";
+import Debug "mo:base/Debug";
+import Array "mo:base/Array";
 
 import Types "../../../../multi_backend/types/Types";
 import Error "../../../../multi_backend/error/Error";
@@ -10,9 +11,8 @@ import CompetitionEntryTypes "../../../../multi_backend/types/CompetitionEntryTy
 import CompetitionEntryStore "../../../../multi_backend/competition/CompetitionEntryStore";
 import StakeVault "../../../../multi_backend/competition/staking/StakeVault";
 import StakeCalculator "../../../../multi_backend/competition/staking/StakeCalculator";
-import SubmissionOperations "../../../../multi_backend/competition/staking/SubmissionOperations";
+import StakingManager "../../../../multi_backend/competition/staking/StakingManager";
 import CompetitionTestUtils "../CompetitionTestUtils";
-import AccountTypes "../../../../multi_backend/types/AccountTypes";
 
 suite(
   "Submission Operations",
@@ -20,133 +20,117 @@ suite(
     // Setup test environment for each test
     let setupTest = func() : (
       CompetitionEntryStore.CompetitionEntryStore,
-      StakeVault.StakeVault,
+      StakingManager.StakingManager,
       Types.Account,
-      () -> Nat,
-      () -> [Types.Amount],
     ) {
       let competitionEntry = CompetitionTestUtils.createCompetitionEntryStore();
       let testUser = CompetitionTestUtils.getUserPrincipal();
-      let getCirculatingSupply = CompetitionTestUtils.createCirculatingSupplyFunction(1_000_000);
 
-      // Define a dummy getReserve function for testing
-      // This would return the current reserve composition in a real scenario
-      let getReserve = func() : [Types.Amount] {
-        [
-          { token = CompetitionTestUtils.getTestToken1(); value = 100_000 },
-          { token = CompetitionTestUtils.getTestToken2(); value = 200_000 },
-          { token = CompetitionTestUtils.getTestToken3(); value = 300_000 },
-        ];
-      };
+      let getCirculatingSupply = CompetitionTestUtils.createCirculatingSupplyFunction(1_000_000);
+      let getBackingTokens = CompetitionTestUtils.getBackingTokensFunction();
+
+      let stakingManager = StakingManager.StakingManager(
+        competitionEntry,
+        getCirculatingSupply,
+        getBackingTokens,
+      );
 
       competitionEntry.updateStatus(#AcceptingStakes);
 
-      (competitionEntry, competitionEntry.getStakeVault(), testUser, getCirculatingSupply, getReserve);
+      (competitionEntry, stakingManager, testUser);
     };
 
     test(
-      "createSubmission creates a valid submission with correct properties",
+      "creates a valid submission with correct properties",
       func() {
-        let (competitionEntry, _, user, _, _) = setupTest();
+        let (competitionEntry, stakingManager, user) = setupTest();
+        let stakeVault = competitionEntry.getStakeVault();
 
         let govStake : Types.Amount = {
           token = CompetitionTestUtils.getGovToken();
           value = 1000;
         };
-
-        let multiStake : Types.Amount = {
-          token = CompetitionTestUtils.getMultiToken();
-          value = 500;
-        };
-
         let testToken = CompetitionTestUtils.getTestToken1();
-        let tokenQuantity = 10000;
 
-        let submission = SubmissionOperations.createSubmission(
-          competitionEntry,
+        let result = stakingManager.acceptStakeRequest(
+          govStake,
           user,
           testToken,
-          tokenQuantity,
-          govStake,
-          multiStake,
         );
 
-        // Verify the submission properties
-        assert (submission.id == 0);
-        assert (Principal.equal(submission.participant, user));
-        assert (submission.govStake.value == 1000);
-        assert (submission.multiStake.value == 500);
-        assert (Principal.equal(submission.token, testToken));
-        assert (submission.proposedQuantity.value == tokenQuantity);
-        assert (submission.status == #Queued);
-        assert (submission.rejectionReason == null);
-        assert (submission.adjustedQuantity == null);
-        assert (submission.soldQuantity == null);
-        assert (submission.executionPrice == null);
-        assert (submission.positionId == null);
+        switch (result) {
+          case (#err(error)) {
+            Debug.print("Unexpected error: " # debug_show (error));
+            assert (false);
+          };
+          case (#ok(output)) {
+            // Verify submission properties
+            assert (output.submissionId == 0);
+
+            // Get the submission from the store
+            let submissions = competitionEntry.getAllSubmissions();
+            assert (submissions.size() == 1);
+
+            let submission = submissions[0];
+            assert (Principal.equal(submission.participant, user));
+            assert (Principal.equal(submission.token, testToken));
+            assert (submission.proposedQuantity.value == output.tokenQuantity.value);
+            assert (submission.status == #Staked);
+            assert (submission.rejectionReason == null);
+            assert (submission.adjustedQuantity == null);
+            assert (submission.soldQuantity == null);
+            assert (submission.executionPrice == null);
+            assert (submission.positionId == null);
+
+            // Verify stakes in the flexible array format
+            assert (submission.stakes.size() == 2);
+            let (govToken, govStakeAmount) = submission.stakes[0];
+            let (multiToken, multiStakeAmount) = submission.stakes[1];
+            assert (govStakeAmount.value == 1000);
+            assert (multiStakeAmount.value == 200); // Calculated from rates
+          };
+        };
       },
     );
 
     test(
-      "processSubmission handles valid submission correctly",
+      "processes valid submission correctly",
       func() {
-        let (competitionEntry, stakeVault, user, _, _) = setupTest();
+        let (competitionEntry, stakingManager, user) = setupTest();
+        let stakeVault = competitionEntry.getStakeVault();
 
-        // Create a submission
-        let testToken = CompetitionTestUtils.getTestToken1();
         let govStake : Types.Amount = {
           token = CompetitionTestUtils.getGovToken();
           value = 1000;
         };
-        let multiStake : Types.Amount = {
-          token = CompetitionTestUtils.getMultiToken();
-          value = 500;
-        };
-        let proposedQuantity : Types.Amount = {
-          token = testToken;
-          value = 5000;
-        };
+        let testToken = CompetitionTestUtils.getTestToken1();
 
-        let submission = SubmissionOperations.createSubmission(
-          competitionEntry,
+        let result = stakingManager.acceptStakeRequest(
+          govStake,
           user,
           testToken,
-          proposedQuantity.value,
-          govStake,
-          multiStake,
         );
 
-        // Process the submission
-        let result = SubmissionOperations.processSubmission(
-          competitionEntry,
-          stakeVault,
-          submission,
-        );
-
-        // Check the result
         switch (result) {
           case (#err(_)) {
-            assert (false); // Should not reach here
+            assert (false);
           };
-          case (#ok(updatedSubmission)) {
-            // Verify the submission was updated correctly
-            assert (updatedSubmission.status == #Staked);
-
-            // Verify that the submission was added to the store
+          case (#ok(output)) {
+            // Verify the submission was processed correctly
             let allSubmissions = competitionEntry.getAllSubmissions();
             assert (allSubmissions.size() == 1);
-            assert (allSubmissions[0].id == submission.id);
+            assert (allSubmissions[0].id == output.submissionId);
             assert (allSubmissions[0].status == #Staked);
 
             // Verify that token balances were updated
             let stakeAccounts = stakeVault.getStakeAccounts();
-            assert (stakeAccounts.getBalance(user, govStake.token).value == govStake.value);
-            assert (stakeAccounts.getBalance(user, multiStake.token).value == multiStake.value);
-            assert (stakeAccounts.getBalance(user, proposedQuantity.token).value == proposedQuantity.value);
+            assert (stakeAccounts.getBalance(user, CompetitionTestUtils.getGovToken()).value == 1000);
+            assert (stakeAccounts.getBalance(user, CompetitionTestUtils.getMultiToken()).value == 200);
+            assert (stakeAccounts.getBalance(user, testToken).value == output.tokenQuantity.value);
 
             // Verify total stakes were updated in the store
-            assert (competitionEntry.getTotalGovStake() == govStake.value);
-            assert (competitionEntry.getTotalMultiStake() == multiStake.value);
+            let totalStakes = competitionEntry.getStakeVault().getAllTotalStakes();
+            assert (totalStakes.size() == 2);
           };
         };
       },
@@ -155,7 +139,7 @@ suite(
     test(
       "competition must be active for processing submissions",
       func() {
-        let (competitionEntry, stakeVault, user, _, _) = setupTest();
+        let (competitionEntry, stakingManager, user) = setupTest();
 
         // Set competition inactive
         competitionEntry.updateStatus(#PreAnnouncement);
@@ -163,31 +147,16 @@ suite(
         // Verify the competition is inactive
         assert (competitionEntry.getStatus() != #AcceptingStakes);
 
-        // Create a submission
-        let testToken = CompetitionTestUtils.getTestToken1();
         let govStake : Types.Amount = {
           token = CompetitionTestUtils.getGovToken();
           value = 1000;
         };
-        let multiStake : Types.Amount = {
-          token = CompetitionTestUtils.getMultiToken();
-          value = 500;
-        };
+        let testToken = CompetitionTestUtils.getTestToken1();
 
-        let submission = SubmissionOperations.createSubmission(
-          competitionEntry,
+        let result = stakingManager.acceptStakeRequest(
+          govStake,
           user,
           testToken,
-          5000,
-          govStake,
-          multiStake,
-        );
-
-        // Process submission when competition is inactive
-        let result = SubmissionOperations.processSubmission(
-          competitionEntry,
-          stakeVault,
-          submission,
         );
 
         // Should return an InvalidPhase error
@@ -203,35 +172,20 @@ suite(
     );
 
     test(
-      "processSubmission rejects submission with insufficient balance",
+      "rejects submission with insufficient balance",
       func() {
-        let (competitionEntry, stakeVault, user, _, _) = setupTest();
+        let (competitionEntry, stakingManager, user) = setupTest();
 
-        // Create a submission with too many tokens
-        let testToken = CompetitionTestUtils.getTestToken1();
         let govStake : Types.Amount = {
           token = CompetitionTestUtils.getGovToken();
-          value = 1_000_000 // More than user has
+          value = 1_000_000; // More than user has
         };
-        let multiStake : Types.Amount = {
-          token = CompetitionTestUtils.getMultiToken();
-          value = 500;
-        };
+        let testToken = CompetitionTestUtils.getTestToken1();
 
-        let submission = SubmissionOperations.createSubmission(
-          competitionEntry,
+        let result = stakingManager.acceptStakeRequest(
+          govStake,
           user,
           testToken,
-          5000,
-          govStake,
-          multiStake,
-        );
-
-        // This should fail due to insufficient balance
-        let result = SubmissionOperations.processSubmission(
-          competitionEntry,
-          stakeVault,
-          submission,
         );
 
         // Verify we get the right error
@@ -240,195 +194,144 @@ suite(
             assert (false); // Should not succeed
           };
           case (#err(#InsufficientStake({ token; required; available }))) {
-            assert (Principal.equal(token, govStake.token));
-            assert (required == govStake.value);
-            // We know the exact available amount from test utilities
-            assert (available == 100_000);
+            // With 1M gov stake at 5% rate and 1% multi rate:
+            // multiStake = 1M * (1%/5%) = 200,000
+            // tokenQuantity = 200,000 / (1% * 1.0) = 20,000,000
+            // User has only 10,000,000 of testToken1, so this fails first
+            assert (Principal.equal(token, testToken));
+            assert (required == 20_000_000);
+            assert (available == 10_000_000);
           };
           case (#err(_)) {
             assert (false); // Should not get other errors
           };
         };
-
-        // Verify the submission was stored with Rejected status
-        let allSubmissions = competitionEntry.getAllSubmissions();
-        assert (allSubmissions.size() == 1);
-        assert (allSubmissions[0].status == #Rejected);
-        switch (allSubmissions[0].rejectionReason) {
-          case (? #InsufficientBalance) {
-            // Expected
-          };
-          case (_) {
-            assert (false); // Wrong rejection reason
-          };
-        };
       },
     );
 
     test(
-      "adjustSubmissionPostRound correctly adjusts quantities when rates increase",
+      "correctly adjusts quantities when rates increase",
       func() {
-        let (competitionEntry, stakeVault, user, _, _) = setupTest();
+        let (competitionEntry, stakingManager, user) = setupTest();
+        let stakeVault = competitionEntry.getStakeVault();
 
-        // 1. Get the test token and price
-        let testToken = CompetitionTestUtils.getTestToken1();
-        let price = competitionEntry.getCompetitionPrice(testToken);
-
-        // 2. Set up gov stake
-        let govStake : Types.Amount = {
-          token = CompetitionTestUtils.getGovToken();
-          value = 5000;
-        };
-
-        // 3. Calculate multi stake from gov stake
-        let multiStake = StakeCalculator.calculateEquivalentStake(
-          govStake,
-          { value = CompetitionTestUtils.getFIVE_PERCENT() },
-          { value = CompetitionTestUtils.getONE_PERCENT() },
-          CompetitionTestUtils.getMultiToken(),
-        );
-
-        // 4. Calculate token quantity from multi stake
-        let tokenQuantity = StakeCalculator.calculateTokenQuantity(
-          multiStake,
-          { value = CompetitionTestUtils.getONE_PERCENT() },
-          price,
-        );
-
-        // 5. Create submission using CALCULATED values
-        let submission = SubmissionOperations.createSubmission(
-          competitionEntry,
-          user,
-          testToken,
-          tokenQuantity.value, // Use calculated value instead of fixed
-          govStake,
-          multiStake,
-        );
-
-        // 6. Process the submission
-        switch (SubmissionOperations.processSubmission(competitionEntry, stakeVault, submission)) {
-          case (#err(_)) {
-            assert (false);
-          };
-          case (#ok(_)) {};
-        };
-
-        // 7. Use higher rates for adjustment
-        let updatedGovRate = { value = CompetitionTestUtils.getTEN_PERCENT() };
-        let updatedMultiRate = { value = CompetitionTestUtils.getTWO_PERCENT() };
-
-        // 8. Adjust the submission
-        let result = SubmissionOperations.adjustSubmissionPostRound(
-          competitionEntry,
-          stakeVault,
-          submission.id,
-          updatedGovRate,
-          updatedMultiRate,
-        );
-
-        // 9. Verify the result
-        switch (result) {
-          case (#err(_)) {
-            assert (false);
-          };
-          case (#ok(adjustedSubmission)) {
-            assert (adjustedSubmission.status == #Finalized);
-
-            let adjustedQuantity = switch (adjustedSubmission.adjustedQuantity) {
-              case (null) { assert (false); 0 };
-              case (?adjusted) { adjusted.value };
-            };
-
-            // When rates double, quantity should approximately halve
-            assert (adjustedQuantity < tokenQuantity.value);
-
-            // Verify tokens were returned to user
-            let returnedTokens = stakeVault.getStakeAccounts().getBalance(user, testToken).value;
-            assert (returnedTokens > 0);
-          };
-        };
-      },
-    );
-
-    test(
-      "adjustSubmissionPostRound handles equal rates correctly",
-      func() {
-        let (competitionEntry, stakeVault, user, _, _) = setupTest();
-
-        // 1. Get the test token and price
-        let testToken = CompetitionTestUtils.getTestToken1();
-        let price = competitionEntry.getCompetitionPrice(testToken);
-
-        // 2. Set up gov stake
         let govStake : Types.Amount = {
           token = CompetitionTestUtils.getGovToken();
           value = 1000;
         };
+        let testToken = CompetitionTestUtils.getTestToken1();
 
-        // 3. Calculate multi stake from gov stake
-        let multiStake = StakeCalculator.calculateEquivalentStake(
+        // Process initial stake request
+        let result = stakingManager.acceptStakeRequest(
           govStake,
-          { value = CompetitionTestUtils.getFIVE_PERCENT() },
-          { value = CompetitionTestUtils.getONE_PERCENT() },
-          CompetitionTestUtils.getMultiToken(),
-        );
-
-        // 4. Calculate token quantity from multi stake
-        let tokenQuantity = StakeCalculator.calculateTokenQuantity(
-          multiStake,
-          { value = CompetitionTestUtils.getONE_PERCENT() },
-          price,
-        );
-
-        // 5. Create submission using CALCULATED values
-        let submission = SubmissionOperations.createSubmission(
-          competitionEntry,
           user,
           testToken,
-          tokenQuantity.value, // Use calculated value instead of fixed
-          govStake,
-          multiStake,
         );
 
-        // 6. Process the submission
-        switch (SubmissionOperations.processSubmission(competitionEntry, stakeVault, submission)) {
-          case (#err(_)) {
-            assert (false);
-          };
-          case (#ok(_)) {};
-        };
-
-        // Check initial stake account balance
-        let initialStakedTokens = stakeVault.getStakeAccounts().getBalance(user, testToken).value;
-
-        // 7. Use the SAME rates for adjustment
-        let sameGovRate = { value = CompetitionTestUtils.getFIVE_PERCENT() };
-        let sameMultiRate = { value = CompetitionTestUtils.getONE_PERCENT() };
-
-        // 8. Adjust the submission
-        let result = SubmissionOperations.adjustSubmissionPostRound(
-          competitionEntry,
-          stakeVault,
-          submission.id,
-          sameGovRate,
-          sameMultiRate,
-        );
-
-        // 9. Verify the result
         switch (result) {
-          case (#err(_)) {
+          case (#err(error)) {
+            Debug.print("Setup failed: " # debug_show (error));
             assert (false);
           };
-          case (#ok(adjustedSubmission)) {
-            assert (adjustedSubmission.status == #Finalized);
+          case (#ok(output)) {
+            let submissionId = output.submissionId;
+            let originalQuantity = output.tokenQuantity.value;
 
-            let adjustedQuantity = switch (adjustedSubmission.adjustedQuantity) {
-              case (null) { assert (false); 0 };
-              case (?adjusted) { adjusted.value };
+            // Use higher rates for adjustment
+            let updatedRates : [(Types.Token, Types.Ratio)] = [
+              (CompetitionTestUtils.getGovToken(), { value = CompetitionTestUtils.getTEN_PERCENT() }), // Double
+              (CompetitionTestUtils.getMultiToken(), { value = CompetitionTestUtils.getTWO_PERCENT() }), // Double
+            ];
+
+            // Finalize the submission with new rates
+            let finalizeResult = stakingManager.finalizeSubmission(
+              submissionId,
+              updatedRates,
+            );
+
+            switch (finalizeResult) {
+              case (#err(error)) {
+                Debug.print("Finalization failed: " # debug_show (error));
+                assert (false);
+              };
+              case (#ok(adjustedSubmission)) {
+                assert (adjustedSubmission.status == #Finalized);
+
+                let adjustedQuantity = switch (adjustedSubmission.adjustedQuantity) {
+                  case (null) { assert (false); 0 };
+                  case (?adjusted) { adjusted.value };
+                };
+
+                // When rates double, quantity should approximately halve
+                assert (adjustedQuantity < originalQuantity);
+
+                // Verify excess tokens were returned to user
+                let userBalance = stakeVault.getUserAccounts().getBalance(user, testToken);
+                assert (userBalance.value > 0);
+              };
             };
+          };
+        };
+      },
+    );
 
-            // With equal rates, key invariant: adjusted quantity equals original quantity
-            assert (adjustedQuantity == tokenQuantity.value);
+    test(
+      "handles equal rates correctly",
+      func() {
+        let (competitionEntry, stakingManager, user) = setupTest();
+        let stakeVault = competitionEntry.getStakeVault();
+
+        let govStake : Types.Amount = {
+          token = CompetitionTestUtils.getGovToken();
+          value = 1000;
+        };
+        let testToken = CompetitionTestUtils.getTestToken1();
+
+        // Process initial stake request
+        let result = stakingManager.acceptStakeRequest(
+          govStake,
+          user,
+          testToken,
+        );
+
+        switch (result) {
+          case (#err(error)) {
+            Debug.print("Setup failed: " # debug_show (error));
+            assert (false);
+          };
+          case (#ok(output)) {
+            let submissionId = output.submissionId;
+            let originalQuantity = output.tokenQuantity.value;
+
+            // Use the same rates for finalization
+            let sameRates : [(Types.Token, Types.Ratio)] = [
+              (CompetitionTestUtils.getGovToken(), { value = CompetitionTestUtils.getFIVE_PERCENT() }),
+              (CompetitionTestUtils.getMultiToken(), { value = CompetitionTestUtils.getONE_PERCENT() }),
+            ];
+
+            // Finalize the submission with same rates
+            let finalizeResult = stakingManager.finalizeSubmission(
+              submissionId,
+              sameRates,
+            );
+
+            switch (finalizeResult) {
+              case (#err(error)) {
+                Debug.print("Finalization failed: " # debug_show (error));
+                assert (false);
+              };
+              case (#ok(adjustedSubmission)) {
+                assert (adjustedSubmission.status == #Finalized);
+
+                let adjustedQuantity = switch (adjustedSubmission.adjustedQuantity) {
+                  case (null) { assert (false); 0 };
+                  case (?adjusted) { adjusted.value };
+                };
+
+                // With equal rates, adjusted quantity equals original quantity
+                assert (adjustedQuantity == originalQuantity);
+              };
+            };
           };
         };
       },

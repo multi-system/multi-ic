@@ -11,6 +11,7 @@ import VirtualAccounts "../../../../multi_backend/custodial/VirtualAccounts";
 import UserPositionSettlement "../../../../multi_backend/competition/settlement/UserPositionSettlement";
 import RatioOperations "../../../../multi_backend/financial/RatioOperations";
 import CompetitionTestUtils "../CompetitionTestUtils";
+import AccountTypes "../../../../multi_backend/types/AccountTypes";
 
 suite(
   "User Position Settlement",
@@ -26,12 +27,13 @@ suite(
       // Create virtual accounts
       let userAccounts = CompetitionTestUtils.createUserAccounts();
       let stakeAccounts = VirtualAccounts.VirtualAccounts(
-        StableHashMap.init<Types.Account, StableHashMap.StableHashMap<Types.Token, Nat>>()
+        StableHashMap.init<Types.Account, AccountTypes.BalanceMap>()
       );
 
       // Create test tokens and principals
       let multiToken = CompetitionTestUtils.getMultiToken();
       let testToken = CompetitionTestUtils.getTestToken1();
+      let govToken = CompetitionTestUtils.getGovToken();
       // Use a valid Principal format for the system account
       let systemAccount = Principal.fromText("renrk-eyaaa-aaaaa-aaada-cai");
       let userAccount = CompetitionTestUtils.getUserPrincipal();
@@ -51,7 +53,7 @@ suite(
       };
 
       let govStake : Types.Amount = {
-        token = CompetitionTestUtils.getGovToken();
+        token = govToken;
         value = 1_000;
       };
 
@@ -67,12 +69,14 @@ suite(
       // Add multi tokens to system account
       userAccounts.mint(systemAccount, { token = multiToken; value = 50_000 });
 
-      // Create a test submission
+      // Create a test submission with flexible stakes array
       let submission : SubmissionTypes.Submission = {
         id = 0;
         participant = userAccount;
-        govStake = govStake;
-        multiStake = multiStake;
+        stakes = [
+          (govToken, govStake),
+          (multiToken, multiStake),
+        ];
         token = testToken;
         proposedQuantity = tokenAmount;
         timestamp = 0;
@@ -124,8 +128,16 @@ suite(
         // Verify position record
         assert (position.quantity.value == 10_000);
         assert (Principal.equal(position.quantity.token, CompetitionTestUtils.getTestToken1()));
-        assert (position.govStake.value == 1_000);
-        assert (position.multiStake.value == 500);
+
+        // Check stakes array contains the expected values
+        assert (position.stakes.size() == 2);
+        let (govToken, govStakeAmount) = position.stakes[0];
+        let (multiToken, multiStakeAmount) = position.stakes[1];
+        assert (Principal.equal(govToken, CompetitionTestUtils.getGovToken()));
+        assert (govStakeAmount.value == 1_000);
+        assert (Principal.equal(multiToken, CompetitionTestUtils.getMultiToken()));
+        assert (multiStakeAmount.value == 500);
+
         assert (position.isSystem == false);
         assert (position.submissionId == ?0);
 

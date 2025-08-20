@@ -15,66 +15,25 @@ import StakeOperations "./StakeOperations";
 import CompetitionEntryStore "../CompetitionEntryStore";
 import SubmissionOperations "./SubmissionOperations";
 import SystemStakeOperations "./SystemStakeOperations";
+import StakeTokenTypes "../../types/StakeTokenTypes";
 
-/**
- * FinalizeStakingRound handles the end of a staking competition round.
- * It processes submissions in the Queued status, adjusts stake rates based on
- * total stakes and volume limit, then updates Staked submissions to Finalized status.
- * Additionally, it calculates the system's stake for the competition.
- */
 module {
   /**
-   * Result of the staking round finalization process
+   * Result of the staking round finalization process with flexible stake tokens
    */
   public type FinalizationResult = {
-    initialGovRate : Types.Ratio;
-    finalGovRate : Types.Ratio;
-    initialMultiRate : Types.Ratio;
-    finalMultiRate : Types.Ratio;
-    totalGovStaked : Nat;
-    totalMultiStaked : Nat;
+    initialRates : [(Types.Token, Types.Ratio)];
+    finalRates : [(Types.Token, Types.Ratio)];
+    totalStakes : [(Types.Token, Nat)];
     volumeLimit : Nat;
     stakedSubmissionsCount : Nat;
     adjustmentSuccessCount : Nat;
     adjustmentFailureCount : Nat;
-    queuedProcessedCount : Nat;
-    queuedSuccessCount : Nat;
-    queuedFailureCount : Nat;
     systemStake : SystemStakeTypes.SystemStake;
   };
 
   /**
-   * Helper function to determine the rejection reason from an error
-   */
-  private func determineRejectionReason(error : Error.CompetitionError) : SubmissionTypes.RejectionReason {
-    switch (error) {
-      case (#InsufficientStake(_)) {
-        #InsufficientBalance;
-      };
-      case (#TokenNotApproved(_)) {
-        #InvalidToken;
-      };
-      case (#CompetitionNotActive) {
-        #CompetitionNotActive;
-      };
-      case (#OperationFailed(reason)) {
-        #Other(reason);
-      };
-      case (#InvalidPhase(_)) {
-        #Other("Invalid phase");
-      };
-      case (_) {
-        #Other("Unknown error");
-      };
-    };
-  };
-
-  /**
-   * Finalizes the staking round by:
-   * 1. Processing all Queued submissions
-   * 2. Calculating adjusted stake rates based on total stakes and volume limit
-   * 3. Processing all Staked submissions with the adjusted rates
-   * 4. Calculating the system's stake and phantom positions
+   * Finalizes the staking round with flexible stake tokens.
    *
    * @param competitionEntry The competition entry store with configuration and submissions
    * @param getCirculatingSupply Function to get current circulating supply
@@ -86,7 +45,7 @@ module {
     getCirculatingSupply : () -> Nat,
     getBackingTokens : () -> [BackingTypes.BackingPair],
   ) : Result.Result<FinalizationResult, Error.CompetitionError> {
-    // Get the stake vault from the competition entry
+
     let stakeVault = competitionEntry.getStakeVault();
 
     // Validate competition state
@@ -94,108 +53,68 @@ module {
       return #err(#InvalidPhase({ current = debug_show (competitionEntry.getStatus()); required = "AcceptingStakes" }));
     };
 
-    // Process all Queued submissions
-    var queuedProcessedCount = 0;
-    var queuedSuccessCount = 0;
-    var queuedFailureCount = 0;
-
-    let queuedSubmissions = competitionEntry.getSubmissionsByStatus(#Queued);
-
-    // Process each Queued submission
-    for (submission in queuedSubmissions.vals()) {
-      queuedProcessedCount += 1;
-
-      // Process the submission and track results
-      switch (SubmissionOperations.processSubmission(competitionEntry, stakeVault, submission)) {
-        case (#err(_)) {
-          queuedFailureCount += 1;
-        };
-        case (#ok(_)) {
-          queuedSuccessCount += 1;
-        };
-      };
-    };
-
-    // Get the volume limit (theta * M_start)
+    // Calculate volume limit
     let volumeLimit = competitionEntry.calculateVolumeLimit(getCirculatingSupply);
 
-    // Get the initial rates
-    let initialGovRate = competitionEntry.getGovRate();
-    let initialMultiRate = competitionEntry.getMultiRate();
+    // Get initial rates for all stake tokens
+    let stakeConfigs = competitionEntry.getStakeTokenConfigs();
+    let initialRates = Array.map<StakeTokenTypes.StakeTokenConfig, (Types.Token, Types.Ratio)>(
+      stakeConfigs,
+      func(config) = (config.token, competitionEntry.getEffectiveRate(config.token)),
+    );
 
-    // Get current total stakes from the stake vault
-    let totalGovStaked = stakeVault.getTotalGovernanceStake();
-    let totalMultiStaked = stakeVault.getTotalMultiStake();
+    // Get current total stakes from vault
+    let totalStakes = stakeVault.getAllTotalStakes();
 
-    // Update both stake rates in the store using StakeOperations
-    let (updatedGovRate, updatedMultiRate) = StakeOperations.updateAdjustedStakeRates(
+    // Update all stake rates based on totals and volume limit
+    let updatedRates = StakeOperations.updateAllStakeRates(
       competitionEntry,
-      totalGovStaked,
-      totalMultiStaked,
       volumeLimit,
     );
 
-    // Get all Staked submissions that need to be adjusted
+    // Get all Staked submissions to adjust
     let stakedSubmissions = competitionEntry.getSubmissionsByStatus(#Staked);
     let stakedSubmissionsCount = stakedSubmissions.size();
 
-    // Track success and failure counts
     var adjustmentSuccessCount = 0;
     var adjustmentFailureCount = 0;
 
-    // Process each Staked submission to adjust its quantities based on updated rates
+    // Process each submission with updated rates
     for (submission in stakedSubmissions.vals()) {
       switch (
         SubmissionOperations.adjustSubmissionPostRound(
           competitionEntry,
           stakeVault,
           submission.id,
-          updatedGovRate,
-          updatedMultiRate,
+          updatedRates,
         )
       ) {
-        case (#ok(_)) {
-          adjustmentSuccessCount += 1;
-        };
-        case (#err(_)) {
-          adjustmentFailureCount += 1;
-        };
+        case (#ok(_)) { adjustmentSuccessCount += 1 };
+        case (#err(_)) { adjustmentFailureCount += 1 };
       };
     };
 
-    // Calculate the system stake and phantom positions using SystemStakeOperations
-    // This represents the system's participation in the competition
+    // Calculate system stakes for all configured tokens
     let backingPairs = getBackingTokens();
 
     let systemStake = SystemStakeOperations.calculateSystemStakes(
       competitionEntry,
-      competitionEntry.getConfig().systemStakeGov,
-      competitionEntry.getConfig().systemStakeMulti,
-      totalGovStaked,
-      totalMultiStaked,
+      totalStakes,
       volumeLimit,
       backingPairs,
     );
 
-    // Set the system stake in the competition entry
     competitionEntry.setSystemStake(systemStake);
 
-    // Return the finalization result
     #ok({
-      initialGovRate;
-      finalGovRate = updatedGovRate;
-      initialMultiRate;
-      finalMultiRate = updatedMultiRate;
-      totalGovStaked;
-      totalMultiStaked;
-      volumeLimit;
-      stakedSubmissionsCount;
-      adjustmentSuccessCount;
-      adjustmentFailureCount;
-      queuedProcessedCount;
-      queuedSuccessCount;
-      queuedFailureCount;
-      systemStake;
+      initialRates = initialRates;
+      finalRates = updatedRates;
+      totalStakes = totalStakes;
+      volumeLimit = volumeLimit;
+      stakedSubmissionsCount = stakedSubmissionsCount;
+      adjustmentSuccessCount = adjustmentSuccessCount;
+      adjustmentFailureCount = adjustmentFailureCount;
+      systemStake = systemStake;
     });
   };
 };

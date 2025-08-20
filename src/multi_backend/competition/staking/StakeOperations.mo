@@ -1,7 +1,9 @@
 import Principal "mo:base/Principal";
 import Debug "mo:base/Debug";
 import Result "mo:base/Result";
-
+import Array "mo:base/Array";
+import Buffer "mo:base/Buffer";
+import Iter "mo:base/Iter";
 import Types "../../types/Types";
 import Error "../../error/Error";
 import StakeCalculator "./StakeCalculator";
@@ -9,138 +11,124 @@ import CompetitionEntryStore "../CompetitionEntryStore";
 import SubmissionTypes "../../types/SubmissionTypes";
 import StakeValidation "./StakeValidation";
 
-/**
- * StakeOperations provides common functionality for stake operations
- * that can be shared between different modules like StakingManager
- * and FinalizeStakingRound.
- */
 module {
-  // Define a local type for submission quantities to simplify the return value
   public type SubmissionQuantities = {
-    govStake : Types.Amount;
-    multiStake : Types.Amount;
+    stakes : [(Types.Token, Types.Amount)];
     tokenQuantity : Types.Amount;
     proposedToken : Types.Token;
   };
 
   /**
-   * Calculates the quantities for a submission based on current stake rates
-   * including basic validation but without recalculating rates.
+   * Calculates submission quantities based on input stake in first configured token.
+   * Calculates equivalent stakes for all other configured tokens.
+   *
+   * @param competitionEntry The competition entry store
+   * @param inputStake The stake amount in the first configured stake token
+   * @param proposedToken The token being proposed for the reserve
+   * @returns All calculated stake amounts and token quantity
    */
   public func calculateSubmission(
     competitionEntry : CompetitionEntryStore.CompetitionEntryStore,
-    govStake : Types.Amount,
+    inputStake : Types.Amount,
     proposedToken : Types.Token,
   ) : Result.Result<SubmissionQuantities, Error.CompetitionError> {
+
     // Verify competition is active
     if (competitionEntry.getStatus() != #AcceptingStakes) {
       return #err(#InvalidPhase({ current = debug_show (competitionEntry.getStatus()); required = "AcceptingStakes" }));
     };
 
-    // Validate the Gov token type
-    switch (StakeValidation.validateTokenType(govStake, competitionEntry.getGovToken())) {
-      case (#err(e)) return #err(e);
-      case (#ok()) {};
+    // Get stake token configurations
+    let stakeConfigs = competitionEntry.getStakeTokenConfigs();
+    if (stakeConfigs.size() == 0) {
+      Debug.trap("No stake tokens configured");
     };
 
-    // Check if token is approved first
+    // Verify input token matches first configured stake token
+    let firstStakeToken = stakeConfigs[0].token;
+    if (not Principal.equal(inputStake.token, firstStakeToken)) {
+      return #err(#InvalidSubmission({ reason = "Must stake with first configured token: " # Principal.toText(firstStakeToken) }));
+    };
+
+    // Check if proposed token is approved
     if (not competitionEntry.isTokenApproved(proposedToken)) {
       return #err(#TokenNotApproved(proposedToken));
     };
 
-    // Get the competition price for the proposed token (now returns Price directly)
+    // Get the competition price for the proposed token
     let price = competitionEntry.getCompetitionPrice(proposedToken);
 
-    // Calculate the equivalent Multi stake using the current adjusted rates
-    let multiStake = StakeCalculator.calculateEquivalentStake(
-      govStake,
-      competitionEntry.getAdjustedGovRate(),
-      competitionEntry.getAdjustedMultiRate(),
-      competitionEntry.getMultiToken(),
-    );
+    // Calculate stakes for all configured tokens
+    let stakesBuffer = Buffer.Buffer<(Types.Token, Types.Amount)>(stakeConfigs.size());
+    let inputRate = competitionEntry.getEffectiveRate(firstStakeToken);
 
-    // Calculate token quantity using the current adjusted stake rate
+    // Add the input stake first
+    stakesBuffer.add((firstStakeToken, inputStake));
+
+    // Calculate equivalent stakes for all other tokens
+    for (i in Iter.range(1, stakeConfigs.size() - 1)) {
+      let config = stakeConfigs[i];
+      let targetRate = competitionEntry.getEffectiveRate(config.token);
+
+      let equivalentStake = StakeCalculator.calculateEquivalentStake(
+        inputStake,
+        inputRate,
+        targetRate,
+        config.token,
+      );
+
+      stakesBuffer.add((config.token, equivalentStake));
+    };
+
+    let stakes = Buffer.toArray(stakesBuffer);
+
+    // Calculate token quantity using the first stake (any would work due to normalization)
     let tokenQuantity = StakeCalculator.calculateTokenQuantity(
-      multiStake,
-      competitionEntry.getAdjustedMultiRate(),
+      inputStake,
+      inputRate,
       price,
     );
 
     #ok({
-      govStake;
-      multiStake;
-      tokenQuantity;
-      proposedToken;
+      stakes = stakes;
+      tokenQuantity = tokenQuantity;
+      proposedToken = proposedToken;
     });
   };
 
   /**
-   * Updates stake rates in the competition entry based on the provided total stakes
-   * and volume limit. This is used during both stake submission processing
-   * and submission finalization.
+   * Updates all stake rates based on total stakes and volume limit.
    *
    * @param competitionEntry The competition entry to update
-   * @param totalGovStake The total governance stake amount
-   * @param totalMultiStake The total multi stake amount
    * @param volumeLimit The calculated volume limit
-   * @returns A tuple with the adjusted (govRate, multiRate)
+   * @returns Array of updated rates for each stake token
    */
-  public func updateAdjustedStakeRates(
+  public func updateAllStakeRates(
     competitionEntry : CompetitionEntryStore.CompetitionEntryStore,
-    totalGovStake : Nat,
-    totalMultiStake : Nat,
     volumeLimit : Nat,
-  ) : (Types.Ratio, Types.Ratio) {
-    // Get current adjusted rates from the competition entry
-    let currentGovRate = competitionEntry.getAdjustedGovRate();
-    let currentMultiRate = competitionEntry.getAdjustedMultiRate();
+  ) : [(Types.Token, Types.Ratio)] {
 
-    // Calculate adjusted rates based on current stakes and limit
-    let updatedGovRate = StakeCalculator.calculateAdjustedStakeRate(
-      currentGovRate,
-      totalGovStake,
-      volumeLimit,
-    );
+    let stakeConfigs = competitionEntry.getStakeTokenConfigs();
+    let ratesBuffer = Buffer.Buffer<(Types.Token, Types.Ratio)>(stakeConfigs.size());
 
-    let updatedMultiRate = StakeCalculator.calculateAdjustedStakeRate(
-      currentMultiRate,
-      totalMultiStake,
-      volumeLimit,
-    );
+    for (config in stakeConfigs.vals()) {
+      let totalStake = competitionEntry.getTotalStake(config.token);
+      let currentRate = competitionEntry.getEffectiveRate(config.token);
 
-    // Update the rates in the competition entry
-    competitionEntry.updateStakeRates(updatedGovRate, updatedMultiRate);
+      let updatedRate = StakeCalculator.calculateAdjustedStakeRate(
+        currentRate,
+        totalStake,
+        volumeLimit,
+      );
 
-    // Return the new rates
-    (updatedGovRate, updatedMultiRate);
-  };
-
-  /**
-   * Calculates the adjusted stake rate for a specific token type without
-   * updating the competition entry. Useful for preview calculations.
-   *
-   * @param competitionEntry The competition entry with current rates
-   * @param isGovToken Whether we're calculating for governance token (true) or multi token (false)
-   * @param totalStake The total stake amount for the specified token type
-   * @param volumeLimit The calculated volume limit
-   * @returns The adjusted stake rate
-   */
-  public func calculateAdjustedStakeRate(
-    competitionEntry : CompetitionEntryStore.CompetitionEntryStore,
-    isGovToken : Bool,
-    totalStake : Nat,
-    volumeLimit : Nat,
-  ) : Types.Ratio {
-    let currentRate = if (isGovToken) {
-      competitionEntry.getAdjustedGovRate();
-    } else {
-      competitionEntry.getAdjustedMultiRate();
+      ratesBuffer.add((config.token, updatedRate));
     };
 
-    StakeCalculator.calculateAdjustedStakeRate(
-      currentRate,
-      totalStake,
-      volumeLimit,
-    );
+    let newRates = Buffer.toArray(ratesBuffer);
+
+    // Update all rates in the competition entry
+    ignore competitionEntry.updateAllStakeRates(newRates);
+
+    newRates;
   };
 };
