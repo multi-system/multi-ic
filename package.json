@@ -11,6 +11,7 @@
     "demo:init": "npx tsx scripts/demo-setup.ts --init-only",
     "demo:quick": "npx tsx scripts/demo-setup.ts",
     "fund": "npx tsx scripts/fund-account.ts",
+    "history:populate": "npx tsx scripts/populate-history.ts",
     "test": "vitest",
     "test:unit": "mops test",
     "test:e2e": "vitest --run",
@@ -57,6 +58,7 @@
     "ethereum-blockies": "^0.1.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "recharts": "^3.1.2",
     "tailwind-merge": "^3.3.1",
     "yarn": "^1.22.22"
   },
@@ -64,6 +66,7 @@
     "@types/node": "^24.0.14",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
+    "@types/recharts": "^2.0.1",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
     "@vitejs/plugin-react": "^4.2.1",

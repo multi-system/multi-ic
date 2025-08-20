@@ -46,6 +46,16 @@ main() {
   export MULTI_BACKEND_ID=$(dfx canister id multi_backend)
   print_info "Exported MULTI_BACKEND_ID=${MULTI_BACKEND_ID}"
 
+  # Deploy multi history
+  print_green "=== Deploying multi history canister ==="
+  dfx deploy multi_history
+  print_info "Generating declarations for multi_history..."
+  dfx generate multi_history
+  
+  # Export multi history ID
+  export MULTI_HISTORY_ID=$(dfx canister id multi_history)
+  print_info "Exported MULTI_HISTORY_ID=${MULTI_HISTORY_ID}"
+
   # Deploy multi token
   print_green "=== Deploying multi token canister ==="
   dfx deploy multi_token --argument "(variant {
@@ -146,6 +156,15 @@ main() {
   done
  
   print_green "=== Deployment completed successfully! ==="
+  print_info ""
+  print_info "Canister IDs:"
+  print_info "  Multi Backend:  ${MULTI_BACKEND_ID}"
+  print_info "  Multi History:  ${MULTI_HISTORY_ID}"
+  print_info "  Multi Token:    ${MULTI_TOKEN_ID}"
+  print_info "  Governance:     ${GOVERNANCE_TOKEN_ID}"
+  print_info "  Token A:        $(dfx canister id token_a)"
+  print_info "  Token B:        $(dfx canister id token_b)"
+  print_info "  Token C:        $(dfx canister id token_c)"
 }
 # Trap errors
 trap 'print_error "An error occurred during deployment"; exit 1' ERR

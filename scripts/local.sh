@@ -87,6 +87,7 @@ start_frontend() {
     # Export environment variables
     export VITE_DFX_NETWORK=${DFX_NETWORK:-local}
     export VITE_CANISTER_ID_MULTI_BACKEND=$(dfx canister id multi_backend)
+    export VITE_CANISTER_ID_MULTI_HISTORY=$(dfx canister id multi_history)
     export VITE_CANISTER_ID_MULTI_TOKEN=$(dfx canister id multi_token)
     export VITE_CANISTER_ID_GOVERNANCE_TOKEN=$(dfx canister id governance_token)
     export VITE_CANISTER_ID_TOKEN_A=$(dfx canister id token_a)
@@ -137,6 +138,7 @@ show_status() {
     print_info "📦 Canister IDs:"
     echo "   Internet Identity:  ${INTERNET_IDENTITY_ID}"
     echo "   Multi Backend:      $(dfx canister id multi_backend)"
+    echo "   Multi History:      $(dfx canister id multi_history)"
     echo "   Multi Token:        $(dfx canister id multi_token)"
     echo "   Governance Token:   $(dfx canister id governance_token)"
     echo "   Token A:            $(dfx canister id token_a)"
@@ -147,6 +149,7 @@ show_status() {
     echo ""
     print_info "📝 The system is deployed but not initialized with data"
     print_info "💡 Run 'yarn demo init' to initialize the system"
+    print_info "📊 Run 'yarn history:2years' to populate historical data"
     print_info "🛑 Press Ctrl+C to stop"
     echo ""
 }
