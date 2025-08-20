@@ -4,10 +4,15 @@
       "main": "src/multi_backend/api/MultiBackend.mo",
       "type": "motoko"
     },
+    "multi_history": {
+      "main": "src/multi_history/MultiHistory.mo",
+      "type": "motoko"
+    },
     "multi_frontend": {
       "type": "assets",
       "dependencies": [
         "multi_backend",
+        "multi_history",
         "multi_token",
         "governance_token",
         "token_a",
