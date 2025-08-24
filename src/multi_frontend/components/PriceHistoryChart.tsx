@@ -363,27 +363,14 @@ const PriceHistoryChart: React.FC<{
             ))}
           </AreaChart>
         </ResponsiveContainer>
-      </div>
-
-      {/* Statistics */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white bg-opacity-5 rounded-lg p-4">
-          <p className="text-sm text-gray-400">Backing Asset Count</p>
-          <p className="text-2xl font-bold text-white">{Object.keys(tokenInfoMap).length}</p>
+            <div className='flex flex-row gap-8 w-full justify-end'>
+               <div className="flex flex-row gap-1 items-center">
+          <p className="text-xs text-gray-400">Data Points</p>
+          <p className="text-sm font-bold text-white">{chartData.length}</p>
         </div>
-        <div className="bg-white bg-opacity-5 rounded-lg p-4">
-          <p className="text-sm text-gray-400">Data Points</p>
-          <p className="text-2xl font-bold text-white">{chartData.length}</p>
-        </div>
-        <div className="bg-white bg-opacity-5 rounded-lg p-4">
-          <p className="text-sm text-gray-400">Current TVL</p>
-          <p className="text-2xl font-bold text-white">
-            {chartData.length > 0 ? formatUSD(chartData[chartData.length - 1].tvl) : '$0'}
-          </p>
-        </div>
-        <div className="bg-white bg-opacity-5 rounded-lg p-4">
-          <p className="text-sm text-gray-400">Period Change</p>
-          <p className={`text-2xl font-bold ${
+        <div className="flex flex-row gap-1 items-center">
+          <p className="text-xs text-gray-400">Period Change</p>
+          <p className={`text-sm font-bold ${
             chartData.length > 1 && chartData[chartData.length - 1].tvl > chartData[0].tvl 
               ? 'text-green-400' 
               : 'text-red-400'
@@ -393,7 +380,11 @@ const PriceHistoryChart: React.FC<{
               : '0%'}
           </p>
         </div>
+            </div>
       </div>
+
+
+       
     </div>
   );
 };

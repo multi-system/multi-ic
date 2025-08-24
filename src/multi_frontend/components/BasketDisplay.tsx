@@ -4,7 +4,6 @@ import { idlFactory as backendIdl } from '../../declarations/multi_backend';
 // @ts-ignore
 import type { _SERVICE } from '../../declarations/multi_backend';
 import { getTokenInfo } from '../config/tokenPrices';
-import MultiLogo from '../assets/multi_logo.svg';
 import { formatAmount, formatMultiPrice, formatUSD } from '../utils/formatters';
 import InfoCard from './InfoCard';
 import Section from './Section';
@@ -13,6 +12,7 @@ import { PriceDisplay, ValuePercentage } from '../utils/types';
 import { useSystemInfo } from '../contexts/SystemInfoContext';
 import { Loader } from './Loader';
 import { IncrementalInput } from './IncrementalInput';
+import TokenTable from './TokenTable';
 
 const MemoizedPriceHistoryChart = memo(PriceHistoryChart, (prevProps, nextProps) => {
   return prevProps.backingTokens.length === nextProps.backingTokens.length;
@@ -206,10 +206,13 @@ const BasketDisplay: React.FC = () => {
           />
         </div>
 
+
         <MemoizedPriceHistoryChart 
           systemInfo={systemInfo} 
           backingTokens={systemInfo.backingTokens}
         />
+        <TokenTable           systemInfo={systemInfo} 
+          backingTokens={systemInfo.backingTokens}/>
 
         <Section title="Portfolio Value Composition">
           <div className="flex h-8 rounded-full overflow-hidden mb-4">
