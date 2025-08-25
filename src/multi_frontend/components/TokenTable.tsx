@@ -3,6 +3,8 @@ import { formatUSD } from '../utils/formatters';
 import { Loader } from './Loader';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCaretUp, faCaretDown } from '@fortawesome/free-solid-svg-icons';
+import { getTokenInfo, subscribeToToken } from '../config/tokenPrices';
+import { getTokenIcon } from '../utils/tokenIcons';
 
 interface TokenInfo {
   canisterId: string;
@@ -36,25 +38,45 @@ const TokenTable: React.FC<{
   systemInfo: any;
   backingTokens: any[];
 }> = ({ systemInfo, backingTokens }) => {
-  const [loading, setLoading] = useState(true);
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{
     key: SortKey;
     direction: SortDirection;
   }>({ key: 'portfolioShare', direction: 'desc' });
+  const [updateCounter, forceUpdate] = useState(0);
 
-  // Generate token data only once and memoize it based on backing tokens
-  // This prevents regeneration on every render
+  useEffect(() => {
+    const unsubscribes: (() => void)[] = [];
+    
+    backingTokens.forEach((token) => {
+      const canisterId = token.tokenInfo.canisterId.toString();
+      const unsubscribe = subscribeToToken(canisterId, () => {
+        forceUpdate(prev => prev + 1);
+      });
+      unsubscribes.push(unsubscribe);
+    });
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [backingTokens]);
+
+  const allDataLoaded = useMemo(() => {
+    return backingTokens.every(token => {
+      const tokenInfo = getTokenInfo(token.tokenInfo.canisterId.toString());
+      return tokenInfo !== undefined;
+    });
+  }, [backingTokens, updateCounter]);
+
   const generatedTokenData = useMemo(() => {
-    // Generate deterministic mock data based on canister ID
-    // This ensures the same token always gets the same mock data
+    if (!allDataLoaded) return [];
+
     const hashCode = (str: string) => {
       let hash = 0;
       for (let i = 0; i < str.length; i++) {
         const char = str.charCodeAt(i);
         hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32bit integer
+        hash = hash & hash;
       }
       return Math.abs(hash);
     };
@@ -63,18 +85,19 @@ const TokenTable: React.FC<{
       const canisterId = token.tokenInfo.canisterId.toString();
       const seed = hashCode(canisterId);
       
-      // Use seed to generate consistent random values
       const seededRandom = (min: number, max: number, offset: number) => {
         const x = Math.sin(seed + offset) * 10000;
         return min + (x - Math.floor(x)) * (max - min);
       };
 
+      const tokenInfo = getTokenInfo(canisterId);
+
       return {
         canisterId,
-        symbol: token.tokenInfo.symbol || `Token${index}`,
-        name: token.tokenInfo.name || `Token ${index}`,
+        symbol: tokenInfo!.symbol,
+        name: tokenInfo!.name,
         color: COLORS[index % COLORS.length],
-        price: seededRandom(1, 100, 1),
+        price: tokenInfo!.priceUSD,
         marketCap: seededRandom(100_000_000, 1_000_000_000, 2),
         volume: seededRandom(10_000_000, 100_000_000, 3),
         supply: seededRandom(10_000_000, 100_000_000, 4),
@@ -83,25 +106,27 @@ const TokenTable: React.FC<{
         change7d: seededRandom(-20, 20, 7),
       };
     });
-  }, [backingTokens]); // Only regenerate if backing tokens actually change
+  }, [backingTokens, allDataLoaded, updateCounter]);
 
-  // Load token data with portfolio shares
   useEffect(() => {
-    setLoading(true);
+    if (!allDataLoaded) return;
     
-    // Simulate async loading
-    const timer = setTimeout(() => {
-      const totalMarketCap = generatedTokenData.reduce((sum, t) => sum + t.marketCap, 0);
-      const withShares = generatedTokenData.map((t) => ({
-        ...t,
-        portfolioShare: (t.marketCap / totalMarketCap) * 100,
-      }));
-      setTokens(withShares);
-      setLoading(false);
-    }, 500); // Reduced delay
+    let totalValue = 0;
+    const tokensWithValues = backingTokens.map((token) => {
+      const tokenInfo = getTokenInfo(token.tokenInfo.canisterId.toString());
+      const backingPerMulti = Number(token.backingUnit) / Number(systemInfo.supplyUnit);
+      const value = backingPerMulti * (tokenInfo!.priceUSD || 0);
+      totalValue += value;
+      return value;
+    });
 
-    return () => clearTimeout(timer);
-  }, [generatedTokenData]);
+    const withShares = generatedTokenData.map((t, index) => ({
+      ...t,
+      portfolioShare: totalValue > 0 ? (tokensWithValues[index] / totalValue) * 100 : 0,
+    }));
+    
+    setTokens(withShares);
+  }, [generatedTokenData, backingTokens, systemInfo, allDataLoaded]);
 
   const sortedTokens = useMemo(() => {
     return [...tokens].sort((a, b) => {
@@ -141,21 +166,13 @@ const TokenTable: React.FC<{
     );
   };
 
-  if (loading) {
+  if (!allDataLoaded) {
     return (
       <div className="bg-white bg-opacity-5 rounded-lg p-8">
         <div className="flex items-center justify-center">
           <Loader size="lg" />
           <span className="ml-4 text-white">Loading token data...</span>
         </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-white bg-opacity-5 rounded-lg p-8">
-        <p className="text-red-400 text-center">{error}</p>
       </div>
     );
   }
@@ -246,10 +263,17 @@ const TokenTable: React.FC<{
             >
               <td className="px-4 py-3">{idx + 1}</td>
               <td className="px-4 py-3 flex items-center gap-2">
-                <div
-                  className="w-5 h-5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: token.color }}
-                />
+                {(() => {
+                  const icon = getTokenIcon(token.symbol);
+                  return icon ? (
+                    <img src={icon} alt={token.symbol} className="w-5 h-5" />
+                  ) : (
+                    <div
+                      className="w-5 h-5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: token.color }}
+                    />
+                  );
+                })()}
                 <span className="font-medium text-white">{token.name}</span>
                 <span className="text-gray-400 text-xs">{token.symbol}</span>
               </td>

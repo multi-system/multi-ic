@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { HttpAgent, Actor } from '@dfinity/agent';
 // Import your backend IDL and types
-import { calculateMultiPrice, getTokenInfo, preloadTokenMetadata } from '../config/tokenPrices';
+import { calculateMultiPrice, getTokenInfo, preloadTokenMetadata, subscribeToToken } from '../config/tokenPrices';
 import { SystemInfo } from '../utils/types';
 // @ts-ignore
 import type { _SERVICE } from '../../declarations/multi_backend';
@@ -30,14 +30,40 @@ export const SystemInfoProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [, forceUpdate] = useState(0);
 
   const refreshStartTime = useRef<number>(0);
   const refreshTimeoutId = useRef<NodeJS.Timeout | null>(null);
 
-  // Example: preload any token metadata
+  // Preload token metadata and subscribe to updates
   useEffect(() => {
-    preloadTokenMetadata();
+    preloadTokenMetadata().then(() => {
+      // Force update after metadata is loaded
+      forceUpdate(prev => prev + 1);
+    });
   }, []);
+
+  // Subscribe to token updates
+  useEffect(() => {
+    if (!systemInfo) return;
+    
+    const unsubscribes: (() => void)[] = [];
+    
+    // Subscribe to each token's updates
+    systemInfo.backingTokens.forEach((token: any) => {
+      const canisterId = token.tokenInfo.canisterId.toString();
+      const unsubscribe = subscribeToToken(canisterId, () => {
+        // Force update when token data changes
+        forceUpdate(prev => prev + 1);
+      });
+      unsubscribes.push(unsubscribe);
+    });
+
+    // Cleanup subscriptions
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [systemInfo]);
 
   const multiPrice = systemInfo
     ? calculateMultiPrice(systemInfo.backingTokens, systemInfo.supplyUnit)

@@ -12,6 +12,7 @@ import type { _SERVICE as BackendService } from '../../declarations/multi_backen
 import type { _SERVICE as TokenService } from '../../declarations/token_a';
 import { useAuth } from '../contexts/AuthContext';
 import { getTokenInfo } from '../config/tokenPrices';
+import { getTokenIcon } from '../utils/tokenIcons';
 import { showError, logError, safeStringify } from '../utils/errorHandler';
 import { TokenBalance } from '../utils/types';
 import { Loader } from './Loader';
@@ -398,70 +399,74 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
               <div>
                 <h3 className="text-lg font-semibold text-white mb-4">Token Portfolio</h3>
                 <div className="space-y-4">
-                  {tokenBalances.map((token) => (
-                    <div key={token.canisterId} className="bg-gray-800 rounded-lg p-5">
-                      <div className="mb-3 flex flex-row gap-2 items-center">
-                        <h4 className="font-semibold text-white text-lg">
-                          {token.name} ({token.symbol})
-                        </h4>
-                        <CopyText copyText={token.canisterId}>
-                          <p className="text-xs text-gray-500 hover:text-blue-500">
-                            {token.canisterId}
-                          </p>
-                        </CopyText>
-                      </div>
+                  {tokenBalances.map((token) => {
+                    const icon = getTokenIcon(token.symbol);
+                    return (
+                      <div key={token.canisterId} className="bg-gray-800 rounded-lg p-5">
+                        <div className="mb-3 flex flex-row gap-2 items-center">
+                          {icon && <img src={icon} alt={token.symbol} className="w-6 h-6" />}
+                          <h4 className="font-semibold text-white text-lg">
+                            {token.name} ({token.symbol})
+                          </h4>
+                          <CopyText copyText={token.canisterId}>
+                            <p className="text-xs text-gray-500 hover:text-blue-500">
+                              {token.canisterId}
+                            </p>
+                          </CopyText>
+                        </div>
 
-                      {/* Balances */}
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div>
-                          <p className="text-xs text-gray-400">Wallet Balance</p>
-                          <p className="text-lg font-mono text-white">
-                            {formatBalance(token.walletBalance, token.decimals)}
-                          </p>
+                        {/* Balances */}
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <p className="text-xs text-gray-400">Wallet Balance</p>
+                            <p className="text-lg font-mono text-white">
+                              {formatBalance(token.walletBalance, token.decimals)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400">Deposited</p>
+                            <p className="text-lg font-mono text-white">
+                              {formatBalance(token.systemBalance, token.decimals)}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-400">Deposited</p>
-                          <p className="text-lg font-mono text-white">
-                            {formatBalance(token.systemBalance, token.decimals)}
-                          </p>
-                        </div>
-                      </div>
 
-                      {/* Deposit Form */}
-                      <div className="pt-3 border-t border-gray-700">
-                        <p className="text-sm font-medium text-gray-300 mb-2">Deposit to System</p>
-                        <div className="flex gap-2">
-                          <IncrementalInput
-                            value={depositAmounts[token.canisterId] || ''}
-                            onChange={(e) =>
-                              setDepositAmounts((prev) => ({
-                                ...prev,
-                                [token.canisterId]: e.target.value,
-                              }))
-                            }
-                            placeholder="Amount"
-                          />
-                          <Button
-                            type="neutral"
-                            onClick={() => handleDeposit(token.canisterId)}
-                            loading={depositingToken === token.canisterId}
-                            disabled={
-                              depositingToken === token.canisterId ||
-                              !depositAmounts[token.canisterId]
-                            }
-                            className="px-4 py-2 bg-[#586CE1] hover:bg-[#4056C7] disabled:bg-gray-600 text-white font-medium rounded-lg transition-colors text-sm"
-                          >
-                            Deposit
-                          </Button>
+                        {/* Deposit Form */}
+                        <div className="pt-3 border-t border-gray-700">
+                          <p className="text-sm font-medium text-gray-300 mb-2">Deposit to System</p>
+                          <div className="flex gap-2">
+                            <IncrementalInput
+                              value={depositAmounts[token.canisterId] || ''}
+                              onChange={(e) =>
+                                setDepositAmounts((prev) => ({
+                                  ...prev,
+                                  [token.canisterId]: e.target.value,
+                                }))
+                              }
+                              placeholder="Amount"
+                            />
+                            <Button
+                              type="neutral"
+                              onClick={() => handleDeposit(token.canisterId)}
+                              loading={depositingToken === token.canisterId}
+                              disabled={
+                                depositingToken === token.canisterId ||
+                                !depositAmounts[token.canisterId]
+                              }
+                              className="px-4 py-2 bg-[#586CE1] hover:bg-[#4056C7] disabled:bg-gray-600 text-white font-medium rounded-lg transition-colors text-sm"
+                            >
+                              Deposit
+                            </Button>
+                          </div>
+                          {token.walletBalance === 0n && (
+                            <p className="text-xs text-yellow-400 mt-2">
+                              Need tokens? Run: yarn fund {principal?.toText()}
+                            </p>
+                          )}
                         </div>
-                        {token.walletBalance === 0n && (
-                          <p className="text-xs text-yellow-400 mt-2">
-                            Need tokens? Run: yarn fund {principal?.toText()}
-                          </p>
-                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>

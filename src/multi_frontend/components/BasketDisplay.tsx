@@ -1,9 +1,9 @@
-import React, { useState, memo, useMemo } from 'react';
+import React, { useState, memo, useMemo, useEffect } from 'react';
 // @ts-ignore
 import { idlFactory as backendIdl } from '../../declarations/multi_backend';
 // @ts-ignore
 import type { _SERVICE } from '../../declarations/multi_backend';
-import { getTokenInfo } from '../config/tokenPrices';
+import { getTokenInfo, subscribeToToken } from '../config/tokenPrices';
 import { formatAmount, formatMultiPrice, formatUSD } from '../utils/formatters';
 import InfoCard from './InfoCard';
 import Section from './Section';
@@ -13,6 +13,7 @@ import { useSystemInfo } from '../contexts/SystemInfoContext';
 import { Loader } from './Loader';
 import { IncrementalInput } from './IncrementalInput';
 import TokenTable from './TokenTable';
+import { getTokenIcon } from '../utils/tokenIcons';
 
 // Memoized components to prevent re-renders
 const MemoizedPriceHistoryChart = memo(PriceHistoryChart, (prevProps, nextProps) => {
@@ -51,6 +52,7 @@ const MemoizedTokenTable = memo(TokenTable, (prevProps, nextProps) => {
 const BasketDisplay: React.FC = () => {
   const [priceDisplay, setPriceDisplay] = useState<PriceDisplay>('USD');
   const [multiAmount, setMultiAmount] = useState<string>('1');
+  const [updateCounter, forceUpdate] = useState(0); // Capture counter value
 
   const {
     systemInfo,
@@ -64,6 +66,28 @@ const BasketDisplay: React.FC = () => {
     setAutoRefresh,
   } = useSystemInfo();
 
+  // Subscribe to token metadata updates
+  useEffect(() => {
+    if (!systemInfo) return;
+    
+    const unsubscribes: (() => void)[] = [];
+    
+    // Subscribe to each token's updates
+    systemInfo.backingTokens.forEach((token: any) => {
+      const canisterId = token.tokenInfo.canisterId.toString();
+      const unsubscribe = subscribeToToken(canisterId, () => {
+        // Force component to re-render when token data updates
+        forceUpdate(prev => prev + 1);
+      });
+      unsubscribes.push(unsubscribe);
+    });
+
+    // Cleanup subscriptions
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [systemInfo]);
+
   // Memoize the multi price calculation to prevent recalculation on every render
   const actualMultiPrice = useMemo(() => {
     if (!systemInfo) return 0;
@@ -72,10 +96,10 @@ const BasketDisplay: React.FC = () => {
     return multiPrice;
   }, [multiPrice, systemInfo]);
 
-  // Memoize value percentages to prevent recalculation
+  // Memoize value percentages - now includes updateCounter
   const valuePercentages = useMemo(() => {
     return calculateValuePercentages();
-  }, [calculateValuePercentages]);
+  }, [calculateValuePercentages, updateCounter]);
 
   if (loading) {
     return (
@@ -269,7 +293,14 @@ const BasketDisplay: React.FC = () => {
               const style = getTokenStyle(index);
               return (
                 <div key={index} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={style.badge} />
+                  {(() => {
+                    const icon = getTokenIcon(vp.tokenInfo?.symbol);
+                    return icon ? (
+                      <img src={icon} alt={vp.tokenInfo?.symbol} className="w-3 h-3" />
+                    ) : (
+                      <div className="w-3 h-3 rounded-full" style={style.badge} />
+                    );
+                  })()}
                   <span className="text-sm text-gray-300">
                     {vp.tokenInfo?.symbol}: {vp.percentage.toFixed(1)}% (
                     {formatValue(vp.value)})
@@ -338,14 +369,21 @@ const BasketDisplay: React.FC = () => {
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center space-x-3">
-                      <div
-                        className="w-12 h-12 rounded-full flex items-center justify-center"
-                        style={style.badge}
-                      >
-                        <span className="text-white font-semibold">
-                          {tokenInfo?.symbol || 'TKN'}
-                        </span>
-                      </div>
+                      {(() => {
+                        const icon = getTokenIcon(tokenInfo?.symbol);
+                        return icon ? (
+                          <img src={icon} alt={tokenInfo?.symbol} className="w-12 h-12" />
+                        ) : (
+                          <div
+                            className="w-12 h-12 rounded-full flex items-center justify-center"
+                            style={style.badge}
+                          >
+                            <span className="text-white font-semibold">
+                              {tokenInfo?.symbol || 'TKN'}
+                            </span>
+                          </div>
+                        );
+                      })()}
                       <div>
                         <p className="text-white font-medium text-lg">
                           {tokenInfo?.name || `Token ${index}`}
@@ -359,7 +397,7 @@ const BasketDisplay: React.FC = () => {
 
                     <div className="text-right">
                       <div className="flex items-baseline gap-1">
-                        <p className="text-2xl font-bold text-white">{vp.percentage.toFixed(1)}</p>
+                        <p className="text-2xl font-bold text-white">{vp?.percentage?.toFixed(1) || '0'}</p>
                         <span className="text-sm text-gray-400">%</span>
                       </div>
                       <p className="text-sm text-gray-400">of portfolio value</p>
@@ -370,7 +408,7 @@ const BasketDisplay: React.FC = () => {
                     <div
                       className="h-2 rounded-full transition-all duration-1000 ease-out"
                       style={{
-                        width: `${vp.percentage}%`,
+                        width: `${vp?.percentage || 0}%`,
                         ...style.bar,
                       }}
                     />
@@ -391,7 +429,7 @@ const BasketDisplay: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-gray-400">Total Value</p>
-                      <p className="text-white">{formatValue(vp.value)}</p>
+                      <p className="text-white">{formatValue(vp?.value || 0)}</p>
                     </div>
                   </div>
                 </div>
