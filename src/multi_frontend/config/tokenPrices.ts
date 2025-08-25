@@ -172,19 +172,20 @@ export const getTokenInfo = (canisterId: string): TokenPrice | undefined => {
     return tokenMetadataCache[canisterId];
   }
 
-  // If not cached, trigger the fetch (but return placeholder for now)
+  // If not cached, trigger the fetch (but return cached price if available)
   fetchTokenMetadata(canisterId).then((metadata) => {
     if (metadata) {
       console.log(`Fetched metadata for ${canisterId}:`, metadata);
     }
   });
 
-  // Return a temporary placeholder
+  // Return last known price from cache to prevent price jumps during refresh
+  const cachedPrice = latestPricesCache[canisterId];
   return {
     name: 'Loading...',
     symbol: '...',
     decimals: 8,
-    priceUSD: 1.0,
+    priceUSD: cachedPrice || 1.0,
     lastUpdated: new Date().toISOString(),
   };
 };

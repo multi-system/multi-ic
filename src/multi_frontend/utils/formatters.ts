@@ -13,16 +13,14 @@ const formatAmount = (amount: bigint, decimals: number = 8): string => {
 };
 
 const formatUSD = (amount: number): string => {
-
   if (amount > 999_999) {
-      return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-};
-
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  }
 
   return new Intl.NumberFormat('en-US', {
     style: 'currency',

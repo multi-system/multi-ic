@@ -1,4 +1,4 @@
-import React, { useState, memo } from 'react';
+import React, { useState, memo, useMemo } from 'react';
 // @ts-ignore
 import { idlFactory as backendIdl } from '../../declarations/multi_backend';
 // @ts-ignore
@@ -14,8 +14,38 @@ import { Loader } from './Loader';
 import { IncrementalInput } from './IncrementalInput';
 import TokenTable from './TokenTable';
 
+// Memoized components to prevent re-renders
 const MemoizedPriceHistoryChart = memo(PriceHistoryChart, (prevProps, nextProps) => {
-  return prevProps.backingTokens.length === nextProps.backingTokens.length;
+  // Only re-render if backing tokens actually change
+  if (prevProps.backingTokens.length !== nextProps.backingTokens.length) {
+    return false;
+  }
+  
+  // Check if token IDs changed
+  for (let i = 0; i < prevProps.backingTokens.length; i++) {
+    if (prevProps.backingTokens[i].tokenInfo.canisterId.toString() !== 
+        nextProps.backingTokens[i].tokenInfo.canisterId.toString()) {
+      return false;
+    }
+  }
+  
+  return true; // Props are equal, don't re-render
+});
+
+const MemoizedTokenTable = memo(TokenTable, (prevProps, nextProps) => {
+  // Similar memoization for TokenTable
+  if (prevProps.backingTokens.length !== nextProps.backingTokens.length) {
+    return false;
+  }
+  
+  for (let i = 0; i < prevProps.backingTokens.length; i++) {
+    if (prevProps.backingTokens[i].tokenInfo.canisterId.toString() !== 
+        nextProps.backingTokens[i].tokenInfo.canisterId.toString()) {
+      return false;
+    }
+  }
+  
+  return true;
 });
 
 const BasketDisplay: React.FC = () => {
@@ -33,6 +63,19 @@ const BasketDisplay: React.FC = () => {
     fetchBasketInfo,
     setAutoRefresh,
   } = useSystemInfo();
+
+  // Memoize the multi price calculation to prevent recalculation on every render
+  const actualMultiPrice = useMemo(() => {
+    if (!systemInfo) return 0;
+    
+    // Use the price from context which is already calculated
+    return multiPrice;
+  }, [multiPrice, systemInfo]);
+
+  // Memoize value percentages to prevent recalculation
+  const valuePercentages = useMemo(() => {
+    return calculateValuePercentages();
+  }, [calculateValuePercentages]);
 
   if (loading) {
     return (
@@ -71,21 +114,7 @@ const BasketDisplay: React.FC = () => {
     );
   }
 
-  const valuePercentages: ValuePercentage[] = calculateValuePercentages();
   const multiAmountNum = parseFloat(multiAmount) || 0;
-
-  const calculateMultiPrice = () => {
-    let totalValue = 0;
-    for (const token of systemInfo.backingTokens) {
-      const tokenInfo = getTokenInfo(token.tokenInfo.canisterId.toString());
-      const backingPerMulti = Number(token.backingUnit) / Number(systemInfo.supplyUnit);
-      const value = backingPerMulti * (tokenInfo?.priceUSD || 0);
-      totalValue += value;
-    }
-    return totalValue;
-  };
-
-  const actualMultiPrice = calculateMultiPrice() || multiPrice;
 
   const formatValue = (usdValue: number): string => {
     if (priceDisplay === 'USD') {
@@ -206,13 +235,16 @@ const BasketDisplay: React.FC = () => {
           />
         </div>
 
-
         <MemoizedPriceHistoryChart 
           systemInfo={systemInfo} 
           backingTokens={systemInfo.backingTokens}
+          key={systemInfo.backingTokens.map(t => t.tokenInfo.canisterId.toString()).join(',')}
         />
-        <TokenTable           systemInfo={systemInfo} 
-          backingTokens={systemInfo.backingTokens}/>
+        
+        <MemoizedTokenTable 
+          systemInfo={systemInfo} 
+          backingTokens={systemInfo.backingTokens}
+        />
 
         <Section title="Portfolio Value Composition">
           <div className="flex h-8 rounded-full overflow-hidden mb-4">

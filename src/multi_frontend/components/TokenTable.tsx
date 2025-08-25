@@ -42,52 +42,84 @@ const TokenTable: React.FC<{
   const [sortConfig, setSortConfig] = useState<{
     key: SortKey;
     direction: SortDirection;
-  }>({ key: 'portfolioShare', direction: 'desc' }); // default sort
+  }>({ key: 'portfolioShare', direction: 'desc' });
 
-  const tokenInfoMap = useMemo(() => {
-    return backingTokens.map((token, index) => ({
-      canisterId: token.tokenInfo.canisterId.toString(),
-      symbol: token.tokenInfo.symbol || `Token${index}`,
-      name: token.tokenInfo.name || `Token ${index}`,
-      color: COLORS[index % COLORS.length],
-      price: Math.random() * 100,
-      marketCap: Math.random() * 1_000_000_000,
-      volume: Math.random() * 100_000_000,
-      supply: Math.random() * 100_000_000,
-      change1h: (Math.random() - 0.5) * 2,
-      change24h: (Math.random() - 0.5) * 10,
-      change7d: (Math.random() - 0.5) * 20,
-    }));
-  }, [backingTokens]);
+  // Generate token data only once and memoize it based on backing tokens
+  // This prevents regeneration on every render
+  const generatedTokenData = useMemo(() => {
+    // Generate deterministic mock data based on canister ID
+    // This ensures the same token always gets the same mock data
+    const hashCode = (str: string) => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+      }
+      return Math.abs(hash);
+    };
 
+    return backingTokens.map((token, index) => {
+      const canisterId = token.tokenInfo.canisterId.toString();
+      const seed = hashCode(canisterId);
+      
+      // Use seed to generate consistent random values
+      const seededRandom = (min: number, max: number, offset: number) => {
+        const x = Math.sin(seed + offset) * 10000;
+        return min + (x - Math.floor(x)) * (max - min);
+      };
+
+      return {
+        canisterId,
+        symbol: token.tokenInfo.symbol || `Token${index}`,
+        name: token.tokenInfo.name || `Token ${index}`,
+        color: COLORS[index % COLORS.length],
+        price: seededRandom(1, 100, 1),
+        marketCap: seededRandom(100_000_000, 1_000_000_000, 2),
+        volume: seededRandom(10_000_000, 100_000_000, 3),
+        supply: seededRandom(10_000_000, 100_000_000, 4),
+        change1h: seededRandom(-2, 2, 5),
+        change24h: seededRandom(-10, 10, 6),
+        change7d: seededRandom(-20, 20, 7),
+      };
+    });
+  }, [backingTokens]); // Only regenerate if backing tokens actually change
+
+  // Load token data with portfolio shares
   useEffect(() => {
     setLoading(true);
-    setTimeout(() => {
-      const totalMarketCap = tokenInfoMap.reduce((sum, t) => sum + t.marketCap, 0);
-      const withShares = tokenInfoMap.map((t) => ({
+    
+    // Simulate async loading
+    const timer = setTimeout(() => {
+      const totalMarketCap = generatedTokenData.reduce((sum, t) => sum + t.marketCap, 0);
+      const withShares = generatedTokenData.map((t) => ({
         ...t,
         portfolioShare: (t.marketCap / totalMarketCap) * 100,
       }));
       setTokens(withShares);
       setLoading(false);
-    }, 1000);
-  }, [tokenInfoMap]);
+    }, 500); // Reduced delay
 
-  const sortedTokens = [...tokens].sort((a, b) => {
-    const aValue = a[sortConfig.key];
-    const bValue = b[sortConfig.key];
+    return () => clearTimeout(timer);
+  }, [generatedTokenData]);
 
-    if (aValue == null) return 1;
-    if (bValue == null) return -1;
+  const sortedTokens = useMemo(() => {
+    return [...tokens].sort((a, b) => {
+      const aValue = a[sortConfig.key];
+      const bValue = b[sortConfig.key];
 
-    if (typeof aValue === 'number' && typeof bValue === 'number') {
-      return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
-    }
+      if (aValue == null) return 1;
+      if (bValue == null) return -1;
 
-    return sortConfig.direction === 'asc'
-      ? String(aValue).localeCompare(String(bValue))
-      : String(bValue).localeCompare(String(aValue));
-  });
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+
+      return sortConfig.direction === 'asc'
+        ? String(aValue).localeCompare(String(bValue))
+        : String(bValue).localeCompare(String(aValue));
+    });
+  }, [tokens, sortConfig]);
 
   const requestSort = (key: SortKey) => {
     let direction: SortDirection = 'asc';
@@ -135,13 +167,13 @@ const TokenTable: React.FC<{
           <tr>
             <th className="px-4 py-3 text-left">#</th>
             <th
-              className="px-4 py-3 text-left cursor-pointer"
+              className="px-4 py-3 text-left cursor-pointer hover:text-gray-200 transition-colors"
               onClick={() => requestSort('name')}
             >
               Name {renderSortIcon('name', 'right')}
             </th>
             <th
-              className="px-4 py-3 text-right cursor-pointer"
+              className="px-4 py-3 text-right cursor-pointer hover:text-gray-200 transition-colors"
               onClick={() => requestSort('price')}
             >
               <span className="flex items-center justify-end">
@@ -149,7 +181,7 @@ const TokenTable: React.FC<{
               </span>
             </th>
             <th
-              className="px-4 py-3 text-right cursor-pointer"
+              className="px-4 py-3 text-right cursor-pointer hover:text-gray-200 transition-colors"
               onClick={() => requestSort('change1h')}
             >
               <span className="flex items-center justify-end">
@@ -157,7 +189,7 @@ const TokenTable: React.FC<{
               </span>
             </th>
             <th
-              className="px-4 py-3 text-right cursor-pointer"
+              className="px-4 py-3 text-right cursor-pointer hover:text-gray-200 transition-colors"
               onClick={() => requestSort('change24h')}
             >
               <span className="flex items-center justify-end">
@@ -165,7 +197,7 @@ const TokenTable: React.FC<{
               </span>
             </th>
             <th
-              className="px-4 py-3 text-right cursor-pointer"
+              className="px-4 py-3 text-right cursor-pointer hover:text-gray-200 transition-colors"
               onClick={() => requestSort('change7d')}
             >
               <span className="flex items-center justify-end">
@@ -173,7 +205,7 @@ const TokenTable: React.FC<{
               </span>
             </th>
             <th
-              className="px-4 py-3 text-right cursor-pointer"
+              className="px-4 py-3 text-right cursor-pointer hover:text-gray-200 transition-colors"
               onClick={() => requestSort('marketCap')}
             >
               <span className="flex items-center justify-end">
@@ -181,7 +213,7 @@ const TokenTable: React.FC<{
               </span>
             </th>
             <th
-              className="px-4 py-3 text-right cursor-pointer"
+              className="px-4 py-3 text-right cursor-pointer hover:text-gray-200 transition-colors"
               onClick={() => requestSort('volume')}
             >
               <span className="flex items-center justify-end">
@@ -189,7 +221,7 @@ const TokenTable: React.FC<{
               </span>
             </th>
             <th
-              className="px-4 py-3 text-right cursor-pointer"
+              className="px-4 py-3 text-right cursor-pointer hover:text-gray-200 transition-colors"
               onClick={() => requestSort('supply')}
             >
               <span className="flex items-center justify-end">
@@ -197,7 +229,7 @@ const TokenTable: React.FC<{
               </span>
             </th>
             <th
-              className="px-4 py-3 text-right cursor-pointer"
+              className="px-4 py-3 text-right cursor-pointer hover:text-gray-200 transition-colors"
               onClick={() => requestSort('portfolioShare')}
             >
               <span className="flex items-center justify-end">
@@ -209,13 +241,13 @@ const TokenTable: React.FC<{
         <tbody>
           {sortedTokens.map((token, idx) => (
             <tr
-              key={token.symbol}
-              className="border-b border-gray-700 hover:bg-gray-700/40"
+              key={token.canisterId}
+              className="border-b border-gray-700 hover:bg-gray-700/40 transition-colors"
             >
               <td className="px-4 py-3">{idx + 1}</td>
               <td className="px-4 py-3 flex items-center gap-2">
                 <div
-                  className="w-5 h-5 rounded-full"
+                  className="w-5 h-5 rounded-full flex-shrink-0"
                   style={{ backgroundColor: token.color }}
                 />
                 <span className="font-medium text-white">{token.name}</span>
