@@ -60,7 +60,7 @@ main() {
   print_green "=== Deploying multi token canister ==="
   dfx deploy multi_token --argument "(variant {
       Init = record {
-        token_name = \"Multi Token\";
+        token_name = \"Multi\";
         token_symbol = \"MULTI\";
         minting_account = record {
           owner = principal \"${MULTI_BACKEND_ID}\";
@@ -90,7 +90,7 @@ main() {
   print_green "=== Deploying governance token canister ==="
   dfx deploy governance_token --argument "(variant {
       Init = record {
-        token_name = \"Foresight Token\";
+        token_name = \"Foresight\";
         token_symbol = \"FORESIGHT\";
         minting_account = record {
           owner = principal \"${MINTER}\";
@@ -118,13 +118,20 @@ main() {
   export GOVERNANCE_TOKEN_ID=$(dfx canister id governance_token)
   print_info "Exported GOVERNANCE_TOKEN_ID=${GOVERNANCE_TOKEN_ID}"
  
-  # Deploy backing tokens
+  # Deploy backing tokens with mythological names
+  declare -A token_names=(
+    ["token_a"]="Apollo:APL"
+    ["token_b"]="Hermes:HRM"
+    ["token_c"]="Athena:ATH"
+  )
+
   for token in "token_a" "token_b" "token_c"; do
-    print_green "Deploying $token..."
+    IFS=':' read -r name symbol <<< "${token_names[$token]}"
+    print_green "Deploying $token ($name)..."
     dfx deploy "$token" --argument "(variant {
         Init = record {
-          token_name = \"${token}\";
-          token_symbol = \"${token:(-1)}\";
+          token_name = \"${name}\";
+          token_symbol = \"${symbol}\";
           minting_account = record {
             owner = principal \"${MINTER}\";
           };
@@ -160,11 +167,11 @@ main() {
   print_info "Canister IDs:"
   print_info "  Multi Backend:  ${MULTI_BACKEND_ID}"
   print_info "  Multi History:  ${MULTI_HISTORY_ID}"
-  print_info "  Multi Token:    ${MULTI_TOKEN_ID}"
-  print_info "  Governance:     ${GOVERNANCE_TOKEN_ID}"
-  print_info "  Token A:        $(dfx canister id token_a)"
-  print_info "  Token B:        $(dfx canister id token_b)"
-  print_info "  Token C:        $(dfx canister id token_c)"
+  print_info "  Multi:          ${MULTI_TOKEN_ID}"
+  print_info "  Foresight:      ${GOVERNANCE_TOKEN_ID}"
+  print_info "  Apollo (APL):   $(dfx canister id token_a)"
+  print_info "  Hermes (HRM):   $(dfx canister id token_b)"
+  print_info "  Athena (ATH):   $(dfx canister id token_c)"
 }
 # Trap errors
 trap 'print_error "An error occurred during deployment"; exit 1' ERR

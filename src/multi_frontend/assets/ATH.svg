@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img">
+  <defs>
+    <!-- Patterns -->
+    <pattern id="fineDots" width="6" height="6" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="0.8" fill="#000" opacity="0.15"/>
+    </pattern>
+    <pattern id="wave" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M0,12 C6,0 18,24 24,12" fill="none" stroke="#000" stroke-width="1.2" opacity="0.15"/>
+    </pattern>
+    <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <defs>
+    <radialGradient id="ga" cx="35%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#F1E6FF"/>
+      <stop offset="100%" stop-color="#6C40B8"/>
+    </radialGradient>
+  </defs>
+  <g filter="url(#softShadow)">
+    <circle cx="256.0" cy="256.0" r="246.0" fill="url(#ga)" stroke="#0B0B0B" stroke-width="10"/>
+    <circle cx="256.0" cy="256.0" r="222.0" fill="none" stroke="#0B0B0B" stroke-width="6"/>
+  </g>
+  <circle cx="256.0" cy="256.0" r="196.0" fill="none" stroke="#0B0B0B" stroke-width="4" stroke-dasharray="2 14"/>
+  <circle cx="256.0" cy="256.0" r="180.0" fill="url(#fineDots)" opacity="0.3"/>
+  <g transform="translate(256,265)">
+    <path d="M-128,-120 C-32,-180, 32,-180, 128,-120 L100,-90 C40,-130,-40,-130,-100,-90 Z" fill="#FFFFFF" stroke="#0B0B0B" stroke-width="10"/>
+    <path d="M-120,20 C-120,-80,-56,-140,0,-140 C84,-140,128,-76,128,20 L128,120 L44,120 L44,20 C16,34,-48,34,-48,120 L-120,120 Z" fill="#FFFFFF" stroke="#0B0B0B" stroke-width="12"/>
+    <rect x="-6" y="-10" width="12" height="70" rx="6" fill="#0B0B0B" opacity="0.5"/>
+  </g>
+  <g transform="translate(160,360) rotate(-18)">
+    <path d="M0,0 Q80,-16 160,0" fill="none" stroke="#0B0B0B" stroke-width="8" stroke-linecap="round"/>
+    <ellipse cx="20" cy="10" rx="14" ry="9" fill="#7BCB86" stroke="#0B0B0B" stroke-width="6"/>
+    <ellipse cx="40" cy="-10" rx="14" ry="9" fill="#7BCB86" stroke="#0B0B0B" stroke-width="6"/>
+    <ellipse cx="60" cy="10" rx="14" ry="9" fill="#7BCB86" stroke="#0B0B0B" stroke-width="6"/>
+    <ellipse cx="80" cy="-10" rx="14" ry="9" fill="#7BCB86" stroke="#0B0B0B" stroke-width="6"/>
+    <ellipse cx="100" cy="10" rx="14" ry="9" fill="#7BCB86" stroke="#0B0B0B" stroke-width="6"/>
+    <ellipse cx="120" cy="-10" rx="14" ry="9" fill="#7BCB86" stroke="#0B0B0B" stroke-width="6"/>
+    <ellipse cx="140" cy="10" rx="14" ry="9" fill="#7BCB86" stroke="#0B0B0B" stroke-width="6"/>
+  </g>
+  <g transform="translate(256,256)">
+    <line x1="200.0" y1="0.0" x2="182.0" y2="0.0" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="198.3" y1="26.1" x2="180.4" y2="23.8" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="193.2" y1="51.8" x2="175.8" y2="47.1" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="184.8" y1="76.5" x2="168.1" y2="69.6" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="173.2" y1="100.0" x2="157.6" y2="91.0" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="158.7" y1="121.8" x2="144.4" y2="110.8" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="141.4" y1="141.4" x2="128.7" y2="128.7" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="121.8" y1="158.7" x2="110.8" y2="144.4" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="100.0" y1="173.2" x2="91.0" y2="157.6" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="76.5" y1="184.8" x2="69.6" y2="168.1" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="51.8" y1="193.2" x2="47.1" y2="175.8" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="26.1" y1="198.3" x2="23.8" y2="180.4" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="0.0" y1="200.0" x2="0.0" y2="182.0" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-26.1" y1="198.3" x2="-23.8" y2="180.4" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-51.8" y1="193.2" x2="-47.1" y2="175.8" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-76.5" y1="184.8" x2="-69.6" y2="168.1" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-100.0" y1="173.2" x2="-91.0" y2="157.6" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-121.8" y1="158.7" x2="-110.8" y2="144.4" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-141.4" y1="141.4" x2="-128.7" y2="128.7" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-158.7" y1="121.8" x2="-144.4" y2="110.8" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-173.2" y1="100.0" x2="-157.6" y2="91.0" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-184.8" y1="76.5" x2="-168.1" y2="69.6" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-193.2" y1="51.8" x2="-175.8" y2="47.1" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-198.3" y1="26.1" x2="-180.4" y2="23.8" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-200.0" y1="0.0" x2="-182.0" y2="0.0" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-198.3" y1="-26.1" x2="-180.4" y2="-23.8" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-193.2" y1="-51.8" x2="-175.8" y2="-47.1" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-184.8" y1="-76.5" x2="-168.1" y2="-69.6" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-173.2" y1="-100.0" x2="-157.6" y2="-91.0" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-158.7" y1="-121.8" x2="-144.4" y2="-110.8" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-141.4" y1="-141.4" x2="-128.7" y2="-128.7" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-121.8" y1="-158.7" x2="-110.8" y2="-144.4" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-100.0" y1="-173.2" x2="-91.0" y2="-157.6" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-76.5" y1="-184.8" x2="-69.6" y2="-168.1" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-51.8" y1="-193.2" x2="-47.1" y2="-175.8" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-26.1" y1="-198.3" x2="-23.8" y2="-180.4" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="-0.0" y1="-200.0" x2="-0.0" y2="-182.0" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="26.1" y1="-198.3" x2="23.8" y2="-180.4" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="51.8" y1="-193.2" x2="47.1" y2="-175.8" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="76.5" y1="-184.8" x2="69.6" y2="-168.1" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="100.0" y1="-173.2" x2="91.0" y2="-157.6" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="121.8" y1="-158.7" x2="110.8" y2="-144.4" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="141.4" y1="-141.4" x2="128.7" y2="-128.7" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="158.7" y1="-121.8" x2="144.4" y2="-110.8" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="173.2" y1="-100.0" x2="157.6" y2="-91.0" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="184.8" y1="-76.5" x2="168.1" y2="-69.6" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="193.2" y1="-51.8" x2="175.8" y2="-47.1" stroke="#0B0B0B" stroke-width="6"/>
+    <line x1="198.3" y1="-26.1" x2="180.4" y2="-23.8" stroke="#0B0B0B" stroke-width="6"/>
+  </g>
+</svg>
