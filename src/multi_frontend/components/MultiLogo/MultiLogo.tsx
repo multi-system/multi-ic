@@ -1,7 +1,7 @@
 import { twMerge } from 'tailwind-merge';
 
 export function MultiLogo({ className }: { className?: string }) {
-  const classNames = twMerge(className, 'h-6 w-6');
+  const classNames = twMerge('h-6 w-6', className);
 
   return (
     <div className={classNames}>
