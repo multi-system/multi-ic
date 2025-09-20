@@ -2,10 +2,13 @@ import React, { useState, useEffect, Dispatch, SetStateAction } from "react";
 import { Principal } from "@dfinity/principal";
 import { Actor, HttpAgent } from "@dfinity/agent";
 import { AuthClient } from "@dfinity/auth-client";
+import { useSystemInfo } from "../contexts/SystemInfoContext";
 // @ts-ignore
 import { idlFactory as backendIdl } from "../../declarations/multi_backend";
 // @ts-ignore
 import { idlFactory as tokenIdl } from "../../declarations/token_a";
+// @ts-ignore
+import { idlFactory as historyIdl } from "../../declarations/multi_history";
 // @ts-ignore
 import type { _SERVICE as BackendService } from "../../declarations/multi_backend";
 // @ts-ignore
@@ -63,12 +66,16 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
   const [multiBalance, setMultiBalance] = useState<bigint>(BigInt(0));
   const [currentPage, setCurrentPage] = useState<Page>("main");
   const [selectedAsset, setSelectedAsset] = useState<TokenBalance | null>(null);
+  const [prices, setPrices] = useState<Record<string, number>>({});
 
   // Form states - one deposit amount per token
   const [depositAmounts, setDepositAmounts] = useState<Record<string, string>>(
     {},
   );
   const [issueAmount, setIssueAmount] = useState<string>("");
+
+  const { systemInfo } = useSystemInfo();
+
 
   // Track which token is being deposited
   const [depositingToken, setDepositingToken] = useState<string | null>(null);
@@ -99,6 +106,36 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
       agent,
       canisterId,
     });
+  };
+
+  // Fetch current prices from history canister
+  const fetchCurrentPrices = async () => {
+    try {
+      const historyActor = await getAuthenticatedActor(
+        historyIdl,
+        import.meta.env.VITE_CANISTER_ID_MULTI_HISTORY,
+      );
+
+      // Get latest snapshot
+      const latestSnapshots = await historyActor.getSnapshotsInTimeRange(
+        BigInt(Date.now()) * BigInt(1000000) - BigInt(3600 * 1000000000), // Last hour
+        BigInt(Date.now()) * BigInt(1000000),
+        [1] // Just get the latest one
+      );
+
+      if (latestSnapshots.length > 0) {
+        const snapshot = latestSnapshots[0].snapshot;
+        const newPrices: Record<string, number> = {};
+
+        snapshot.prices.forEach(([token, price]: [any, bigint]) => {
+          newPrices[token.toString()] = Number(price) / 100000000; // Convert to USD
+        });
+
+        setPrices(newPrices);
+      }
+    } catch (error) {
+      console.error('Error fetching prices:', error);
+    }
   };
 
   // Fetch all balances
@@ -174,10 +211,13 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  // Refresh balances when sidebar opens or principal changes
+  // Refresh balances and prices when sidebar opens or principal changes
   useEffect(() => {
     if (isOpen && principal) {
-      fetchBalances();
+      Promise.all([
+        fetchBalances(),
+        fetchCurrentPrices()
+      ]);
     }
   }, [isOpen, principal]);
 
@@ -407,6 +447,7 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
             tokenBalances={tokenBalances}
             setSelectedAsset={setSelectedAsset}
             principal={principal}
+            prices={prices}
           />
         )}
       </div>
@@ -462,6 +503,7 @@ function MainPage({
   tokenBalances,
   setSelectedAsset,
   principal,
+  prices,
 }: {
   onClose: () => void;
   multiBalance: bigint;
@@ -470,7 +512,26 @@ function MainPage({
   tokenBalances: TokenBalance[];
   setSelectedAsset: (asset: TokenBalance | null) => void;
   principal: Principal | null;
+  prices: Record<string, number>;
 }) {
+  // Calculate total value in USD
+  const calculateTotalValue = () => {
+    let total = 0;
+
+    // Add value of MULTI tokens
+    const multiPrice = prices[import.meta.env.VITE_CANISTER_ID_MULTI_BACKEND] || 1; // Default to 1 USD if no price
+    total += Number(multiBalance) * multiPrice / 100000000; // Convert from e8s
+
+    // Add value of backing tokens
+    tokenBalances.forEach(token => {
+      const price = prices[token.canisterId] || 1; // Default to 1 USD if no price
+      if (token.systemBalance) {
+        total += Number(token.systemBalance) * price / (10 ** token.decimals);
+      }
+    });
+
+    return total;
+  };
   return (
     <div className="flex flex-col">
       <Aurora className="w-full h-92 items-center ">
@@ -492,13 +553,19 @@ function MainPage({
           </div>
 
           <div className="text-center mt-16 items-center flex flex-col gap-2 justify-center w-full">
-            <div className="flex flex-col items-center justify-center">
+            <div className="flex flex-col items-center justify-center gap-2">
               <p className="text-sm font-thin text-white/60">
-                Total deposited balance
+                Total Deposited Value
               </p>
               <div className="flex items-end flex-row gap-1">
                 <p className="text-5xl font-mono font-bold text-white">
-                  ${formatBalance(multiBalance, 8)}
+                  ${calculateTotalValue().toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 bg-black/50 px-4 py-2 rounded-full">
+                <p className="text-sm font-thin text-white/40">MULTI Balance:</p>
+                <p className="text-sm font-mono font-black text-white/80">
+                  {formatBalance(multiBalance, 8)} <span className="font-thin text-white/40">MULTI</span>
                 </p>
               </div>
             </div>
@@ -736,7 +803,6 @@ function DepositPage({
   const walletBefore = selectedAsset?.walletBalance ?? 0n;
   const systemBefore = selectedAsset?.systemBalance ?? 0n;
   const walletAfter = walletBefore - (bigIntAmount ?? 0n);
-  const systemAfter = systemBefore + (bigIntAmount ?? 0n);
   const tooMuch = bigIntAmount !== null && walletAfter < 0n;
 
 
@@ -853,15 +919,24 @@ function IssuePage({
     await onIssue(amount);
   };
 
+  const { systemInfo } = useSystemInfo();
   const issueAmount = formatStringToBigInt(amount, 8); // MULTI token has 8 decimals
   const multiRequired = issueAmount ?? 0n;
-  const backingRequired = assets.map(asset => ({
-    ...asset,
-    requiredAmount: (multiRequired * BigInt(100000000)) / BigInt(10 ** asset.decimals) // Simple 1:1 backing ratio
-  }));
+  const backingRequired = assets.map(asset => {
+    const backingToken = systemInfo?.backingTokens.find(token =>
+      token.tokenInfo.canisterId.toString() === asset.canisterId
+    );
+    const amountPerMulti = backingToken && systemInfo
+      ? Number(backingToken.backingUnit) / Number(systemInfo.supplyUnit)
+      : 0;
+    return {
+      ...asset,
+      requiredAmount: BigInt(Math.floor(Number(multiRequired) * amountPerMulti * (10 ** asset.decimals) / 100000000))
+    };
+  });
 
   const insufficientFunds = backingRequired.some(asset =>
-    asset.requiredAmount > (asset.walletBalance ?? 0n)
+    asset.requiredAmount > (asset.systemBalance ?? 0n)
   );
 
   return (
@@ -938,13 +1013,13 @@ function IssuePage({
                     <div className="space-y-1">
                       <p className="text-xs text-white/60">Current Balance</p>
                       <p className="text-lg font-mono text-white">
-                        {formatBalance(asset.walletBalance ?? 0n, asset.decimals)}
+                        {formatBalance(asset.systemBalance ?? 0n, asset.decimals)}
                         <span className="text-xs text-white/40 ml-1">{asset.symbol}</span>
                       </p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-white/60">Required Amount</p>
-                      <p className={`text-lg font-mono ${asset.requiredAmount > (asset.walletBalance ?? 0n) ? 'text-red-400' : 'text-white'}`}>
+                      <p className={`text-lg font-mono ${asset.requiredAmount > (asset.systemBalance ?? 0n) ? 'text-red-400' : 'text-white'}`}>
                         {formatBalance(asset.requiredAmount, asset.decimals)}
                         <span className="text-xs text-white/40 ml-1">{asset.symbol}</span>
                       </p>
@@ -997,15 +1072,25 @@ function RedeemPage({
     await onRedeem(amount);
   };
 
+  const { systemInfo } = useSystemInfo();
   const redeemAmount = formatStringToBigInt(amount, 8); // MULTI token has 8 decimals
   const multiRequired = redeemAmount ?? 0n;
   const multiAfterRedeem = multiBalance - multiRequired;
 
-  const backingToReceive = assets.map(asset => ({
-    ...asset,
-    receiveAmount: (multiRequired * BigInt(100000000)) / BigInt(10 ** asset.decimals), // Simple 1:1 backing ratio
-    balanceAfter: (asset.systemBalance ?? 0n) + ((multiRequired * BigInt(100000000)) / BigInt(10 ** asset.decimals))
-  }));
+  const backingToReceive = assets.map(asset => {
+    const backingToken = systemInfo?.backingTokens.find(token =>
+      token.tokenInfo.canisterId.toString() === asset.canisterId
+    );
+    const amountPerMulti = backingToken && systemInfo
+      ? Number(backingToken.backingUnit) / Number(systemInfo.supplyUnit)
+      : 0;
+    const receiveAmount = BigInt(Math.floor(Number(multiRequired) * amountPerMulti * (10 ** asset.decimals) / 100000000));
+    return {
+      ...asset,
+      receiveAmount,
+      balanceAfter: (asset.systemBalance ?? 0n) + receiveAmount
+    };
+  });
 
   const insufficientBalance = multiRequired > multiBalance;
 
@@ -1144,7 +1229,6 @@ function RedeemPage({
 function TransactionPreview({ selectedAsset, bigIntAmount }: { selectedAsset: Asset | null; bigIntAmount: bigint | null; }) {
 
   const walletBefore = selectedAsset?.walletBalance ?? 0n;
-  const systemBefore = selectedAsset?.systemBalance ?? 0n;
   const walletAfter = walletBefore - (bigIntAmount ?? 0n);
 
 
@@ -1179,7 +1263,7 @@ function TransactionPreview({ selectedAsset, bigIntAmount }: { selectedAsset: As
               <div className="space-y-1">
                 <p className="text-xs text-white/60">Deposited</p>
                 <p className="text-lg font-mono text-white">
-                  {selectedAsset ? formatBalance(systemBefore, selectedAsset.decimals) : "-"}
+                  {selectedAsset ? formatBalance(selectedAsset.systemBalance ?? 0n, selectedAsset.decimals) : "-"}
                   <span className="text-xs text-white/40 ml-1">{selectedAsset?.symbol}</span>
                 </p>
               </div>
@@ -1211,7 +1295,7 @@ function TransactionPreview({ selectedAsset, bigIntAmount }: { selectedAsset: As
               <div className="space-y-1">
                 <p className="text-xs text-white/60">Deposited</p>
                 <p className="text-lg font-mono text-white">
-                  {selectedAsset ? formatBalance(systemBefore + (bigIntAmount ?? 0n), selectedAsset.decimals) : "-"}
+                  {selectedAsset ? formatBalance((selectedAsset.systemBalance ?? 0n) + (bigIntAmount ?? 0n), selectedAsset.decimals) : "-"}
                   <span className="text-xs text-white/40 ml-1">{selectedAsset?.symbol}</span>
                 </p>
               </div>

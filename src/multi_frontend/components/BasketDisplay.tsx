@@ -21,15 +21,15 @@ const MemoizedPriceHistoryChart = memo(PriceHistoryChart, (prevProps, nextProps)
   if (prevProps.backingTokens.length !== nextProps.backingTokens.length) {
     return false;
   }
-  
+
   // Check if token IDs changed
   for (let i = 0; i < prevProps.backingTokens.length; i++) {
-    if (prevProps.backingTokens[i].tokenInfo.canisterId.toString() !== 
-        nextProps.backingTokens[i].tokenInfo.canisterId.toString()) {
+    if (prevProps.backingTokens[i].tokenInfo.canisterId.toString() !==
+      nextProps.backingTokens[i].tokenInfo.canisterId.toString()) {
       return false;
     }
   }
-  
+
   return true; // Props are equal, don't re-render
 });
 
@@ -38,14 +38,14 @@ const MemoizedTokenTable = memo(TokenTable, (prevProps, nextProps) => {
   if (prevProps.backingTokens.length !== nextProps.backingTokens.length) {
     return false;
   }
-  
+
   for (let i = 0; i < prevProps.backingTokens.length; i++) {
-    if (prevProps.backingTokens[i].tokenInfo.canisterId.toString() !== 
-        nextProps.backingTokens[i].tokenInfo.canisterId.toString()) {
+    if (prevProps.backingTokens[i].tokenInfo.canisterId.toString() !==
+      nextProps.backingTokens[i].tokenInfo.canisterId.toString()) {
       return false;
     }
   }
-  
+
   return true;
 });
 
@@ -69,9 +69,9 @@ const BasketDisplay: React.FC = () => {
   // Subscribe to token metadata updates
   useEffect(() => {
     if (!systemInfo) return;
-    
+
     const unsubscribes: (() => void)[] = [];
-    
+
     // Subscribe to each token's updates
     systemInfo.backingTokens.forEach((token: any) => {
       const canisterId = token.tokenInfo.canisterId.toString();
@@ -91,7 +91,7 @@ const BasketDisplay: React.FC = () => {
   // Memoize the multi price calculation to prevent recalculation on every render
   const actualMultiPrice = useMemo(() => {
     if (!systemInfo) return 0;
-    
+
     // Use the price from context which is already calculated
     return multiPrice;
   }, [multiPrice, systemInfo]);
@@ -161,21 +161,19 @@ const BasketDisplay: React.FC = () => {
             <div className="flex bg-white bg-opacity-10 rounded-lg p-1">
               <button
                 onClick={() => setPriceDisplay('USD')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                  priceDisplay === 'USD'
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${priceDisplay === 'USD'
                     ? 'bg-[#586CE1] text-white'
                     : 'text-gray-300 hover:text-white'
-                }`}
+                  }`}
               >
                 USD
               </button>
               <button
                 onClick={() => setPriceDisplay('MULTI')}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                  priceDisplay === 'MULTI'
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${priceDisplay === 'MULTI'
                     ? 'bg-[#586CE1] text-white'
                     : 'text-gray-300 hover:text-white'
-                }`}
+                  }`}
               >
                 MULTI
               </button>
@@ -188,9 +186,8 @@ const BasketDisplay: React.FC = () => {
               title={refreshing ? 'Fetching latest data...' : 'Data is up to date'}
             >
               <div
-                className={`w-2 h-2 rounded-full transition-colors duration-300 ${
-                  refreshing ? 'bg-yellow-400' : 'bg-green-400'
-                } ${refreshing && autoRefresh ? 'animate-pulse' : ''}`}
+                className={`w-2 h-2 rounded-full transition-colors duration-300 ${refreshing ? 'bg-yellow-400' : 'bg-green-400'
+                  } ${refreshing && autoRefresh ? 'animate-pulse' : ''}`}
               ></div>
               <span className="text-gray-400 select-none">Live</span>
             </div>
@@ -199,14 +196,12 @@ const BasketDisplay: React.FC = () => {
               <span className="text-sm text-gray-400 select-none">Auto-refresh</span>
               <button
                 onClick={() => setAutoRefresh(!autoRefresh)}
-                className={`inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  autoRefresh ? 'bg-[#586CE1]' : 'bg-gray-600'
-                }`}
+                className={`inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoRefresh ? 'bg-[#586CE1]' : 'bg-gray-600'
+                  }`}
               >
                 <span
-                  className={` inline-flex h-4 w-4 relative rounded-full bg-white transition-transform ${
-                    autoRefresh ? 'translate-x-6' : 'translate-x-1'
-                  }`}
+                  className={` inline-flex h-4 w-4 relative rounded-full bg-white transition-transform ${autoRefresh ? 'translate-x-6' : 'translate-x-1'
+                    }`}
                 />
               </button>
             </label>
@@ -214,9 +209,8 @@ const BasketDisplay: React.FC = () => {
             <button
               onClick={() => fetchBasketInfo(false)}
               disabled={refreshing}
-              className={`text-gray-400 hover:text-white transition-colors ${
-                refreshing ? 'animate-spin' : ''
-              }`}
+              className={`text-gray-400 hover:text-white transition-colors ${refreshing ? 'animate-spin' : ''
+                }`}
               title={refreshing ? 'Refreshing...' : 'Refresh now'}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -240,10 +234,10 @@ const BasketDisplay: React.FC = () => {
             unitName="MULTI tokens"
           />
 
-          <InfoCard 
-            label="Multi Price" 
-            value={formatUSD(actualMultiPrice)} 
-            unitName="per Multi token" 
+          <InfoCard
+            label="Multi Price"
+            value={formatUSD(actualMultiPrice)}
+            unitName="per Multi token"
           />
 
           <InfoCard
@@ -259,14 +253,14 @@ const BasketDisplay: React.FC = () => {
           />
         </div>
 
-        <MemoizedPriceHistoryChart 
-          systemInfo={systemInfo} 
+        <MemoizedPriceHistoryChart
+          systemInfo={systemInfo}
           backingTokens={systemInfo.backingTokens}
           key={systemInfo.backingTokens.map(t => t.tokenInfo.canisterId.toString()).join(',')}
         />
-        
-        <MemoizedTokenTable 
-          systemInfo={systemInfo} 
+
+        <MemoizedTokenTable
+          systemInfo={systemInfo}
           backingTokens={systemInfo.backingTokens}
         />
 
@@ -311,46 +305,6 @@ const BasketDisplay: React.FC = () => {
           </div>
         </Section>
 
-        <Section title="Redemption Calculator">
-          <div className="">
-            <div className="flex items-center gap-3 mb-4">
-              <IncrementalInput
-                value={multiAmount}
-                onChange={(e) => setMultiAmount(e.target.value)}
-                step={0.01}
-                min={0}
-              />
-              <span className="text-gray-300">MULTI tokens can be redeemed for:</span>
-              <span className="ml-auto text-lg font-semibold text-white">
-                ≈ {formatValue(multiAmountNum * actualMultiPrice)}
-              </span>
-            </div>
-
-            <div className="grid gap-2 pt-3 border-t border-white border-opacity-10">
-              {systemInfo.backingTokens.map((token, index) => {
-                const tokenInfo = getTokenInfo(token.tokenInfo.canisterId.toString());
-                const amountPerMulti = Number(token.backingUnit) / Number(systemInfo.supplyUnit);
-                const totalAmount = amountPerMulti * multiAmountNum;
-                const value = totalAmount * (tokenInfo?.priceUSD || 0);
-
-                return (
-                  <div key={index} className="flex justify-between items-center text-sm">
-                    <span className="text-gray-300">
-                      {tokenInfo?.name || `Token ${index}`} ({tokenInfo?.symbol})
-                    </span>
-                    <div className="text-right">
-                      <span className="font-mono text-white">{totalAmount.toFixed(8)}</span>
-                      <span className="text-gray-400 ml-2">
-                        ({formatValue(value)})
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </Section>
-
         <Section title="Reserve Token Details">
           <div className="space-y-3">
             {systemInfo.backingTokens.map((token, index) => {
@@ -358,7 +312,7 @@ const BasketDisplay: React.FC = () => {
               const style = getTokenStyle(index);
               const backingPerMulti = Number(token.backingUnit) / Number(systemInfo.supplyUnit);
               const vp = valuePercentages[index];
-              const tokenPriceDisplay = priceDisplay === 'USD' 
+              const tokenPriceDisplay = priceDisplay === 'USD'
                 ? formatUSD(tokenInfo?.priceUSD || 0)
                 : `${((tokenInfo?.priceUSD || 0) / actualMultiPrice).toFixed(6)} MULTI`;
 
