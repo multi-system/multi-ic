@@ -57,12 +57,16 @@ suite(
 
         // Verify token types
         switch (govStake) {
-          case (?stake) { assert stake.token == CompetitionTestUtils.getGovToken() };
+          case (?stake) {
+            assert stake.token == CompetitionTestUtils.getGovToken();
+          };
           case null { assert false }; // Should have gov stake
         };
 
         switch (multiStake) {
-          case (?stake) { assert stake.token == CompetitionTestUtils.getMultiToken() };
+          case (?stake) {
+            assert stake.token == CompetitionTestUtils.getMultiToken();
+          };
           case null { assert false }; // Should have multi stake
         };
 

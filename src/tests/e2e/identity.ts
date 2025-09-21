@@ -1,5 +1,5 @@
-import { Ed25519KeyIdentity } from '@dfinity/identity';
-import { Secp256k1KeyIdentity } from '@dfinity/identity-secp256k1';
+import { Ed25519KeyIdentity } from "@dfinity/identity";
+import { Secp256k1KeyIdentity } from "@dfinity/identity-secp256k1";
 
 // This key is not a secret. Only use it for testing!
 const MINTER_KEY = `-----BEGIN EC PRIVATE KEY-----

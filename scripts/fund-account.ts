@@ -1,16 +1,16 @@
-import { Principal } from '@dfinity/principal';
-import { minter } from '../src/tests/e2e/identity';
-import { tokenA, tokenB, tokenC } from '../src/tests/e2e/actor';
+import { Principal } from "@dfinity/principal";
+import { minter } from "../src/tests/e2e/identity";
+import { tokenA, tokenB, tokenC } from "../src/tests/e2e/actor";
 
 async function fundPrincipalWithTokens(
   targetPrincipal: Principal,
-  amountPerToken: bigint = BigInt(10000000000000) // 100,000 tokens default
+  amountPerToken: bigint = BigInt(10000000000000), // 100,000 tokens default
 ): Promise<{ success: boolean; results: string[] }> {
   const results: string[] = [];
 
   try {
     console.log(
-      `Funding ${targetPrincipal.toText()} with ${Number(amountPerToken) / 1e8} tokens each...`
+      `Funding ${targetPrincipal.toText()} with ${Number(amountPerToken) / 1e8} tokens each...`,
     );
 
     // Create actor instances
@@ -55,8 +55,8 @@ async function fundPrincipalWithTokens(
 
     let successCount = 0;
     transfers.forEach((result, index) => {
-      const tokenName = ['Token A', 'Token B', 'Token C'][index];
-      if ('ok' in result || (result as any).Ok) {
+      const tokenName = ["Token A", "Token B", "Token C"][index];
+      if ("ok" in result || (result as any).Ok) {
         results.push(`✅ ${tokenName}: Success`);
         successCount++;
       } else {
@@ -75,15 +75,19 @@ async function main() {
   const amount = process.argv[3];
 
   if (!principalText) {
-    console.log('\n💰 Fund Internet Identity Account');
-    console.log('==================================');
-    console.log('\nUsage:');
-    console.log('  yarn fund <principal>           # Funds with 100,000 tokens each');
-    console.log('  yarn fund <principal> <amount>  # Funds with custom amount');
-    console.log('\nExample:');
-    console.log('  yarn fund j5b9r-zw4cn-o7aie-hzt4e-fqkwu-jqzwl-5v5k3-weq2x-gszp2-py6p6-fae');
+    console.log("\n💰 Fund Internet Identity Account");
+    console.log("==================================");
+    console.log("\nUsage:");
     console.log(
-      '  yarn fund j5b9r-zw4cn-o7aie-hzt4e-fqkwu-jqzwl-5v5k3-weq2x-gszp2-py6p6-fae 50000'
+      "  yarn fund <principal>           # Funds with 100,000 tokens each",
+    );
+    console.log("  yarn fund <principal> <amount>  # Funds with custom amount");
+    console.log("\nExample:");
+    console.log(
+      "  yarn fund j5b9r-zw4cn-o7aie-hzt4e-fqkwu-jqzwl-5v5k3-weq2x-gszp2-py6p6-fae",
+    );
+    console.log(
+      "  yarn fund j5b9r-zw4cn-o7aie-hzt4e-fqkwu-jqzwl-5v5k3-weq2x-gszp2-py6p6-fae 50000",
     );
     process.exit(0);
   }
@@ -101,10 +105,10 @@ async function main() {
     if (result.success) {
       console.log(`\n✅ Successfully funded ${principalText}`);
     } else {
-      console.log('\n⚠️  Some transfers failed');
+      console.log("\n⚠️  Some transfers failed");
     }
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error("❌ Error:", error);
     process.exit(1);
   }
 }

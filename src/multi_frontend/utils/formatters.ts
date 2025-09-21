@@ -7,36 +7,39 @@ const formatAmount = (amount: bigint, decimals: number = 8): string => {
     return whole.toString();
   }
 
-  const decimal = remainder.toString().padStart(decimals, '0');
-  const trimmedDecimal = decimal.replace(/0+$/, '');
+  const decimal = remainder.toString().padStart(decimals, "0");
+  const trimmedDecimal = decimal.replace(/0+$/, "");
   return trimmedDecimal ? `${whole}.${trimmedDecimal}` : whole.toString();
 };
 
 const formatUSD = (amount: number): string => {
   if (amount > 999_999) {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
   }
 
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
 };
 
-const formatMultiPrice = (usdValue: number, multiPriceInUSD: number): string => {
-  if (!multiPriceInUSD || multiPriceInUSD === 0) return '0.0000 MULTI';
+const formatMultiPrice = (
+  usdValue: number,
+  multiPriceInUSD: number,
+): string => {
+  if (!multiPriceInUSD || multiPriceInUSD === 0) return "0.0000 MULTI";
 
   const valueInMulti = usdValue / multiPriceInUSD;
 
   if (valueInMulti < 0.0001) {
-    return '<0.0001 MULTI';
+    return "<0.0001 MULTI";
   }
 
   if (valueInMulti < 1) {

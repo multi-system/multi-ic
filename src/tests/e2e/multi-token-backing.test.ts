@@ -1,6 +1,6 @@
-import { describe, expect, test, beforeAll } from 'vitest';
-import { Principal } from '@dfinity/principal';
-import { minter, newIdentity } from './identity';
+import { describe, expect, test, beforeAll } from "vitest";
+import { Principal } from "@dfinity/principal";
+import { minter, newIdentity } from "./identity";
 import {
   multiBackend,
   tokenA,
@@ -15,7 +15,7 @@ import {
   multiToken,
   governanceToken,
   fundTestAccount,
-} from './actor';
+} from "./actor";
 
 // Enable debug logging during development and bug resolution
 const DEBUG = false;
@@ -24,8 +24,8 @@ const DEBUG = false;
 function safeStringify(obj: any, indent = 2) {
   return JSON.stringify(
     obj,
-    (_, value) => (typeof value === 'bigint' ? value.toString() : value),
-    indent
+    (_, value) => (typeof value === "bigint" ? value.toString() : value),
+    indent,
   );
 }
 
@@ -40,7 +40,7 @@ async function waitForTokenTransfer(
   token: any,
   recipient: Principal,
   expectedAmount: bigint,
-  maxAttempts: number = 10
+  maxAttempts: number = 10,
 ): Promise<boolean> {
   for (let i = 0; i < maxAttempts; i++) {
     const balance = await token.icrc1_balance_of({
@@ -60,7 +60,7 @@ function unwrapResult(result) {
 }
 
 function hasError(result) {
-  return 'err' in result;
+  return "err" in result;
 }
 
 function getErrorType(result) {
@@ -68,7 +68,7 @@ function getErrorType(result) {
   return Object.keys(result.err)[0];
 }
 
-describe('Multi Token Backing System', () => {
+describe("Multi Token Backing System", () => {
   const testIdentity = newIdentity();
   let backend: any;
   let tokenAInstance: any;
@@ -110,89 +110,96 @@ describe('Multi Token Backing System', () => {
         }),
       ]);
 
-      debugLog('Test identity balances:', {
+      debugLog("Test identity balances:", {
         tokenA: balanceA.toString(),
         tokenB: balanceB.toString(),
         tokenC: balanceC.toString(),
       });
     } catch (e) {
-      console.error('Error setting up test balances:', e);
+      console.error("Error setting up test balances:", e);
       throw e;
     }
   });
 
-  test.sequential('1. should handle token approval correctly', { timeout: 15000 }, async () => {
-    const initialState = await backend.isInitialized();
-    if (initialState) {
-      debugLog('Warning: Canister already initialized');
-      return;
-    }
-
-    // We need to use an admin/owner identity to approve tokens
-    const adminBackend = await multiBackend(minter);
-
-    // Process each token approval
-    for (const [name, tokenId] of [
-      ['Token A', TOKEN_A],
-      ['Token B', TOKEN_B],
-      ['Token C', TOKEN_C],
-    ]) {
-      const approveResult = await adminBackend.approveToken({
-        canisterId: tokenId,
-      });
-      debugLog(`Approval response ${name}:`, safeStringify(approveResult));
-
-      if (hasError(approveResult)) {
-        const errorType = getErrorType(approveResult);
-        // Only TokenAlreadyApproved is acceptable as an error for valid tokens
-        if (errorType === 'TokenAlreadyApproved') {
-          debugLog(`${name} already approved, this is valid`);
-        } else {
-          console.error(
-            `Unexpected error during ${name} approval:`,
-            safeStringify(approveResult.err)
-          );
-          // Any other error is a test failure
-          expect(approveResult.err).toBeNull();
-        }
-      } else {
-        // If no error, should be a successful approval
-        debugLog(`${name} approved successfully`);
-      }
-    }
-
-    // Test unauthorized approval with the regular test identity
-    const unauthorizedResult = await backend.approveToken({
-      canisterId: Principal.fromText('rrkah-fqaaa-aaaaa-aaaaq-cai'),
-    });
-    debugLog('Unauthorized approval response:', safeStringify(unauthorizedResult));
-    expect(hasError(unauthorizedResult)).toBe(true);
-    expect(getErrorType(unauthorizedResult)).toBe('Unauthorized');
-
-    // Test management canister (should be rejected by our validation)
-    const emptyPrincipalResult = await adminBackend.approveToken({
-      canisterId: Principal.fromText('aaaaa-aa'),
-    });
-    expect(hasError(emptyPrincipalResult)).toBe(true);
-    expect(getErrorType(emptyPrincipalResult)).toBe('TokenError');
-    expect(emptyPrincipalResult.err.TokenError.code).toBe(2104n);
-
-    // Test double approval of a token we just approved
-    // (should return TokenAlreadyApproved error)
-    const secondApproval = await adminBackend.approveToken({
-      canisterId: TOKEN_A, // Re-using an already approved token
-    });
-    expect(hasError(secondApproval)).toBe(true);
-    expect(getErrorType(secondApproval)).toBe('TokenAlreadyApproved');
-  });
-
   test.sequential(
-    '2. should initialize with three backing tokens',
+    "1. should handle token approval correctly",
     { timeout: 15000 },
     async () => {
       const initialState = await backend.isInitialized();
       if (initialState) {
-        debugLog('Warning: Canister already initialized');
+        debugLog("Warning: Canister already initialized");
+        return;
+      }
+
+      // We need to use an admin/owner identity to approve tokens
+      const adminBackend = await multiBackend(minter);
+
+      // Process each token approval
+      for (const [name, tokenId] of [
+        ["Token A", TOKEN_A],
+        ["Token B", TOKEN_B],
+        ["Token C", TOKEN_C],
+      ]) {
+        const approveResult = await adminBackend.approveToken({
+          canisterId: tokenId,
+        });
+        debugLog(`Approval response ${name}:`, safeStringify(approveResult));
+
+        if (hasError(approveResult)) {
+          const errorType = getErrorType(approveResult);
+          // Only TokenAlreadyApproved is acceptable as an error for valid tokens
+          if (errorType === "TokenAlreadyApproved") {
+            debugLog(`${name} already approved, this is valid`);
+          } else {
+            console.error(
+              `Unexpected error during ${name} approval:`,
+              safeStringify(approveResult.err),
+            );
+            // Any other error is a test failure
+            expect(approveResult.err).toBeNull();
+          }
+        } else {
+          // If no error, should be a successful approval
+          debugLog(`${name} approved successfully`);
+        }
+      }
+
+      // Test unauthorized approval with the regular test identity
+      const unauthorizedResult = await backend.approveToken({
+        canisterId: Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai"),
+      });
+      debugLog(
+        "Unauthorized approval response:",
+        safeStringify(unauthorizedResult),
+      );
+      expect(hasError(unauthorizedResult)).toBe(true);
+      expect(getErrorType(unauthorizedResult)).toBe("Unauthorized");
+
+      // Test management canister (should be rejected by our validation)
+      const emptyPrincipalResult = await adminBackend.approveToken({
+        canisterId: Principal.fromText("aaaaa-aa"),
+      });
+      expect(hasError(emptyPrincipalResult)).toBe(true);
+      expect(getErrorType(emptyPrincipalResult)).toBe("TokenError");
+      expect(emptyPrincipalResult.err.TokenError.code).toBe(2104n);
+
+      // Test double approval of a token we just approved
+      // (should return TokenAlreadyApproved error)
+      const secondApproval = await adminBackend.approveToken({
+        canisterId: TOKEN_A, // Re-using an already approved token
+      });
+      expect(hasError(secondApproval)).toBe(true);
+      expect(getErrorType(secondApproval)).toBe("TokenAlreadyApproved");
+    },
+  );
+
+  test.sequential(
+    "2. should initialize with three backing tokens",
+    { timeout: 15000 },
+    async () => {
+      const initialState = await backend.isInitialized();
+      if (initialState) {
+        debugLog("Warning: Canister already initialized");
         return;
       }
 
@@ -218,10 +225,10 @@ describe('Multi Token Backing System', () => {
 
       const duplicateResult = await adminBackend.initialize(duplicateConfig);
       expect(hasError(duplicateResult)).toBe(true);
-      debugLog('Duplicate token error:', safeStringify(duplicateResult));
+      debugLog("Duplicate token error:", safeStringify(duplicateResult));
 
       // Check for error for duplicate token
-      if (getErrorType(duplicateResult) === 'TokenError') {
+      if (getErrorType(duplicateResult) === "TokenError") {
         const code = duplicateResult.err.TokenError.code;
         expect(code === 2103n).toBe(true);
       }
@@ -235,7 +242,7 @@ describe('Multi Token Backing System', () => {
             backingUnit: BigInt(100),
           },
           {
-            canisterId: Principal.fromText('rrkah-fqaaa-aaaaa-aaaaq-cai'), // Unapproved token
+            canisterId: Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai"), // Unapproved token
             backingUnit: BigInt(50),
           },
         ],
@@ -245,10 +252,10 @@ describe('Multi Token Backing System', () => {
 
       const unapprovedResult = await adminBackend.initialize(unapprovedConfig);
       expect(hasError(unapprovedResult)).toBe(true);
-      debugLog('Unapproved token error:', safeStringify(unapprovedResult));
+      debugLog("Unapproved token error:", safeStringify(unapprovedResult));
 
       // Verify error type for unapproved token
-      expect(getErrorType(unapprovedResult)).toBe('TokenNotApproved');
+      expect(getErrorType(unapprovedResult)).toBe("TokenNotApproved");
 
       // Test initializing with a zero backingUnit
       const zeroUnitConfig = {
@@ -269,10 +276,10 @@ describe('Multi Token Backing System', () => {
 
       const zeroUnitResult = await adminBackend.initialize(zeroUnitConfig);
       expect(hasError(zeroUnitResult)).toBe(true);
-      debugLog('Zero backing unit error:', safeStringify(zeroUnitResult));
+      debugLog("Zero backing unit error:", safeStringify(zeroUnitResult));
 
       // Verify error for invalid backing unit
-      if (getErrorType(zeroUnitResult) === 'TokenError') {
+      if (getErrorType(zeroUnitResult) === "TokenError") {
         const code = zeroUnitResult.err.TokenError.code;
         expect(code === 2102n).toBe(true);
       }
@@ -296,10 +303,10 @@ describe('Multi Token Backing System', () => {
 
       const zeroSupplyResult = await adminBackend.initialize(zeroSupplyConfig);
       expect(hasError(zeroSupplyResult)).toBe(true);
-      debugLog('Zero supply unit error:', safeStringify(zeroSupplyResult));
+      debugLog("Zero supply unit error:", safeStringify(zeroSupplyResult));
 
       // Verify error for invalid supply unit
-      expect(getErrorType(zeroSupplyResult)).toBe('InvalidSupplyUnit');
+      expect(getErrorType(zeroSupplyResult)).toBe("InvalidSupplyUnit");
 
       // Initialize with valid configuration
       const validConfig = {
@@ -323,7 +330,7 @@ describe('Multi Token Backing System', () => {
       };
 
       const result = await adminBackend.initialize(validConfig);
-      debugLog('Init result:', safeStringify(result));
+      debugLog("Init result:", safeStringify(result));
       expect(hasError(result)).toBe(false);
 
       // Verify initialized state
@@ -340,9 +347,11 @@ describe('Multi Token Backing System', () => {
       // Verify token config
       storedTokens.forEach((token, index) => {
         expect(token.tokenInfo.canisterId.toText()).toEqual(
-          validConfig.backingTokens[index].canisterId.toText()
+          validConfig.backingTokens[index].canisterId.toText(),
         );
-        expect(token.backingUnit).toEqual(validConfig.backingTokens[index].backingUnit);
+        expect(token.backingUnit).toEqual(
+          validConfig.backingTokens[index].backingUnit,
+        );
         // Reserve quantity should be 0 initially
         expect(token.reserveQuantity).toEqual(BigInt(0));
       });
@@ -356,46 +365,50 @@ describe('Multi Token Backing System', () => {
       expect(hasError(totalSupplyResult)).toBe(false);
       const totalSupply = unwrapResult(totalSupplyResult);
       expect(totalSupply).toEqual(BigInt(0));
-    }
+    },
   );
 
-  test.sequential('3. should prevent double initialization', { timeout: 15000 }, async () => {
-    // Use admin identity for attempted re-initialization
-    const adminBackend = await multiBackend(minter);
+  test.sequential(
+    "3. should prevent double initialization",
+    { timeout: 15000 },
+    async () => {
+      // Use admin identity for attempted re-initialization
+      const adminBackend = await multiBackend(minter);
 
-    // Attempt to initialize again
-    const config = {
-      supplyUnit: BigInt(100),
-      backingTokens: [
-        {
-          canisterId: TOKEN_A,
-          backingUnit: BigInt(100),
-        },
-      ],
-      multiToken: { canisterId: MULTI_TOKEN_ID },
-      governanceToken: { canisterId: GOVERNANCE_TOKEN_ID },
-    };
+      // Attempt to initialize again
+      const config = {
+        supplyUnit: BigInt(100),
+        backingTokens: [
+          {
+            canisterId: TOKEN_A,
+            backingUnit: BigInt(100),
+          },
+        ],
+        multiToken: { canisterId: MULTI_TOKEN_ID },
+        governanceToken: { canisterId: GOVERNANCE_TOKEN_ID },
+      };
 
-    const result = await adminBackend.initialize(config);
-    expect(hasError(result)).toBe(true);
-    debugLog('Double init error:', safeStringify(result));
+      const result = await adminBackend.initialize(config);
+      expect(hasError(result)).toBe(true);
+      debugLog("Double init error:", safeStringify(result));
 
-    // Verify specific error for AlreadyInitialized
-    expect(getErrorType(result)).toBe('AlreadyInitialized');
+      // Verify specific error for AlreadyInitialized
+      expect(getErrorType(result)).toBe("AlreadyInitialized");
 
-    // Also verify that we can't approve new tokens after initialization
-    const approveResult = await adminBackend.approveToken({
-      canisterId: Principal.fromText('rrkah-fqaaa-aaaaa-aaaaq-cai'),
-    });
-    expect(hasError(approveResult)).toBe(true);
-    debugLog('Post-init approval error:', safeStringify(approveResult));
+      // Also verify that we can't approve new tokens after initialization
+      const approveResult = await adminBackend.approveToken({
+        canisterId: Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai"),
+      });
+      expect(hasError(approveResult)).toBe(true);
+      debugLog("Post-init approval error:", safeStringify(approveResult));
 
-    // Verify specific error for AlreadyInitialized
-    expect(getErrorType(approveResult)).toBe('AlreadyInitialized');
-  });
+      // Verify specific error for AlreadyInitialized
+      expect(getErrorType(approveResult)).toBe("AlreadyInitialized");
+    },
+  );
 
   test.sequential(
-    '4. should verify backing tokens and system configuration after initialization',
+    "4. should verify backing tokens and system configuration after initialization",
     { timeout: 15000 },
     async () => {
       const tokensResult = await backend.getBackingTokens();
@@ -403,7 +416,7 @@ describe('Multi Token Backing System', () => {
 
       const tokens = unwrapResult(tokensResult);
       if (tokens.length === 0) {
-        console.log('Warning: No backing tokens found');
+        console.log("Warning: No backing tokens found");
         return;
       }
 
@@ -426,7 +439,9 @@ describe('Multi Token Backing System', () => {
 
       // Check governance token ID (with the new endpoint)
       const governanceTokenIdResult = await backend.getGovernanceTokenId();
-      expect(governanceTokenIdResult.toText()).toBe(GOVERNANCE_TOKEN_ID.toText());
+      expect(governanceTokenIdResult.toText()).toBe(
+        GOVERNANCE_TOKEN_ID.toText(),
+      );
 
       // Check total supply
       const totalSupplyResult = await backend.getTotalSupply();
@@ -439,451 +454,487 @@ describe('Multi Token Backing System', () => {
       const systemInfo = unwrapResult(systemInfoResult);
       expect(systemInfo.initialized).toBe(true);
       expect(systemInfo.supplyUnit).toBe(BigInt(100));
-    }
+    },
   );
 
-  test.sequential('5. should validate issue operations', { timeout: 60000 }, async () => {
-    // Calculate amounts
-    const issueAmount = BigInt(100);
-    const requiredAmountA = BigInt(100);
-    const requiredAmountB = BigInt(50);
-    const requiredAmountC = BigInt(200);
+  test.sequential(
+    "5. should validate issue operations",
+    { timeout: 60000 },
+    async () => {
+      // Calculate amounts
+      const issueAmount = BigInt(100);
+      const requiredAmountA = BigInt(100);
+      const requiredAmountB = BigInt(50);
+      const requiredAmountC = BigInt(200);
 
-    // Get fees
-    const [feeA, feeB, feeC] = await Promise.all([
-      tokenAInstance.icrc1_fee(),
-      tokenBInstance.icrc1_fee(),
-      tokenCInstance.icrc1_fee(),
-    ]);
+      // Get fees
+      const [feeA, feeB, feeC] = await Promise.all([
+        tokenAInstance.icrc1_fee(),
+        tokenBInstance.icrc1_fee(),
+        tokenCInstance.icrc1_fee(),
+      ]);
 
-    debugLog('Token fees:', {
-      feeA: feeA.toString(),
-      feeB: feeB.toString(),
-      feeC: feeC.toString(),
-    });
+      debugLog("Token fees:", {
+        feeA: feeA.toString(),
+        feeB: feeB.toString(),
+        feeC: feeC.toString(),
+      });
 
-    const totalNeededA = requiredAmountA + feeA + feeA; // Additional fee for approval
-    const totalNeededB = requiredAmountB + feeB + feeB;
-    const totalNeededC = requiredAmountC + feeC + feeC;
+      const totalNeededA = requiredAmountA + feeA + feeA; // Additional fee for approval
+      const totalNeededB = requiredAmountB + feeB + feeB;
+      const totalNeededC = requiredAmountC + feeC + feeC;
 
-    // Process each token in sequence
-    for (const { tokenId, amount, name, token } of [
-      {
-        tokenId: TOKEN_A,
-        amount: totalNeededA - feeA, // Subtract one fee since approve takes its own
-        name: 'Token A',
-        token: tokenAInstance,
-      },
-      {
-        tokenId: TOKEN_B,
-        amount: totalNeededB - feeB,
-        name: 'Token B',
-        token: tokenBInstance,
-      },
-      {
-        tokenId: TOKEN_C,
-        amount: totalNeededC - feeC,
-        name: 'Token C',
-        token: tokenCInstance,
-      },
-    ]) {
-      debugLog(`Processing ${name}...`);
+      // Process each token in sequence
+      for (const { tokenId, amount, name, token } of [
+        {
+          tokenId: TOKEN_A,
+          amount: totalNeededA - feeA, // Subtract one fee since approve takes its own
+          name: "Token A",
+          token: tokenAInstance,
+        },
+        {
+          tokenId: TOKEN_B,
+          amount: totalNeededB - feeB,
+          name: "Token B",
+          token: tokenBInstance,
+        },
+        {
+          tokenId: TOKEN_C,
+          amount: totalNeededC - feeC,
+          name: "Token C",
+          token: tokenCInstance,
+        },
+      ]) {
+        debugLog(`Processing ${name}...`);
 
-      // Add approval before deposit - approve for transfer amount plus fee
-      const approveResult = await token.icrc2_approve({
+        // Add approval before deposit - approve for transfer amount plus fee
+        const approveResult = await token.icrc2_approve({
+          spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
+          amount: amount + feeA,
+          fee: [],
+          memo: [],
+          from_subaccount: [], // Required parameter
+          created_at_time: [],
+          expected_allowance: [],
+          expires_at: [],
+        });
+
+        // Check for "Ok" property (ICRC standard)
+        expect("Ok" in approveResult).toBe(true);
+        debugLog(`${name} approval result:`, safeStringify(approveResult));
+
+        // Wait a bit for approval to be processed
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // Use deposit function to transfer tokens and create virtual balance
+        const depositResult = await backend.deposit({
+          token: tokenId,
+          amount,
+        });
+
+        // Check for response format
+        debugLog(`${name} deposit result:`, safeStringify(depositResult));
+
+        // Verify deposit succeeds
+        expect(hasError(depositResult)).toBe(false);
+
+        // Verify virtual balance
+        const balanceResult = await backend.getVirtualBalance(
+          testIdentity.getPrincipal(),
+          tokenId,
+        );
+
+        expect(hasError(balanceResult)).toBe(false);
+        const balance = unwrapResult(balanceResult);
+        expect(balance).toBe(amount - feeA);
+        debugLog(`${name} virtual balance: ${balance.toString()}`);
+      }
+
+      // Now that all tokens are in virtual ledger, do the issue operation
+      const issueResult = await backend.issue({ amount: issueAmount });
+
+      // Use the API's ok/err response format
+      debugLog("Issue result:", safeStringify(issueResult));
+
+      // Verify issue succeeds
+      expect(hasError(issueResult)).toBe(false);
+
+      // Verify minting completion
+      const finalBalanceResult = await backend.getMultiTokenBalance(
+        testIdentity.getPrincipal(),
+      );
+      expect(hasError(finalBalanceResult)).toBe(false);
+      const finalBalance = unwrapResult(finalBalanceResult);
+      expect(finalBalance).toBe(issueAmount);
+      debugLog("Final multi token balance:", finalBalance.toString());
+
+      // Verify supply and reserves
+      const finalSupplyResult = await backend.getTotalSupply();
+      expect(hasError(finalSupplyResult)).toBe(false);
+      const finalSupply = unwrapResult(finalSupplyResult);
+      expect(finalSupply).toBe(issueAmount);
+      debugLog("Final supply:", finalSupply.toString());
+
+      const finalTokensResult = await backend.getBackingTokens();
+      expect(hasError(finalTokensResult)).toBe(false);
+      const finalTokens = unwrapResult(finalTokensResult);
+      debugLog("Final token reserves:", safeStringify(finalTokens));
+
+      // Expect each token to have its reserve quantity set correctly
+      finalTokens.forEach((token) => {
+        // Verify token has expected reserve quantity if it matches one of our test tokens
+        const principal = token.tokenInfo.canisterId.toText();
+        if (principal === TOKEN_A.toText())
+          expect(token.reserveQuantity).toBe(requiredAmountA);
+        if (principal === TOKEN_B.toText())
+          expect(token.reserveQuantity).toBe(requiredAmountB);
+        if (principal === TOKEN_C.toText())
+          expect(token.reserveQuantity).toBe(requiredAmountC);
+      });
+    },
+  );
+
+  test.sequential(
+    "6. should handle insufficient funds correctly",
+    { timeout: 15000 },
+    async () => {
+      // Store initial state
+      const backingTokensResult = await backend.getBackingTokens();
+      expect(hasError(backingTokensResult)).toBe(false);
+      const previousTokens = unwrapResult(backingTokensResult);
+      const previousReserves = previousTokens.map((t) => t.reserveQuantity);
+
+      const previousSupplyResult = await backend.getTotalSupply();
+      expect(hasError(previousSupplyResult)).toBe(false);
+      const previousSupply = unwrapResult(previousSupplyResult);
+
+      // Get virtual balances
+      const virtualBalanceAResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_A,
+      );
+      const virtualBalanceBResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_B,
+      );
+      const virtualBalanceCResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_C,
+      );
+
+      // Extract balance values from results using helper functions
+      const virtualBalanceA = hasError(virtualBalanceAResult)
+        ? BigInt(0)
+        : unwrapResult(virtualBalanceAResult);
+      const virtualBalanceB = hasError(virtualBalanceBResult)
+        ? BigInt(0)
+        : unwrapResult(virtualBalanceBResult);
+      const virtualBalanceC = hasError(virtualBalanceCResult)
+        ? BigInt(0)
+        : unwrapResult(virtualBalanceCResult);
+
+      debugLog("Current virtual balances:", {
+        A: virtualBalanceA.toString(),
+        B: virtualBalanceB.toString(),
+        C: virtualBalanceC.toString(),
+      });
+
+      // Request amount that would require more than our virtual balance
+      const issueAmount = BigInt(10000);
+
+      // Should return error for insufficient balance
+      const result = await backend.issue({ amount: issueAmount });
+
+      // Check for err property using helper function
+      expect(hasError(result)).toBe(true);
+
+      // We expect specifically an InsufficientBalance error
+      const errorType = getErrorType(result);
+      expect(errorType).toBe("InsufficientBalance");
+
+      // Verify nothing changed
+      const tokensResult = await backend.getBackingTokens();
+      expect(hasError(tokensResult)).toBe(false);
+      const tokens = unwrapResult(tokensResult);
+      tokens.forEach((token, i) => {
+        expect(token.reserveQuantity.toString()).toBe(
+          previousReserves[i].toString(),
+        );
+      });
+
+      const currentSupplyResult = await backend.getTotalSupply();
+      expect(hasError(currentSupplyResult)).toBe(false);
+      const currentSupply = unwrapResult(currentSupplyResult);
+      expect(currentSupply.toString()).toBe(previousSupply.toString());
+
+      // Verify virtual balances didn't change
+      const finalVirtualBalanceAResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_A,
+      );
+      const finalVirtualBalanceBResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_B,
+      );
+      const finalVirtualBalanceCResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_C,
+      );
+
+      // Extract balance values from results using helper functions
+      const finalVirtualBalanceA = hasError(finalVirtualBalanceAResult)
+        ? BigInt(0)
+        : unwrapResult(finalVirtualBalanceAResult);
+      const finalVirtualBalanceB = hasError(finalVirtualBalanceBResult)
+        ? BigInt(0)
+        : unwrapResult(finalVirtualBalanceBResult);
+      const finalVirtualBalanceC = hasError(finalVirtualBalanceCResult)
+        ? BigInt(0)
+        : unwrapResult(finalVirtualBalanceCResult);
+
+      // Compare as strings to avoid BigInt equality issues
+      expect(finalVirtualBalanceA.toString()).toBe(virtualBalanceA.toString());
+      expect(finalVirtualBalanceB.toString()).toBe(virtualBalanceB.toString());
+      expect(finalVirtualBalanceC.toString()).toBe(virtualBalanceC.toString());
+    },
+  );
+
+  test.sequential(
+    "7. should handle transfer failures atomically",
+    { timeout: 15000 },
+    async () => {
+      // Store initial state
+      const backingTokensResult = await backend.getBackingTokens();
+      expect(hasError(backingTokensResult)).toBe(false);
+      const previousTokens = unwrapResult(backingTokensResult);
+      const previousReserves = previousTokens.map((t) => t.reserveQuantity);
+
+      const previousSupplyResult = await backend.getTotalSupply();
+      expect(hasError(previousSupplyResult)).toBe(false);
+      const previousSupply = unwrapResult(previousSupplyResult);
+
+      // Get current virtual balances
+      const virtualBalanceAResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_A,
+      );
+      const virtualBalanceBResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_B,
+      );
+      const virtualBalanceCResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_C,
+      );
+
+      // Extract balance values from results using the helper function
+      const virtualBalanceA = hasError(virtualBalanceAResult)
+        ? BigInt(0)
+        : unwrapResult(virtualBalanceAResult);
+      const virtualBalanceB = hasError(virtualBalanceBResult)
+        ? BigInt(0)
+        : unwrapResult(virtualBalanceBResult);
+      const virtualBalanceC = hasError(virtualBalanceCResult)
+        ? BigInt(0)
+        : unwrapResult(virtualBalanceCResult);
+
+      debugLog("Virtual balances before atomic test:", {
+        A: virtualBalanceA.toString(),
+        B: virtualBalanceB.toString(),
+        C: virtualBalanceC.toString(),
+      });
+
+      // Try a request that would pass for first two tokens but fail for the last one
+      // Token C has backing ratio of 200, so requesting 5100 would need:
+      // Token A (ratio 100): 5100 tokens
+      // Token B (ratio 50): 2550 tokens
+      // Token C (ratio 200): 10200 tokens - should fail
+      const atomicAmount = BigInt(5100);
+
+      // Should return error since one token doesn't have enough balance
+      const result = await backend.issue({ amount: atomicAmount });
+
+      // Check for error property using helper function
+      expect(hasError(result)).toBe(true);
+
+      // We expect specifically an InsufficientBalance error
+      const errorType = getErrorType(result);
+      expect(errorType).toBe("InsufficientBalance");
+
+      // Verify nothing changed - this is the key atomicity check
+      const tokensResult = await backend.getBackingTokens();
+      expect(hasError(tokensResult)).toBe(false);
+      const tokens = unwrapResult(tokensResult);
+      tokens.forEach((token, i) => {
+        expect(token.reserveQuantity.toString()).toBe(
+          previousReserves[i].toString(),
+        );
+      });
+
+      const currentSupplyResult = await backend.getTotalSupply();
+      expect(hasError(currentSupplyResult)).toBe(false);
+      const currentSupply = unwrapResult(currentSupplyResult);
+      expect(currentSupply.toString()).toBe(previousSupply.toString());
+
+      // Verify virtual balances didn't change
+      const finalVirtualBalanceAResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_A,
+      );
+      const finalVirtualBalanceBResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_B,
+      );
+      const finalVirtualBalanceCResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_C,
+      );
+
+      // Extract balance values from results using helper functions
+      const finalVirtualBalanceA = hasError(finalVirtualBalanceAResult)
+        ? BigInt(0)
+        : unwrapResult(finalVirtualBalanceAResult);
+      const finalVirtualBalanceB = hasError(finalVirtualBalanceBResult)
+        ? BigInt(0)
+        : unwrapResult(finalVirtualBalanceBResult);
+      const finalVirtualBalanceC = hasError(finalVirtualBalanceCResult)
+        ? BigInt(0)
+        : unwrapResult(finalVirtualBalanceCResult);
+
+      // Compare as strings to avoid BigInt equality issues
+      expect(finalVirtualBalanceA.toString()).toBe(virtualBalanceA.toString());
+      expect(finalVirtualBalanceB.toString()).toBe(virtualBalanceB.toString());
+      expect(finalVirtualBalanceC.toString()).toBe(virtualBalanceC.toString());
+    },
+  );
+
+  test.sequential(
+    "8. should handle token withdrawals correctly",
+    { timeout: 60000 },
+    async () => {
+      const fee = BigInt(10000);
+      const testAmount = BigInt(20000);
+
+      // Need to cover:
+      // 1. Approval fee
+      // 2. Transfer fee
+      // 3. The actual amount
+      const depositAmount = testAmount + fee + fee;
+      const approvalAmount = depositAmount + fee; // Extra fee for the approve operation itself
+
+      debugLog(
+        "Starting test 8 with deposit amount:",
+        depositAmount.toString(),
+      );
+
+      // Add approval before deposit
+      const approveRes = await tokenAInstance.icrc2_approve({
         spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
-        amount: amount + feeA,
+        amount: approvalAmount,
         fee: [],
         memo: [],
-        from_subaccount: [], // Required parameter
+        from_subaccount: [],
         created_at_time: [],
         expected_allowance: [],
         expires_at: [],
       });
+      expect("Ok" in approveRes).toBe(true);
 
-      // Check for "Ok" property (ICRC standard)
-      expect('Ok' in approveResult).toBe(true);
-      debugLog(`${name} approval result:`, safeStringify(approveResult));
-
-      // Wait a bit for approval to be processed
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Use deposit function to transfer tokens and create virtual balance
+      // Initial setup - deposit tokens
       const depositResult = await backend.deposit({
-        token: tokenId,
-        amount,
+        token: TOKEN_A,
+        amount: depositAmount,
       });
+      debugLog("Deposit result:", safeStringify(depositResult));
 
-      // Check for response format
-      debugLog(`${name} deposit result:`, safeStringify(depositResult));
+      // If deposit fails, log failure and skip test
+      if (hasError(depositResult)) {
+        debugLog(
+          "Deposit failed, test cannot proceed:",
+          safeStringify(depositResult),
+        );
+        return;
+      }
 
-      // Verify deposit succeeds
       expect(hasError(depositResult)).toBe(false);
 
-      // Verify virtual balance
-      const balanceResult = await backend.getVirtualBalance(testIdentity.getPrincipal(), tokenId);
+      // Record starting balances
+      const startRealBalance = await tokenAInstance.icrc1_balance_of({
+        owner: testIdentity.getPrincipal(),
+        subaccount: [],
+      });
+      debugLog("Starting real balance:", startRealBalance.toString());
 
-      expect(hasError(balanceResult)).toBe(false);
-      const balance = unwrapResult(balanceResult);
-      expect(balance).toBe(amount - feeA);
-      debugLog(`${name} virtual balance: ${balance.toString()}`);
-    }
+      const startVirtualBalanceResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_A,
+      );
+      expect(hasError(startVirtualBalanceResult)).toBe(false);
+      const startVirtualBalance = unwrapResult(startVirtualBalanceResult);
+      debugLog("Starting virtual balance:", startVirtualBalance.toString());
 
-    // Now that all tokens are in virtual ledger, do the issue operation
-    const issueResult = await backend.issue({ amount: issueAmount });
+      // Perform valid withdrawal
+      const withdrawResult = await backend.withdraw({
+        token: TOKEN_A,
+        amount: testAmount,
+      });
+      debugLog("Withdraw result:", safeStringify(withdrawResult));
+      expect(hasError(withdrawResult)).toBe(false);
 
-    // Use the API's ok/err response format
-    debugLog('Issue result:', safeStringify(issueResult));
+      // Check real balance updated
+      const expectedRealBalance = startRealBalance + (testAmount - fee);
+      const currentBalance = await tokenAInstance.icrc1_balance_of({
+        owner: testIdentity.getPrincipal(),
+        subaccount: [],
+      });
+      debugLog("Current real balance:", currentBalance.toString());
+      debugLog("Expected real balance:", expectedRealBalance.toString());
+      expect(currentBalance).toBe(expectedRealBalance);
 
-    // Verify issue succeeds
-    expect(hasError(issueResult)).toBe(false);
+      // Check virtual balance decreased
+      const endVirtualBalanceResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_A,
+      );
+      expect(hasError(endVirtualBalanceResult)).toBe(false);
+      const endVirtualBalance = unwrapResult(endVirtualBalanceResult);
+      const expectedVirtualBalance = startVirtualBalance - testAmount;
 
-    // Verify minting completion
-    const finalBalanceResult = await backend.getMultiTokenBalance(testIdentity.getPrincipal());
-    expect(hasError(finalBalanceResult)).toBe(false);
-    const finalBalance = unwrapResult(finalBalanceResult);
-    expect(finalBalance).toBe(issueAmount);
-    debugLog('Final multi token balance:', finalBalance.toString());
+      debugLog("End virtual balance:", endVirtualBalance.toString());
+      debugLog("Expected virtual balance:", expectedVirtualBalance.toString());
 
-    // Verify supply and reserves
-    const finalSupplyResult = await backend.getTotalSupply();
-    expect(hasError(finalSupplyResult)).toBe(false);
-    const finalSupply = unwrapResult(finalSupplyResult);
-    expect(finalSupply).toBe(issueAmount);
-    debugLog('Final supply:', finalSupply.toString());
+      // Using toString() comparison to avoid potential BigInt comparison issues
+      expect(endVirtualBalance.toString()).toBe(
+        expectedVirtualBalance.toString(),
+      );
 
-    const finalTokensResult = await backend.getBackingTokens();
-    expect(hasError(finalTokensResult)).toBe(false);
-    const finalTokens = unwrapResult(finalTokensResult);
-    debugLog('Final token reserves:', safeStringify(finalTokens));
+      // Test invalid withdrawal - attempt to withdraw more than available
+      const invalidWithdrawResult = await backend.withdraw({
+        token: TOKEN_A,
+        amount: endVirtualBalance + BigInt(1000),
+      });
+      expect(hasError(invalidWithdrawResult)).toBe(true);
+      expect(getErrorType(invalidWithdrawResult)).toBe("InsufficientBalance");
 
-    // Expect each token to have its reserve quantity set correctly
-    finalTokens.forEach((token) => {
-      // Verify token has expected reserve quantity if it matches one of our test tokens
-      const principal = token.tokenInfo.canisterId.toText();
-      if (principal === TOKEN_A.toText()) expect(token.reserveQuantity).toBe(requiredAmountA);
-      if (principal === TOKEN_B.toText()) expect(token.reserveQuantity).toBe(requiredAmountB);
-      if (principal === TOKEN_C.toText()) expect(token.reserveQuantity).toBe(requiredAmountC);
-    });
-  });
+      // Verify balances remained unchanged after failed withdrawal
+      const finalVirtualBalanceResult = await backend.getVirtualBalance(
+        testIdentity.getPrincipal(),
+        TOKEN_A,
+      );
+      expect(hasError(finalVirtualBalanceResult)).toBe(false);
+      const finalVirtualBalance = unwrapResult(finalVirtualBalanceResult);
+      expect(finalVirtualBalance.toString()).toBe(endVirtualBalance.toString());
 
-  test.sequential('6. should handle insufficient funds correctly', { timeout: 15000 }, async () => {
-    // Store initial state
-    const backingTokensResult = await backend.getBackingTokens();
-    expect(hasError(backingTokensResult)).toBe(false);
-    const previousTokens = unwrapResult(backingTokensResult);
-    const previousReserves = previousTokens.map((t) => t.reserveQuantity);
-
-    const previousSupplyResult = await backend.getTotalSupply();
-    expect(hasError(previousSupplyResult)).toBe(false);
-    const previousSupply = unwrapResult(previousSupplyResult);
-
-    // Get virtual balances
-    const virtualBalanceAResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_A
-    );
-    const virtualBalanceBResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_B
-    );
-    const virtualBalanceCResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_C
-    );
-
-    // Extract balance values from results using helper functions
-    const virtualBalanceA = hasError(virtualBalanceAResult)
-      ? BigInt(0)
-      : unwrapResult(virtualBalanceAResult);
-    const virtualBalanceB = hasError(virtualBalanceBResult)
-      ? BigInt(0)
-      : unwrapResult(virtualBalanceBResult);
-    const virtualBalanceC = hasError(virtualBalanceCResult)
-      ? BigInt(0)
-      : unwrapResult(virtualBalanceCResult);
-
-    debugLog('Current virtual balances:', {
-      A: virtualBalanceA.toString(),
-      B: virtualBalanceB.toString(),
-      C: virtualBalanceC.toString(),
-    });
-
-    // Request amount that would require more than our virtual balance
-    const issueAmount = BigInt(10000);
-
-    // Should return error for insufficient balance
-    const result = await backend.issue({ amount: issueAmount });
-
-    // Check for err property using helper function
-    expect(hasError(result)).toBe(true);
-
-    // We expect specifically an InsufficientBalance error
-    const errorType = getErrorType(result);
-    expect(errorType).toBe('InsufficientBalance');
-
-    // Verify nothing changed
-    const tokensResult = await backend.getBackingTokens();
-    expect(hasError(tokensResult)).toBe(false);
-    const tokens = unwrapResult(tokensResult);
-    tokens.forEach((token, i) => {
-      expect(token.reserveQuantity.toString()).toBe(previousReserves[i].toString());
-    });
-
-    const currentSupplyResult = await backend.getTotalSupply();
-    expect(hasError(currentSupplyResult)).toBe(false);
-    const currentSupply = unwrapResult(currentSupplyResult);
-    expect(currentSupply.toString()).toBe(previousSupply.toString());
-
-    // Verify virtual balances didn't change
-    const finalVirtualBalanceAResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_A
-    );
-    const finalVirtualBalanceBResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_B
-    );
-    const finalVirtualBalanceCResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_C
-    );
-
-    // Extract balance values from results using helper functions
-    const finalVirtualBalanceA = hasError(finalVirtualBalanceAResult)
-      ? BigInt(0)
-      : unwrapResult(finalVirtualBalanceAResult);
-    const finalVirtualBalanceB = hasError(finalVirtualBalanceBResult)
-      ? BigInt(0)
-      : unwrapResult(finalVirtualBalanceBResult);
-    const finalVirtualBalanceC = hasError(finalVirtualBalanceCResult)
-      ? BigInt(0)
-      : unwrapResult(finalVirtualBalanceCResult);
-
-    // Compare as strings to avoid BigInt equality issues
-    expect(finalVirtualBalanceA.toString()).toBe(virtualBalanceA.toString());
-    expect(finalVirtualBalanceB.toString()).toBe(virtualBalanceB.toString());
-    expect(finalVirtualBalanceC.toString()).toBe(virtualBalanceC.toString());
-  });
-
-  test.sequential('7. should handle transfer failures atomically', { timeout: 15000 }, async () => {
-    // Store initial state
-    const backingTokensResult = await backend.getBackingTokens();
-    expect(hasError(backingTokensResult)).toBe(false);
-    const previousTokens = unwrapResult(backingTokensResult);
-    const previousReserves = previousTokens.map((t) => t.reserveQuantity);
-
-    const previousSupplyResult = await backend.getTotalSupply();
-    expect(hasError(previousSupplyResult)).toBe(false);
-    const previousSupply = unwrapResult(previousSupplyResult);
-
-    // Get current virtual balances
-    const virtualBalanceAResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_A
-    );
-    const virtualBalanceBResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_B
-    );
-    const virtualBalanceCResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_C
-    );
-
-    // Extract balance values from results using the helper function
-    const virtualBalanceA = hasError(virtualBalanceAResult)
-      ? BigInt(0)
-      : unwrapResult(virtualBalanceAResult);
-    const virtualBalanceB = hasError(virtualBalanceBResult)
-      ? BigInt(0)
-      : unwrapResult(virtualBalanceBResult);
-    const virtualBalanceC = hasError(virtualBalanceCResult)
-      ? BigInt(0)
-      : unwrapResult(virtualBalanceCResult);
-
-    debugLog('Virtual balances before atomic test:', {
-      A: virtualBalanceA.toString(),
-      B: virtualBalanceB.toString(),
-      C: virtualBalanceC.toString(),
-    });
-
-    // Try a request that would pass for first two tokens but fail for the last one
-    // Token C has backing ratio of 200, so requesting 5100 would need:
-    // Token A (ratio 100): 5100 tokens
-    // Token B (ratio 50): 2550 tokens
-    // Token C (ratio 200): 10200 tokens - should fail
-    const atomicAmount = BigInt(5100);
-
-    // Should return error since one token doesn't have enough balance
-    const result = await backend.issue({ amount: atomicAmount });
-
-    // Check for error property using helper function
-    expect(hasError(result)).toBe(true);
-
-    // We expect specifically an InsufficientBalance error
-    const errorType = getErrorType(result);
-    expect(errorType).toBe('InsufficientBalance');
-
-    // Verify nothing changed - this is the key atomicity check
-    const tokensResult = await backend.getBackingTokens();
-    expect(hasError(tokensResult)).toBe(false);
-    const tokens = unwrapResult(tokensResult);
-    tokens.forEach((token, i) => {
-      expect(token.reserveQuantity.toString()).toBe(previousReserves[i].toString());
-    });
-
-    const currentSupplyResult = await backend.getTotalSupply();
-    expect(hasError(currentSupplyResult)).toBe(false);
-    const currentSupply = unwrapResult(currentSupplyResult);
-    expect(currentSupply.toString()).toBe(previousSupply.toString());
-
-    // Verify virtual balances didn't change
-    const finalVirtualBalanceAResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_A
-    );
-    const finalVirtualBalanceBResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_B
-    );
-    const finalVirtualBalanceCResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_C
-    );
-
-    // Extract balance values from results using helper functions
-    const finalVirtualBalanceA = hasError(finalVirtualBalanceAResult)
-      ? BigInt(0)
-      : unwrapResult(finalVirtualBalanceAResult);
-    const finalVirtualBalanceB = hasError(finalVirtualBalanceBResult)
-      ? BigInt(0)
-      : unwrapResult(finalVirtualBalanceBResult);
-    const finalVirtualBalanceC = hasError(finalVirtualBalanceCResult)
-      ? BigInt(0)
-      : unwrapResult(finalVirtualBalanceCResult);
-
-    // Compare as strings to avoid BigInt equality issues
-    expect(finalVirtualBalanceA.toString()).toBe(virtualBalanceA.toString());
-    expect(finalVirtualBalanceB.toString()).toBe(virtualBalanceB.toString());
-    expect(finalVirtualBalanceC.toString()).toBe(virtualBalanceC.toString());
-  });
-
-  test.sequential('8. should handle token withdrawals correctly', { timeout: 60000 }, async () => {
-    const fee = BigInt(10000);
-    const testAmount = BigInt(20000);
-
-    // Need to cover:
-    // 1. Approval fee
-    // 2. Transfer fee
-    // 3. The actual amount
-    const depositAmount = testAmount + fee + fee;
-    const approvalAmount = depositAmount + fee; // Extra fee for the approve operation itself
-
-    debugLog('Starting test 8 with deposit amount:', depositAmount.toString());
-
-    // Add approval before deposit
-    const approveRes = await tokenAInstance.icrc2_approve({
-      spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
-      amount: approvalAmount,
-      fee: [],
-      memo: [],
-      from_subaccount: [],
-      created_at_time: [],
-      expected_allowance: [],
-      expires_at: [],
-    });
-    expect('Ok' in approveRes).toBe(true);
-
-    // Initial setup - deposit tokens
-    const depositResult = await backend.deposit({
-      token: TOKEN_A,
-      amount: depositAmount,
-    });
-    debugLog('Deposit result:', safeStringify(depositResult));
-
-    // If deposit fails, log failure and skip test
-    if (hasError(depositResult)) {
-      debugLog('Deposit failed, test cannot proceed:', safeStringify(depositResult));
-      return;
-    }
-
-    expect(hasError(depositResult)).toBe(false);
-
-    // Record starting balances
-    const startRealBalance = await tokenAInstance.icrc1_balance_of({
-      owner: testIdentity.getPrincipal(),
-      subaccount: [],
-    });
-    debugLog('Starting real balance:', startRealBalance.toString());
-
-    const startVirtualBalanceResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_A
-    );
-    expect(hasError(startVirtualBalanceResult)).toBe(false);
-    const startVirtualBalance = unwrapResult(startVirtualBalanceResult);
-    debugLog('Starting virtual balance:', startVirtualBalance.toString());
-
-    // Perform valid withdrawal
-    const withdrawResult = await backend.withdraw({
-      token: TOKEN_A,
-      amount: testAmount,
-    });
-    debugLog('Withdraw result:', safeStringify(withdrawResult));
-    expect(hasError(withdrawResult)).toBe(false);
-
-    // Check real balance updated
-    const expectedRealBalance = startRealBalance + (testAmount - fee);
-    const currentBalance = await tokenAInstance.icrc1_balance_of({
-      owner: testIdentity.getPrincipal(),
-      subaccount: [],
-    });
-    debugLog('Current real balance:', currentBalance.toString());
-    debugLog('Expected real balance:', expectedRealBalance.toString());
-    expect(currentBalance).toBe(expectedRealBalance);
-
-    // Check virtual balance decreased
-    const endVirtualBalanceResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_A
-    );
-    expect(hasError(endVirtualBalanceResult)).toBe(false);
-    const endVirtualBalance = unwrapResult(endVirtualBalanceResult);
-    const expectedVirtualBalance = startVirtualBalance - testAmount;
-
-    debugLog('End virtual balance:', endVirtualBalance.toString());
-    debugLog('Expected virtual balance:', expectedVirtualBalance.toString());
-
-    // Using toString() comparison to avoid potential BigInt comparison issues
-    expect(endVirtualBalance.toString()).toBe(expectedVirtualBalance.toString());
-
-    // Test invalid withdrawal - attempt to withdraw more than available
-    const invalidWithdrawResult = await backend.withdraw({
-      token: TOKEN_A,
-      amount: endVirtualBalance + BigInt(1000),
-    });
-    expect(hasError(invalidWithdrawResult)).toBe(true);
-    expect(getErrorType(invalidWithdrawResult)).toBe('InsufficientBalance');
-
-    // Verify balances remained unchanged after failed withdrawal
-    const finalVirtualBalanceResult = await backend.getVirtualBalance(
-      testIdentity.getPrincipal(),
-      TOKEN_A
-    );
-    expect(hasError(finalVirtualBalanceResult)).toBe(false);
-    const finalVirtualBalance = unwrapResult(finalVirtualBalanceResult);
-    expect(finalVirtualBalance.toString()).toBe(endVirtualBalance.toString());
-
-    const finalRealBalance = await tokenAInstance.icrc1_balance_of({
-      owner: testIdentity.getPrincipal(),
-      subaccount: [],
-    });
-    expect(finalRealBalance).toBe(currentBalance);
-  });
+      const finalRealBalance = await tokenAInstance.icrc1_balance_of({
+        owner: testIdentity.getPrincipal(),
+        subaccount: [],
+      });
+      expect(finalRealBalance).toBe(currentBalance);
+    },
+  );
 
   test.sequential(
-    '9. should handle multiple concurrent operations safely',
+    "9. should handle multiple concurrent operations safely",
     { timeout: 30000 },
     async () => {
       const identities = [newIdentity(), newIdentity(), newIdentity()];
@@ -903,10 +954,10 @@ describe('Multi Token Backing System', () => {
           fundTestAccount(minterTokenA, identity, BigInt(1_000_000)),
           fundTestAccount(minterTokenB, identity, BigInt(1_000_000)),
           fundTestAccount(minterTokenC, identity, BigInt(1_000_000)),
-        ])
+        ]),
       );
 
-      debugLog('Starting test 9 - multiple concurrent operations');
+      debugLog("Starting test 9 - multiple concurrent operations");
 
       // Test concurrent deposits of the same token
       const sameTokenDeposits = await Promise.all(
@@ -929,7 +980,7 @@ describe('Multi Token Backing System', () => {
             token: TOKEN_A,
             amount: depositAmount,
           });
-        })
+        }),
       );
 
       // Verify all same-token deposits succeeded
@@ -941,11 +992,14 @@ describe('Multi Token Backing System', () => {
       // Verify virtual balances for same-token deposits
       await Promise.all(
         identities.map(async (identity) => {
-          const vbResult = await backend.getVirtualBalance(identity.getPrincipal(), TOKEN_A);
+          const vbResult = await backend.getVirtualBalance(
+            identity.getPrincipal(),
+            TOKEN_A,
+          );
           expect(hasError(vbResult)).toBe(false);
           const virtualBalance = unwrapResult(vbResult);
           expect(virtualBalance).toBe(depositAmount - fee);
-        })
+        }),
       );
 
       // Set up virtual balances for remaining tokens
@@ -995,7 +1049,7 @@ describe('Multi Token Backing System', () => {
             amount: depositAmount,
           });
           expect(hasError(resultC)).toBe(false);
-        })
+        }),
       );
 
       // Record initial state
@@ -1010,8 +1064,8 @@ describe('Multi Token Backing System', () => {
       // Execute concurrent issue operations
       const results = await Promise.all(
         identities.map(async (identity) =>
-          (await multiBackend(identity)).issue({ amount: issueAmount })
-        )
+          (await multiBackend(identity)).issue({ amount: issueAmount }),
+        ),
       );
 
       // Verify all operations succeeded
@@ -1034,8 +1088,11 @@ describe('Multi Token Backing System', () => {
       const finalTokens = unwrapResult(finalTokensResult);
 
       finalTokens.forEach((token, i) => {
-        const expectedIncrease = (totalIssued * token.backingUnit) / BigInt(100);
-        expect(token.reserveQuantity).toBe(initialTokens[i].reserveQuantity + expectedIncrease);
+        const expectedIncrease =
+          (totalIssued * token.backingUnit) / BigInt(100);
+        expect(token.reserveQuantity).toBe(
+          initialTokens[i].reserveQuantity + expectedIncrease,
+        );
       });
 
       // Test concurrent withdrawals of the same token
@@ -1044,8 +1101,8 @@ describe('Multi Token Backing System', () => {
           (await multiBackend(identity)).withdraw({
             token: TOKEN_A,
             amount: withdrawAmount, // Now using larger amount that exceeds fee
-          })
-        )
+          }),
+        ),
       );
 
       // Verify all same-token withdrawals succeeded
@@ -1058,21 +1115,22 @@ describe('Multi Token Backing System', () => {
         identities.map(async (identity) => {
           const finalVirtualBalanceResult = await backend.getVirtualBalance(
             identity.getPrincipal(),
-            TOKEN_A
+            TOKEN_A,
           );
           expect(hasError(finalVirtualBalanceResult)).toBe(false);
           const finalVirtualBalance = unwrapResult(finalVirtualBalanceResult);
 
           const token = finalTokens.find(
-            (t) => t.tokenInfo.canisterId.toText() === TOKEN_A.toText()
+            (t) => t.tokenInfo.canisterId.toText() === TOKEN_A.toText(),
           );
           expect(token).toBeDefined();
 
-          const expectedDeduction = (issueAmount * token!.backingUnit) / BigInt(100);
+          const expectedDeduction =
+            (issueAmount * token!.backingUnit) / BigInt(100);
           expect(finalVirtualBalance).toBe(
-            depositAmount - expectedDeduction - fee - withdrawAmount
+            depositAmount - expectedDeduction - fee - withdrawAmount,
           );
-        })
+        }),
       );
 
       // Test remaining concurrent withdrawals
@@ -1089,7 +1147,7 @@ describe('Multi Token Backing System', () => {
               amount: withdrawAmount,
             }),
           ]);
-        })
+        }),
       ).then((results) => results.flat());
 
       // Verify all remaining withdrawals succeeded
@@ -1103,28 +1161,29 @@ describe('Multi Token Backing System', () => {
           [TOKEN_A, TOKEN_B, TOKEN_C].map(async (tokenId) => {
             const finalVirtualBalanceResult = await backend.getVirtualBalance(
               identity.getPrincipal(),
-              tokenId
+              tokenId,
             );
             expect(hasError(finalVirtualBalanceResult)).toBe(false);
             const finalVirtualBalance = unwrapResult(finalVirtualBalanceResult);
 
             const token = finalTokens.find(
-              (t) => t.tokenInfo.canisterId.toText() === tokenId.toText()
+              (t) => t.tokenInfo.canisterId.toText() === tokenId.toText(),
             );
             expect(token).toBeDefined();
 
-            const expectedDeduction = (issueAmount * token!.backingUnit) / BigInt(100);
+            const expectedDeduction =
+              (issueAmount * token!.backingUnit) / BigInt(100);
             expect(finalVirtualBalance).toBe(
-              depositAmount - expectedDeduction - fee - withdrawAmount
+              depositAmount - expectedDeduction - fee - withdrawAmount,
             );
-          })
-        )
+          }),
+        ),
       );
-    }
+    },
   );
 
   test.sequential(
-    '10. should handle supply unit alignment correctly',
+    "10. should handle supply unit alignment correctly",
     { timeout: 15000 },
     async () => {
       const fee = BigInt(10000);
@@ -1141,7 +1200,7 @@ describe('Multi Token Backing System', () => {
       ]) {
         const virtualBalanceResult = await backend.getVirtualBalance(
           testIdentity.getPrincipal(),
-          tokenId
+          tokenId,
         );
 
         const currentBalance = hasError(virtualBalanceResult)
@@ -1176,10 +1235,13 @@ describe('Multi Token Backing System', () => {
           for (let attempt = 0; attempt < 10; attempt++) {
             const balanceResult = await backend.getVirtualBalance(
               testIdentity.getPrincipal(),
-              tokenId
+              tokenId,
             );
 
-            if (!hasError(balanceResult) && unwrapResult(balanceResult) >= requiredAmount) {
+            if (
+              !hasError(balanceResult) &&
+              unwrapResult(balanceResult) >= requiredAmount
+            ) {
               balanceSynced = true;
               break;
             }
@@ -1191,9 +1253,9 @@ describe('Multi Token Backing System', () => {
 
       // Test cases that verify supply unit alignment with backing ratios
       const testCases = [
-        { amount: BigInt(99), expectedErrorType: 'InvalidAmount' }, // Just under supply unit
-        { amount: BigInt(101), expectedErrorType: 'InvalidAmount' }, // Just over supply unit
-        { amount: BigInt(150), expectedErrorType: 'InvalidAmount' }, // Between supply units
+        { amount: BigInt(99), expectedErrorType: "InvalidAmount" }, // Just under supply unit
+        { amount: BigInt(101), expectedErrorType: "InvalidAmount" }, // Just over supply unit
+        { amount: BigInt(150), expectedErrorType: "InvalidAmount" }, // Between supply units
       ];
 
       // Verify misaligned amounts return appropriate errors
@@ -1233,132 +1295,155 @@ describe('Multi Token Backing System', () => {
       tokens.forEach((token, i) => {
         const backingUnit = previousTokens[i].backingUnit;
         const expectedIncrease = (validAmount * backingUnit) / BigInt(100); // supplyUnit is 100
-        expect(token.reserveQuantity).toBe(previousReserves[i] + expectedIncrease);
+        expect(token.reserveQuantity).toBe(
+          previousReserves[i] + expectedIncrease,
+        );
       });
-    }
+    },
   );
 
-  test.sequential('11. should handle redeem operations correctly', { timeout: 60000 }, async () => {
-    const testUser = newIdentity();
-    const testBackend = await multiBackend(testUser);
+  test.sequential(
+    "11. should handle redeem operations correctly",
+    { timeout: 60000 },
+    async () => {
+      const testUser = newIdentity();
+      const testBackend = await multiBackend(testUser);
 
-    // Fund test account
-    await Promise.all([
-      fundTestAccount(await tokenA(minter), testUser, BigInt(100_000)),
-      fundTestAccount(await tokenB(minter), testUser, BigInt(100_000)),
-      fundTestAccount(await tokenC(minter), testUser, BigInt(100_000)),
-    ]);
+      // Fund test account
+      await Promise.all([
+        fundTestAccount(await tokenA(minter), testUser, BigInt(100_000)),
+        fundTestAccount(await tokenB(minter), testUser, BigInt(100_000)),
+        fundTestAccount(await tokenC(minter), testUser, BigInt(100_000)),
+      ]);
 
-    // Get fees
-    const [feeA, feeB, feeC] = await Promise.all([
-      (await tokenA(testUser)).icrc1_fee(),
-      (await tokenB(testUser)).icrc1_fee(),
-      (await tokenC(testUser)).icrc1_fee(),
-    ]);
+      // Get fees
+      const [feeA, feeB, feeC] = await Promise.all([
+        (await tokenA(testUser)).icrc1_fee(),
+        (await tokenB(testUser)).icrc1_fee(),
+        (await tokenC(testUser)).icrc1_fee(),
+      ]);
 
-    // Use amounts that match backing unit ratios and exceed fees
-    const depositAmounts = [
-      { token: await tokenA(testUser), tokenId: TOKEN_A, amount: BigInt(20_000) }, // Backing unit 100
-      { token: await tokenB(testUser), tokenId: TOKEN_B, amount: BigInt(15_000) }, // Backing unit 50
-      { token: await tokenC(testUser), tokenId: TOKEN_C, amount: BigInt(40_000) }, // Backing unit 200
-    ];
+      // Use amounts that match backing unit ratios and exceed fees
+      const depositAmounts = [
+        {
+          token: await tokenA(testUser),
+          tokenId: TOKEN_A,
+          amount: BigInt(20_000),
+        }, // Backing unit 100
+        {
+          token: await tokenB(testUser),
+          tokenId: TOKEN_B,
+          amount: BigInt(15_000),
+        }, // Backing unit 50
+        {
+          token: await tokenC(testUser),
+          tokenId: TOKEN_C,
+          amount: BigInt(40_000),
+        }, // Backing unit 200
+      ];
 
-    // Deposit tokens
-    for (const { token, tokenId, amount } of depositAmounts) {
-      await token.icrc2_approve({
-        spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
-        amount: amount + feeA,
-        fee: [],
-        memo: [],
-        from_subaccount: [],
-        created_at_time: [],
-        expected_allowance: [],
-        expires_at: [],
-      });
+      // Deposit tokens
+      for (const { token, tokenId, amount } of depositAmounts) {
+        await token.icrc2_approve({
+          spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
+          amount: amount + feeA,
+          fee: [],
+          memo: [],
+          from_subaccount: [],
+          created_at_time: [],
+          expected_allowance: [],
+          expires_at: [],
+        });
 
-      const result = await testBackend.deposit({
-        token: tokenId,
-        amount,
-      });
-      expect(hasError(result)).toBe(false);
+        const result = await testBackend.deposit({
+          token: tokenId,
+          amount,
+        });
+        expect(hasError(result)).toBe(false);
 
-      const virtualBalanceResult = await testBackend.getVirtualBalance(
-        testUser.getPrincipal(),
-        tokenId
+        const virtualBalanceResult = await testBackend.getVirtualBalance(
+          testUser.getPrincipal(),
+          tokenId,
+        );
+        expect(hasError(virtualBalanceResult)).toBe(false);
+        const virtualBalance = unwrapResult(virtualBalanceResult);
+        expect(virtualBalance).toBe(amount - feeA);
+      }
+
+      // Initial issue
+      const issueAmount = BigInt(500);
+      const issueResult = await testBackend.issue({ amount: issueAmount });
+      expect(hasError(issueResult)).toBe(false);
+
+      // Get initial state
+      const totalSupplyBeforeRedeemResult = await testBackend.getTotalSupply();
+      expect(hasError(totalSupplyBeforeRedeemResult)).toBe(false);
+      const totalSupplyBeforeRedeem = unwrapResult(
+        totalSupplyBeforeRedeemResult,
       );
-      expect(hasError(virtualBalanceResult)).toBe(false);
-      const virtualBalance = unwrapResult(virtualBalanceResult);
-      expect(virtualBalance).toBe(amount - feeA);
-    }
 
-    // Initial issue
-    const issueAmount = BigInt(500);
-    const issueResult = await testBackend.issue({ amount: issueAmount });
-    expect(hasError(issueResult)).toBe(false);
+      // TODO: When multi token is updated to sync with the backend API, we should
+      // verify the total supply matches between backend.getTotalSupply() and multi token's icrc1_total_supply
 
-    // Get initial state
-    const totalSupplyBeforeRedeemResult = await testBackend.getTotalSupply();
-    expect(hasError(totalSupplyBeforeRedeemResult)).toBe(false);
-    const totalSupplyBeforeRedeem = unwrapResult(totalSupplyBeforeRedeemResult);
+      // Get multi token balance from backend
+      const multiTokenBalanceResult = await testBackend.getMultiTokenBalance(
+        testUser.getPrincipal(),
+      );
+      expect(hasError(multiTokenBalanceResult)).toBe(false);
+      const balanceBeforeRedeem = unwrapResult(multiTokenBalanceResult);
 
-    // TODO: When multi token is updated to sync with the backend API, we should
-    // verify the total supply matches between backend.getTotalSupply() and multi token's icrc1_total_supply
+      const tokensBeforeRedeemResult = await testBackend.getBackingTokens();
+      expect(hasError(tokensBeforeRedeemResult)).toBe(false);
+      const tokensBeforeRedeem = unwrapResult(tokensBeforeRedeemResult);
 
-    // Get multi token balance from backend
-    const multiTokenBalanceResult = await testBackend.getMultiTokenBalance(testUser.getPrincipal());
-    expect(hasError(multiTokenBalanceResult)).toBe(false);
-    const balanceBeforeRedeem = unwrapResult(multiTokenBalanceResult);
+      // Test error cases
+      // 1. Test unaligned amount
+      const unalignedResult = await testBackend.redeem({ amount: BigInt(150) });
+      expect(hasError(unalignedResult)).toBe(true);
+      expect(getErrorType(unalignedResult)).toBe("InvalidAmount");
 
-    const tokensBeforeRedeemResult = await testBackend.getBackingTokens();
-    expect(hasError(tokensBeforeRedeemResult)).toBe(false);
-    const tokensBeforeRedeem = unwrapResult(tokensBeforeRedeemResult);
+      // 2. Test insufficient balance (more than total supply)
+      const tooLargeResult = await testBackend.redeem({
+        amount: totalSupplyBeforeRedeem + BigInt(100),
+      });
+      expect(hasError(tooLargeResult)).toBe(true);
+      expect(getErrorType(tooLargeResult)).toBe("InvalidAmount");
 
-    // Test error cases
-    // 1. Test unaligned amount
-    const unalignedResult = await testBackend.redeem({ amount: BigInt(150) });
-    expect(hasError(unalignedResult)).toBe(true);
-    expect(getErrorType(unalignedResult)).toBe('InvalidAmount');
+      // Test successful redeem
+      const redeemAmount = BigInt(100);
+      const redeemResult = await testBackend.redeem({ amount: redeemAmount });
+      expect(hasError(redeemResult)).toBe(false);
 
-    // 2. Test insufficient balance (more than total supply)
-    const tooLargeResult = await testBackend.redeem({
-      amount: totalSupplyBeforeRedeem + BigInt(100),
-    });
-    expect(hasError(tooLargeResult)).toBe(true);
-    expect(getErrorType(tooLargeResult)).toBe('InvalidAmount');
+      // Verify state changes
+      const finalSupplyResult = await testBackend.getTotalSupply();
+      expect(hasError(finalSupplyResult)).toBe(false);
+      const finalSupply = unwrapResult(finalSupplyResult);
+      expect(finalSupply).toBe(totalSupplyBeforeRedeem - redeemAmount);
 
-    // Test successful redeem
-    const redeemAmount = BigInt(100);
-    const redeemResult = await testBackend.redeem({ amount: redeemAmount });
-    expect(hasError(redeemResult)).toBe(false);
+      // Get final multi token balance from backend
+      const finalMultiTokenBalanceResult =
+        await testBackend.getMultiTokenBalance(testUser.getPrincipal());
+      expect(hasError(finalMultiTokenBalanceResult)).toBe(false);
+      const finalIcrc1Balance = unwrapResult(finalMultiTokenBalanceResult);
+      expect(finalIcrc1Balance).toBe(balanceBeforeRedeem - redeemAmount);
 
-    // Verify state changes
-    const finalSupplyResult = await testBackend.getTotalSupply();
-    expect(hasError(finalSupplyResult)).toBe(false);
-    const finalSupply = unwrapResult(finalSupplyResult);
-    expect(finalSupply).toBe(totalSupplyBeforeRedeem - redeemAmount);
+      // Verify backing token changes
+      const finalTokensResult = await testBackend.getBackingTokens();
+      expect(hasError(finalTokensResult)).toBe(false);
+      const finalTokens = unwrapResult(finalTokensResult);
 
-    // Get final multi token balance from backend
-    const finalMultiTokenBalanceResult = await testBackend.getMultiTokenBalance(
-      testUser.getPrincipal()
-    );
-    expect(hasError(finalMultiTokenBalanceResult)).toBe(false);
-    const finalIcrc1Balance = unwrapResult(finalMultiTokenBalanceResult);
-    expect(finalIcrc1Balance).toBe(balanceBeforeRedeem - redeemAmount);
-
-    // Verify backing token changes
-    const finalTokensResult = await testBackend.getBackingTokens();
-    expect(hasError(finalTokensResult)).toBe(false);
-    const finalTokens = unwrapResult(finalTokensResult);
-
-    finalTokens.forEach((token, i) => {
-      const backingUnit = tokensBeforeRedeem[i].backingUnit;
-      const expectedDecrease = (redeemAmount * backingUnit) / BigInt(100);
-      expect(token.reserveQuantity).toBe(tokensBeforeRedeem[i].reserveQuantity - expectedDecrease);
-    });
-  });
+      finalTokens.forEach((token, i) => {
+        const backingUnit = tokensBeforeRedeem[i].backingUnit;
+        const expectedDecrease = (redeemAmount * backingUnit) / BigInt(100);
+        expect(token.reserveQuantity).toBe(
+          tokensBeforeRedeem[i].reserveQuantity - expectedDecrease,
+        );
+      });
+    },
+  );
 
   test.sequential(
-    '12. should handle concurrent redeem operations safely',
+    "12. should handle concurrent redeem operations safely",
     { timeout: 60000 },
     async () => {
       // Create fresh identities for concurrent test
@@ -1377,9 +1462,21 @@ describe('Multi Token Backing System', () => {
 
         // Use same deposit amounts as test 11
         const depositAmounts = [
-          { token: await tokenA(user), tokenId: TOKEN_A, amount: BigInt(20_000) },
-          { token: await tokenB(user), tokenId: TOKEN_B, amount: BigInt(15_000) },
-          { token: await tokenC(user), tokenId: TOKEN_C, amount: BigInt(40_000) },
+          {
+            token: await tokenA(user),
+            tokenId: TOKEN_A,
+            amount: BigInt(20_000),
+          },
+          {
+            token: await tokenB(user),
+            tokenId: TOKEN_B,
+            amount: BigInt(15_000),
+          },
+          {
+            token: await tokenC(user),
+            tokenId: TOKEN_C,
+            amount: BigInt(40_000),
+          },
         ];
 
         // Deposit tokens
@@ -1426,7 +1523,9 @@ describe('Multi Token Backing System', () => {
 
       // Execute concurrent redeem operations
       const results = await Promise.all(
-        testUsers.map(async (user) => (await multiBackend(user)).redeem({ amount: redeemAmount }))
+        testUsers.map(async (user) =>
+          (await multiBackend(user)).redeem({ amount: redeemAmount }),
+        ),
       );
 
       // Verify all operations succeeded
@@ -1449,9 +1548,12 @@ describe('Multi Token Backing System', () => {
       const finalTokens = unwrapResult(finalTokensResult);
 
       finalTokens.forEach((token, i) => {
-        const expectedDecrease = (totalRedeemed * token.backingUnit) / BigInt(100);
-        expect(token.reserveQuantity).toBe(initialTokens[i].reserveQuantity - expectedDecrease);
+        const expectedDecrease =
+          (totalRedeemed * token.backingUnit) / BigInt(100);
+        expect(token.reserveQuantity).toBe(
+          initialTokens[i].reserveQuantity - expectedDecrease,
+        );
       });
-    }
+    },
   );
 });

@@ -389,7 +389,9 @@ actor class MultiHistory() = {
     {
       totalSnapshots = count;
       earliestTimestamp = if (count > 0) { ?sortedTimestamps[0] } else { null };
-      latestTimestamp = if (count > 0) { ?sortedTimestamps[count - 1] } else { null };
+      latestTimestamp = if (count > 0) { ?sortedTimestamps[count - 1] } else {
+        null;
+      };
       latestIndex = if (count > 0) { ?(count - 1) } else { null };
     };
   };

@@ -1,7 +1,7 @@
 // scripts/populate-history.ts
-import { Principal } from '@dfinity/principal';
-import { Actor, HttpAgent } from '@dfinity/agent';
-import { minter, newIdentity } from '../src/tests/e2e/identity';
+import { Principal } from "@dfinity/principal";
+import { Actor, HttpAgent } from "@dfinity/agent";
+import { minter, newIdentity } from "../src/tests/e2e/identity";
 import {
   multiBackend,
   tokenA,
@@ -14,17 +14,17 @@ import {
   MULTI_TOKEN_ID,
   GOVERNANCE_TOKEN_ID,
   fundTestAccount,
-} from '../src/tests/e2e/actor';
+} from "../src/tests/e2e/actor";
 
 const colors = {
-  reset: '\x1b[0m',
-  bright: '\x1b[1m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  cyan: '\x1b[36m',
-  red: '\x1b[31m',
-  magenta: '\x1b[35m',
+  reset: "\x1b[0m",
+  bright: "\x1b[1m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  cyan: "\x1b[36m",
+  red: "\x1b[31m",
+  magenta: "\x1b[35m",
 };
 
 function log(message: string, color: string = colors.reset) {
@@ -34,7 +34,7 @@ function log(message: string, color: string = colors.reset) {
 // Helper to safely stringify objects with BigInts
 function safeStringify(obj: any): string {
   return JSON.stringify(obj, (key, value) =>
-    typeof value === 'bigint' ? value.toString() : value
+    typeof value === "bigint" ? value.toString() : value,
   );
 }
 
@@ -67,7 +67,8 @@ function generatePriceHistory(days: number): Array<{
     prices.tokenB = Math.max(0.1, prices.tokenB);
     prices.tokenC = Math.max(0.1, prices.tokenC);
 
-    const timestamp = BigInt(startTime + day * 24 * 60 * 60 * 1000) * BigInt(1_000_000);
+    const timestamp =
+      BigInt(startTime + day * 24 * 60 * 60 * 1000) * BigInt(1_000_000);
 
     history.push({
       timestamp,
@@ -81,35 +82,40 @@ function generatePriceHistory(days: number): Array<{
 // Calculate optimal END STATE for 70/20/10 value distribution
 function calculateOptimalEndState(
   finalPrices: { tokenA: number; tokenB: number; tokenC: number },
-  startPrices: { tokenA: number; tokenB: number; tokenC: number }
+  startPrices: { tokenA: number; tokenB: number; tokenC: number },
 ): {
   backingRatios: { tokenA: number; tokenB: number; tokenC: number };
-  performance: Array<{ token: string; id: Principal; growth: number; allocation: number }>;
+  performance: Array<{
+    token: string;
+    id: Principal;
+    growth: number;
+    allocation: number;
+  }>;
   initialMultiPrice: number;
   finalMultiPrice: number;
 } {
   // Calculate performance
   const performances = [
     {
-      token: 'Token A',
+      token: "Token A",
       id: TOKEN_A,
-      key: 'tokenA',
+      key: "tokenA",
       growth: finalPrices.tokenA / startPrices.tokenA,
       startPrice: startPrices.tokenA,
       finalPrice: finalPrices.tokenA,
     },
     {
-      token: 'Token B',
+      token: "Token B",
       id: TOKEN_B,
-      key: 'tokenB',
+      key: "tokenB",
       growth: finalPrices.tokenB / startPrices.tokenB,
       startPrice: startPrices.tokenB,
       finalPrice: finalPrices.tokenB,
     },
     {
-      token: 'Token C',
+      token: "Token C",
       id: TOKEN_C,
-      key: 'tokenC',
+      key: "tokenC",
       growth: finalPrices.tokenC / startPrices.tokenC,
       startPrice: startPrices.tokenC,
       finalPrice: finalPrices.tokenC,
@@ -126,7 +132,7 @@ function calculateOptimalEndState(
     const color = i === 0 ? colors.green : i === 1 ? colors.yellow : colors.red;
     log(
       `   ${i + 1}. ${p.token}: ${((p.growth - 1) * 100).toFixed(1)}% growth → ${p.allocation * 100}% allocation`,
-      color
+      color,
     );
   });
 
@@ -140,7 +146,10 @@ function calculateOptimalEndState(
     initialBackingB * startPrices.tokenB +
     initialBackingC * startPrices.tokenC;
 
-  log(`\n💰 Initial MULTI price (equal weight): $${initialMultiPrice.toFixed(2)}`, colors.blue);
+  log(
+    `\n💰 Initial MULTI price (equal weight): $${initialMultiPrice.toFixed(2)}`,
+    colors.blue,
+  );
 
   // Calculate FINAL backing ratios for 70/20/10 value split
   // We want the final MULTI value to be much higher due to rebalancing into winners
@@ -170,18 +179,27 @@ function calculateOptimalEndState(
     const targetValue = finalMultiPrice * p.allocation;
     const unitsNeeded = targetValue / p.finalPrice;
 
-    if (p.key === 'tokenA') backingRatios.tokenA = unitsNeeded;
-    if (p.key === 'tokenB') backingRatios.tokenB = unitsNeeded;
-    if (p.key === 'tokenC') backingRatios.tokenC = unitsNeeded;
+    if (p.key === "tokenA") backingRatios.tokenA = unitsNeeded;
+    if (p.key === "tokenB") backingRatios.tokenB = unitsNeeded;
+    if (p.key === "tokenC") backingRatios.tokenC = unitsNeeded;
   });
 
   log(`\n🎯 Final Backing Ratios for 70/20/10 split:`, colors.magenta);
-  log(`   Token A: ${backingRatios.tokenA.toFixed(4)} units per MULTI`, colors.blue);
-  log(`   Token B: ${backingRatios.tokenB.toFixed(4)} units per MULTI`, colors.blue);
-  log(`   Token C: ${backingRatios.tokenC.toFixed(4)} units per MULTI`, colors.blue);
+  log(
+    `   Token A: ${backingRatios.tokenA.toFixed(4)} units per MULTI`,
+    colors.blue,
+  );
+  log(
+    `   Token B: ${backingRatios.tokenB.toFixed(4)} units per MULTI`,
+    colors.blue,
+  );
+  log(
+    `   Token C: ${backingRatios.tokenC.toFixed(4)} units per MULTI`,
+    colors.blue,
+  );
   log(
     `\n📈 MULTI Price Growth: $${initialMultiPrice.toFixed(2)} → $${finalMultiPrice.toFixed(2)} (${((finalMultiPrice / initialMultiPrice - 1) * 100).toFixed(1)}% gain)`,
-    colors.bright + colors.green
+    colors.bright + colors.green,
   );
 
   return {
@@ -198,7 +216,7 @@ function generateBackingHistory(
   startPrices: { tokenA: number; tokenB: number; tokenC: number },
   optimalBackingRatios: { tokenA: number; tokenB: number; tokenC: number },
   initialMultiPrice: number,
-  finalMultiPrice: number
+  finalMultiPrice: number,
 ): {
   history: Array<{
     timestamp: bigint;
@@ -256,9 +274,15 @@ function generateBackingHistory(
     if (day > 0 && day % 90 === 0) {
       // Jump closer to optimal on rebalance days
       const jumpStrength = 0.2;
-      backingA = backingA * (1 - jumpStrength) + optimalBackingRatios.tokenA * jumpStrength;
-      backingB = backingB * (1 - jumpStrength) + optimalBackingRatios.tokenB * jumpStrength;
-      backingC = backingC * (1 - jumpStrength) + optimalBackingRatios.tokenC * jumpStrength;
+      backingA =
+        backingA * (1 - jumpStrength) +
+        optimalBackingRatios.tokenA * jumpStrength;
+      backingB =
+        backingB * (1 - jumpStrength) +
+        optimalBackingRatios.tokenB * jumpStrength;
+      backingC =
+        backingC * (1 - jumpStrength) +
+        optimalBackingRatios.tokenC * jumpStrength;
 
       // Calculate current portfolio value
       const currentValue =
@@ -266,7 +290,10 @@ function generateBackingHistory(
         backingB * currentPrices.tokenB +
         backingC * currentPrices.tokenC;
 
-      log(`   Day ${day}: Rebalancing - MULTI value: $${currentValue.toFixed(2)}`, colors.yellow);
+      log(
+        `   Day ${day}: Rebalancing - MULTI value: $${currentValue.toFixed(2)}`,
+        colors.yellow,
+      );
     }
 
     const backing = {
@@ -340,24 +367,30 @@ async function setupMultiBackend(
     backingConfig: any;
   },
   finalPrices: { tokenA: number; tokenB: number; tokenC: number },
-  finalMultiPrice: number
+  finalMultiPrice: number,
 ) {
-  log('\n5️⃣ Setting up Multi Backend with optimal 70/20/10 allocation...', colors.yellow);
+  log(
+    "\n5️⃣ Setting up Multi Backend with optimal 70/20/10 allocation...",
+    colors.yellow,
+  );
 
   const adminBackend = await multiBackend(minter);
   const isInit = await adminBackend.isInitialized();
 
   if (!isInit) {
-    log('   Initializing system with optimal backing ratios...', colors.cyan);
+    log("   Initializing system with optimal backing ratios...", colors.cyan);
 
     // Approve tokens
     for (const [name, tokenId] of [
-      ['Token A', TOKEN_A],
-      ['Token B', TOKEN_B],
-      ['Token C', TOKEN_C],
+      ["Token A", TOKEN_A],
+      ["Token B", TOKEN_B],
+      ["Token C", TOKEN_C],
     ]) {
       const result = await adminBackend.approveToken({ canisterId: tokenId });
-      if ('ok' in result || ('err' in result && 'TokenAlreadyApproved' in result.err)) {
+      if (
+        "ok" in result ||
+        ("err" in result && "TokenAlreadyApproved" in result.err)
+      ) {
         log(`     ✔ ${name} approved`, colors.green);
       }
     }
@@ -374,35 +407,44 @@ async function setupMultiBackend(
     };
 
     const initResult = await adminBackend.initialize(config);
-    if ('ok' in initResult) {
-      log('     ✔ System initialized with optimal ratios', colors.green);
-    } else if ('err' in initResult && 'AlreadyInitialized' in initResult.err) {
-      log('     ⚠ System already initialized', colors.yellow);
+    if ("ok" in initResult) {
+      log("     ✔ System initialized with optimal ratios", colors.green);
+    } else if ("err" in initResult && "AlreadyInitialized" in initResult.err) {
+      log("     ⚠ System already initialized", colors.yellow);
       return;
     } else {
-      log(`     ✗ Failed to initialize: ${safeStringify(initResult)}`, colors.red);
+      log(
+        `     ✗ Failed to initialize: ${safeStringify(initResult)}`,
+        colors.red,
+      );
       return;
     }
   } else {
-    log('   ⚠ System already initialized', colors.yellow);
+    log("   ⚠ System already initialized", colors.yellow);
     return;
   }
 
   // Create user to populate reserves
   const alice = newIdentity();
-  log('\n   Creating user to populate reserves...', colors.cyan);
+  log("\n   Creating user to populate reserves...", colors.cyan);
 
   // Calculate deposit amounts
-  const backingA = Number(finalState.backingConfig.backingPairs[0].backingUnit) / 1e8;
-  const backingB = Number(finalState.backingConfig.backingPairs[1].backingUnit) / 1e8;
-  const backingC = Number(finalState.backingConfig.backingPairs[2].backingUnit) / 1e8;
+  const backingA =
+    Number(finalState.backingConfig.backingPairs[0].backingUnit) / 1e8;
+  const backingB =
+    Number(finalState.backingConfig.backingPairs[1].backingUnit) / 1e8;
+  const backingC =
+    Number(finalState.backingConfig.backingPairs[2].backingUnit) / 1e8;
 
   const targetSupply = 200000; // 200k MULTI
   const neededA = Math.ceil(backingA * targetSupply);
   const neededB = Math.ceil(backingB * targetSupply);
   const neededC = Math.ceil(backingC * targetSupply);
 
-  log(`\n   Target MULTI price: $${finalMultiPrice.toFixed(2)}`, colors.bright + colors.green);
+  log(
+    `\n   Target MULTI price: $${finalMultiPrice.toFixed(2)}`,
+    colors.bright + colors.green,
+  );
   log(`   Required reserves for ${targetSupply} MULTI:`, colors.cyan);
   log(`     Token A: ${neededA} tokens`, colors.blue);
   log(`     Token B: ${neededB} tokens`, colors.blue);
@@ -426,15 +468,30 @@ async function setupMultiBackend(
   const aliceTokenB = await tokenB(alice);
   const aliceTokenC = await tokenC(alice);
 
-  log('\n   Depositing tokens...', colors.cyan);
+  log("\n   Depositing tokens...", colors.cyan);
   const depositA = BigInt(Math.ceil(neededA * 1.2 * 1e8));
   const depositB = BigInt(Math.ceil(neededB * 1.2 * 1e8));
   const depositC = BigInt(Math.ceil(neededC * 1.2 * 1e8));
 
   for (const { tokenActor, tokenId, name, amount } of [
-    { tokenActor: aliceTokenA, tokenId: TOKEN_A, name: 'Token A', amount: depositA },
-    { tokenActor: aliceTokenB, tokenId: TOKEN_B, name: 'Token B', amount: depositB },
-    { tokenActor: aliceTokenC, tokenId: TOKEN_C, name: 'Token C', amount: depositC },
+    {
+      tokenActor: aliceTokenA,
+      tokenId: TOKEN_A,
+      name: "Token A",
+      amount: depositA,
+    },
+    {
+      tokenActor: aliceTokenB,
+      tokenId: TOKEN_B,
+      name: "Token B",
+      amount: depositB,
+    },
+    {
+      tokenActor: aliceTokenC,
+      tokenId: TOKEN_C,
+      name: "Token C",
+      amount: depositC,
+    },
   ]) {
     await tokenActor.icrc2_approve({
       spender: { owner: MULTI_BACKEND_ID, subaccount: [] },
@@ -452,34 +509,34 @@ async function setupMultiBackend(
       amount: amount,
     });
 
-    if ('ok' in depositResult) {
+    if ("ok" in depositResult) {
       log(`     ✔ Deposited ${Number(amount) / 1e8} ${name}`, colors.green);
     }
   }
 
   // Issue MULTI tokens
-  log('\n   Issuing MULTI tokens...', colors.cyan);
+  log("\n   Issuing MULTI tokens...", colors.cyan);
   const issueAmount = BigInt(targetSupply * 1e8);
 
   const issueResult = await aliceBackend.issue({ amount: issueAmount });
-  if ('ok' in issueResult) {
+  if ("ok" in issueResult) {
     log(`     ✔ Issued ${targetSupply} MULTI tokens`, colors.green);
   } else {
     // Try smaller amount
     const fallbackAmount = BigInt(Math.floor(targetSupply * 0.75 * 1e8));
     const fallbackResult = await aliceBackend.issue({ amount: fallbackAmount });
-    if ('ok' in fallbackResult) {
+    if ("ok" in fallbackResult) {
       log(`     ✔ Issued ${Number(fallbackAmount) / 1e8} MULTI`, colors.green);
     }
   }
 
   // Verify final state
   const systemInfo = await adminBackend.getSystemInfo();
-  if ('ok' in systemInfo) {
+  if ("ok" in systemInfo) {
     log(`\n   ✅ Final System State:`, colors.bright + colors.green);
     log(
       `   Total Supply: ${(Number(systemInfo.ok.totalSupply) / 1e8).toFixed(0)} MULTI`,
-      colors.blue
+      colors.blue,
     );
 
     // Calculate actual value distribution
@@ -488,13 +545,13 @@ async function setupMultiBackend(
     const values: any = {};
 
     for (const backing of systemInfo.ok.backingTokens) {
-      const symbol = backing.tokenInfo.symbol || 'Token';
+      const symbol = backing.tokenInfo.symbol || "Token";
       const backingUnit = Number(backing.backingUnit) / 1e8;
 
       let price = 0;
-      if (symbol === 'a') price = finalPrices.tokenA;
-      if (symbol === 'b') price = finalPrices.tokenB;
-      if (symbol === 'c') price = finalPrices.tokenC;
+      if (symbol === "a") price = finalPrices.tokenA;
+      if (symbol === "b") price = finalPrices.tokenB;
+      if (symbol === "c") price = finalPrices.tokenC;
 
       const value = backingUnit * price;
       values[symbol] = value;
@@ -503,24 +560,32 @@ async function setupMultiBackend(
 
     for (const [symbol, value] of Object.entries(values)) {
       const percentage = (((value as number) / totalValue) * 100).toFixed(1);
-      const color = percentage > 50 ? colors.green : percentage > 15 ? colors.yellow : colors.red;
+      const color =
+        percentage > 50
+          ? colors.green
+          : percentage > 15
+            ? colors.yellow
+            : colors.red;
       log(`     ${symbol}: ${percentage}%`, color);
     }
 
-    log(`\n   💰 MULTI Token Value: $${totalValue.toFixed(2)}`, colors.bright + colors.cyan);
+    log(
+      `\n   💰 MULTI Token Value: $${totalValue.toFixed(2)}`,
+      colors.bright + colors.cyan,
+    );
   }
 }
 
 async function populateHistory() {
   log(
-    '\n🚀 Multi History Population Script - Portfolio Rebalancing Simulation',
-    colors.bright + colors.cyan
+    "\n🚀 Multi History Population Script - Portfolio Rebalancing Simulation",
+    colors.bright + colors.cyan,
   );
 
-  const days = parseInt(process.argv[2] || '730');
+  const days = parseInt(process.argv[2] || "730");
   log(
     `Simulating ${days} days of portfolio evolution from equal weight to 70/20/10...\n`,
-    colors.yellow
+    colors.yellow,
   );
 
   // Starting prices
@@ -531,37 +596,38 @@ async function populateHistory() {
   };
 
   // Step 1: Generate price history
-  log('1️⃣ Generating price movements...', colors.yellow);
+  log("1️⃣ Generating price movements...", colors.yellow);
   const priceHistory = generatePriceHistory(days);
   const finalPrices = priceHistory[priceHistory.length - 1].prices;
 
   // Step 2: Calculate optimal end state
-  log('\n2️⃣ Calculating optimal portfolio allocation...', colors.yellow);
-  const { backingRatios, initialMultiPrice, finalMultiPrice } = calculateOptimalEndState(
-    finalPrices,
-    startPrices
-  );
+  log("\n2️⃣ Calculating optimal portfolio allocation...", colors.yellow);
+  const { backingRatios, initialMultiPrice, finalMultiPrice } =
+    calculateOptimalEndState(finalPrices, startPrices);
 
   // Step 3: Generate backing history
-  log('\n3️⃣ Generating rebalancing history...', colors.yellow);
+  log("\n3️⃣ Generating rebalancing history...", colors.yellow);
   const { history: backingHistory, finalState } = generateBackingHistory(
     priceHistory,
     startPrices,
     backingRatios,
     initialMultiPrice,
-    finalMultiPrice
+    finalMultiPrice,
   );
 
   // Connect to history canister
   const MULTI_HISTORY_ID =
     process.env.CANISTER_ID_MULTI_HISTORY ||
-    (await import('child_process')).execSync('dfx canister id multi_history').toString().trim();
+    (await import("child_process"))
+      .execSync("dfx canister id multi_history")
+      .toString()
+      .trim();
 
-  log('\n4️⃣ Writing history to canister...', colors.yellow);
-  const agent = new HttpAgent({ host: 'http://localhost:4943' });
+  log("\n4️⃣ Writing history to canister...", colors.yellow);
+  const agent = new HttpAgent({ host: "http://localhost:4943" });
   await agent.fetchRootKey();
 
-  const { idlFactory } = await import('../src/declarations/multi_history');
+  const { idlFactory } = await import("../src/declarations/multi_history");
   const historyActor = Actor.createActor(idlFactory, {
     agent,
     canisterId: Principal.fromText(MULTI_HISTORY_ID),
@@ -606,11 +672,11 @@ async function populateHistory() {
 
   log(
     `\n🎉 Complete! Portfolio rebalancing from equal weight to 70/20/10 over ${days} days!`,
-    colors.bright + colors.green
+    colors.bright + colors.green,
   );
   log(
     `   MULTI price grew from $${initialMultiPrice.toFixed(2)} to $${finalMultiPrice.toFixed(2)}!`,
-    colors.bright + colors.cyan
+    colors.bright + colors.cyan,
   );
 }
 

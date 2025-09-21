@@ -1,5 +1,5 @@
-import { Principal } from '@dfinity/principal';
-import { TokenPrice } from '../config/tokenPrices';
+import { Principal } from "@dfinity/principal";
+import { TokenPrice } from "../config/tokenPrices";
 
 export type BackingToken = {
   tokenInfo: { canisterId: Principal | string };
@@ -32,4 +32,4 @@ export type TokenBalance = {
   decimals: number;
 };
 
-export type PriceDisplay = 'USD' | 'MULTI';
+export type PriceDisplay = "USD" | "MULTI";

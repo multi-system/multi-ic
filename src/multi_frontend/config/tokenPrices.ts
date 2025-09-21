@@ -1,9 +1,9 @@
-import { Actor, HttpAgent } from '@dfinity/agent';
-import { Principal } from '@dfinity/principal';
+import { Actor, HttpAgent } from "@dfinity/agent";
+import { Principal } from "@dfinity/principal";
 // @ts-ignore
-import { idlFactory as tokenIdl } from '../../declarations/token_a';
+import { idlFactory as tokenIdl } from "../../declarations/token_a";
 // @ts-ignore
-import { idlFactory as historyIdl } from '../../declarations/multi_history';
+import { idlFactory as historyIdl } from "../../declarations/multi_history";
 
 export type TokenPrice = {
   symbol: string;
@@ -34,7 +34,10 @@ function notifyTokenListeners(canisterId: string) {
   }
 }
 
-export function subscribeToToken(canisterId: string, listener: () => void): () => void {
+export function subscribeToToken(
+  canisterId: string,
+  listener: () => void,
+): () => void {
   if (!tokenListeners.has(canisterId)) {
     tokenListeners.set(canisterId, new Set());
   }
@@ -61,10 +64,12 @@ async function fetchLatestPrices(): Promise<Record<string, number>> {
 
   try {
     const host =
-      import.meta.env.VITE_DFX_NETWORK === 'ic' ? 'https://icp-api.io' : 'http://localhost:4943';
+      import.meta.env.VITE_DFX_NETWORK === "ic"
+        ? "https://icp-api.io"
+        : "http://localhost:4943";
     const agent = new HttpAgent({ host });
 
-    if (import.meta.env.VITE_DFX_NETWORK !== 'ic') {
+    if (import.meta.env.VITE_DFX_NETWORK !== "ic") {
       await agent.fetchRootKey();
     }
 
@@ -91,12 +96,14 @@ async function fetchLatestPrices(): Promise<Record<string, number>> {
 
     return {};
   } catch (error) {
-    console.error('Failed to fetch prices from history canister:', error);
+    console.error("Failed to fetch prices from history canister:", error);
     return {};
   }
 }
 
-async function fetchTokenMetadata(canisterId: string): Promise<TokenPrice | undefined> {
+async function fetchTokenMetadata(
+  canisterId: string,
+): Promise<TokenPrice | undefined> {
   if (tokenMetadataCache[canisterId]) {
     return tokenMetadataCache[canisterId];
   }
@@ -109,10 +116,12 @@ async function fetchTokenMetadata(canisterId: string): Promise<TokenPrice | unde
 
   try {
     const host =
-      import.meta.env.VITE_DFX_NETWORK === 'ic' ? 'https://icp-api.io' : 'http://localhost:4943';
+      import.meta.env.VITE_DFX_NETWORK === "ic"
+        ? "https://icp-api.io"
+        : "http://localhost:4943";
     const agent = new HttpAgent({ host });
 
-    if (import.meta.env.VITE_DFX_NETWORK !== 'ic') {
+    if (import.meta.env.VITE_DFX_NETWORK !== "ic") {
       await agent.fetchRootKey();
     }
 
@@ -168,7 +177,7 @@ export async function preloadTokenMetadata() {
     const tokenIds = Object.keys(prices);
     await Promise.all(tokenIds.map((id) => fetchTokenMetadata(id)));
   } catch (error) {
-    console.error('Failed to preload token metadata:', error);
+    console.error("Failed to preload token metadata:", error);
   }
 }
 
@@ -177,19 +186,20 @@ export const calculateMultiPrice = (
     tokenInfo: { canisterId: string | { toString(): string } };
     backingUnit: bigint;
   }>,
-  supplyUnit: bigint
+  supplyUnit: bigint,
 ): number => {
   let totalValue = 0;
 
   for (const backing of backingTokens) {
     const canisterIdStr =
-      typeof backing.tokenInfo.canisterId === 'string'
+      typeof backing.tokenInfo.canisterId === "string"
         ? backing.tokenInfo.canisterId
         : backing.tokenInfo.canisterId.toString();
 
     const tokenInfo = getTokenInfo(canisterIdStr);
     if (tokenInfo) {
-      const tokenAmount = Number(backing.backingUnit) / 10 ** tokenInfo.decimals;
+      const tokenAmount =
+        Number(backing.backingUnit) / 10 ** tokenInfo.decimals;
       totalValue += tokenAmount * tokenInfo.priceUSD;
     }
   }
@@ -200,14 +210,16 @@ export const calculateMultiPrice = (
 export async function recordPriceSnapshot(
   prices: Record<string, number>,
   approvedTokens: string[],
-  backingConfig: any
+  backingConfig: any,
 ): Promise<void> {
   try {
     const host =
-      import.meta.env.VITE_DFX_NETWORK === 'ic' ? 'https://icp-api.io' : 'http://localhost:4943';
+      import.meta.env.VITE_DFX_NETWORK === "ic"
+        ? "https://icp-api.io"
+        : "http://localhost:4943";
     const agent = new HttpAgent({ host });
 
-    if (import.meta.env.VITE_DFX_NETWORK !== 'ic') {
+    if (import.meta.env.VITE_DFX_NETWORK !== "ic") {
       await agent.fetchRootKey();
     }
 
@@ -223,8 +235,12 @@ export async function recordPriceSnapshot(
 
     const approvedPrincipals = approvedTokens.map((t) => Principal.fromText(t));
 
-    await historyActor.recordSnapshot(priceEntries, approvedPrincipals, backingConfig);
+    await historyActor.recordSnapshot(
+      priceEntries,
+      approvedPrincipals,
+      backingConfig,
+    );
   } catch (error) {
-    console.error('Failed to record price snapshot:', error);
+    console.error("Failed to record price snapshot:", error);
   }
 }

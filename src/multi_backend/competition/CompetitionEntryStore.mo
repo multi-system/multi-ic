@@ -83,7 +83,9 @@ module {
     public func getBaseRate(token : Types.Token) : Types.Ratio {
       switch (getStakeTokenConfig(token)) {
         case (?config) { config.baseRate };
-        case (null) { Debug.trap("Token not configured: " # Principal.toText(token)) };
+        case (null) {
+          Debug.trap("Token not configured: " # Principal.toText(token));
+        };
       };
     };
 
@@ -91,7 +93,9 @@ module {
     public func getSystemMultiplier(token : Types.Token) : Types.Ratio {
       switch (getStakeTokenConfig(token)) {
         case (?config) { config.systemMultiplier };
-        case (null) { Debug.trap("Token not configured: " # Principal.toText(token)) };
+        case (null) {
+          Debug.trap("Token not configured: " # Principal.toText(token));
+        };
       };
     };
 
