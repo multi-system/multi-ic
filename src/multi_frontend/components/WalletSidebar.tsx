@@ -302,6 +302,56 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  // Handle withdraw for a specific token
+  const handleWithdraw = async (asset: Asset, amount: string) => {
+    if (!amount || !principal) return;
+
+    const tokenCanisterId = asset.canisterId;
+    setDepositingToken(tokenCanisterId); // Reuse this state for withdrawing
+    try {
+      const backend = await getAuthenticatedActor<BackendService>(
+        backendIdl,
+        import.meta.env.VITE_CANISTER_ID_MULTI_BACKEND,
+      );
+
+      // Parse and validate the amount
+      const parsedAmount = formatStringToBigInt(amount, asset.decimals);
+      if (parsedAmount === null || parsedAmount <= 0n) {
+        throw new Error("Invalid amount");
+      }
+
+      console.log("Withdraw details:", {
+        amount: parsedAmount.toString(),
+        token: tokenCanisterId,
+      });
+
+      // Call withdraw on the backend
+      const tokenPrincipal = Principal.fromText(tokenCanisterId);
+      const withdrawResult = await backend.withdraw({
+        token: tokenPrincipal,
+        amount: parsedAmount,
+      });
+
+      if ("ok" in withdrawResult) {
+        console.log("Withdraw successful");
+        await fetchBalances();
+      } else {
+        console.error("Withdraw failed:", withdrawResult.err);
+        showError("Withdraw failed", withdrawResult.err);
+      }
+    } catch (error) {
+      console.error("Withdraw error:", error);
+      if (error instanceof Error) {
+        alert(error.message);
+      } else {
+        alert("Withdraw failed: Unknown error");
+      }
+    } finally {
+      setDepositingToken(null);
+      fetchBalances();
+    }
+  };
+
   // Handle issue
   const handleIssue = async (amount: string) => {
     if (!amount || !principal) return;
@@ -410,6 +460,16 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
               await handleDeposit(asset, amount);
               await fetchBalances(); // Make sure balances are updated
             }}
+          />
+        )}
+
+        {currentPage === "withdraw" && (
+          <WithdrawPage
+            loading={depositingToken !== null}
+            onBack={() => setCurrentPage("main")}
+            preSelectedAsset={selectedAsset as Asset}
+            assets={tokenBalances}
+            onWithdraw={handleWithdraw}
           />
         )}
 
@@ -595,10 +655,9 @@ function MainPage({
               icon={faRightToBracket}
             />
             <TopButton
-              disabled
               key="withdraw"
               label="Withdraw"
-              tip="Withdraw is currently not implemented"
+              tip="Remove assets from the Multi virtual wallet"
               onClick={() => setCurrentPage("withdraw")}
               icon={faRightFromBracket}
             />
@@ -871,6 +930,200 @@ function DepositPage({
           disabled={!selectedAsset || !amount || bigIntAmount === 0n || tooMuch}
         >
           <span className=""></span>Deposit
+        </LargeFullButton>
+      </div>
+    </div>
+  );
+}
+
+function WithdrawPage({
+  onBack,
+  preSelectedAsset,
+  assets,
+  onWithdraw,
+  loading,
+}: {
+  loading: boolean;
+  onBack: () => void;
+  preSelectedAsset?: Asset;
+  assets: Asset[];
+  onWithdraw: (asset: Asset, amount: string) => Promise<void>;
+}) {
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(
+    preSelectedAsset || null
+  );
+  const [amount, setAmount] = useState("");
+
+  // Update selected asset when assets change or preSelectedAsset changes
+  useEffect(() => {
+    if (selectedAsset) {
+      const updatedAsset = assets.find(a => a.canisterId === selectedAsset.canisterId);
+      if (updatedAsset) {
+        setSelectedAsset(updatedAsset);
+      }
+    } else if (preSelectedAsset) {
+      setSelectedAsset(preSelectedAsset);
+    }
+  }, [assets, preSelectedAsset]);
+
+  // Clear amount when loading transitions from true to false (transaction complete)
+  useEffect(() => {
+    if (!loading) {
+      setAmount("");
+    }
+  }, [loading]);
+
+  const handleWithdraw = async () => {
+    if (!selectedAsset || !amount) return;
+    await onWithdraw(selectedAsset, amount);
+  };
+
+  const bigIntAmount = formatStringToBigInt(amount, selectedAsset?.decimals ?? 0);
+  const systemBefore = selectedAsset?.systemBalance ?? 0n;
+  const walletBefore = selectedAsset?.walletBalance ?? 0n;
+  const systemAfter = systemBefore - (bigIntAmount ?? 0n);
+  const walletAfter = walletBefore + (bigIntAmount ?? 0n);
+  const insufficientBalance = bigIntAmount !== null && systemAfter < 0n;
+
+  return (
+    <div className="flex flex-col h-full">
+      <Aurora className="w-full h-92">
+        <div
+          className="absolute h-92 inset-0 w-full h-full pointer-events-none z-0"
+          style={{
+            background:
+              "linear-gradient(to bottom, rgba(4, 0, 20, 0.85) 0%, rgba(0, 18, 56, 0.6) 40%, rgba(75, 0, 59, 0.2) 80%, rgba(19, 0, 63, 0) 100%)",
+          }}
+        />
+        <div className="p-6 pt-4 z-10 relative flex flex-col gap-4">
+          <div className="flex justify-between w-full items-center">
+            <button
+              onClick={onBack}
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              <FontAwesomeIcon icon={faChevronLeft} />
+            </button>
+            <h2 className="text-base text-white/60">Withdraw Assets</h2>
+            <div className="w-6" />
+          </div>
+
+          <div className="mt-8 space-y-6">
+            <div className="space-y-2">
+              <label className="text-sm text-white/60">Select Asset</label>
+              <Select
+                selectedValue={selectedAsset?.canisterId || ""}
+                onChange={(value) =>
+                  setSelectedAsset(
+                    assets.find((a) => a.canisterId === value) || null
+                  )
+                }
+                placeholder="Select an asset"
+                options={
+                  assets.map((asset) => ({
+                    value: asset.canisterId,
+                    label: <div className="flex items-end flex-row gap-1">
+                      <span>{asset.name}</span>
+                      <span className="text-white/60 font-thin ">{asset.symbol}</span>
+                    </div>,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-white/60">Amount to Withdraw</label>
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="Enter amount"
+                className="w-full bg-black/20 border border-white/20 text-white rounded-lg p-3 focus:outline-none focus:border-white/40"
+              />
+            </div>
+          </div>
+        </div>
+      </Aurora>
+
+      {/* Withdraw Preview */}
+      <div className="flex-1 p-6">
+        <div className="bg-gray-800/50 backdrop-blur rounded-xl p-6 mb-4">
+          <div className="flex flex-col gap-6">
+            {/* Transaction Type Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-[#586CE1]/20 flex items-center justify-center">
+                  <FontAwesomeIcon icon={faArrowRightFromBracket} className="text-[#586CE1]" />
+                </div>
+                <div>
+                  <h3 className="text-white font-medium">Withdraw Preview</h3>
+                  <p className="text-sm text-white/40">Transaction Details</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Current Balances */}
+            <div>
+              <p className="text-sm text-white/40 mb-3">Current Balances</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs text-white/60">Deposited Balance</p>
+                  <p className="text-lg font-mono text-white">
+                    {selectedAsset ? formatBalance(systemBefore, selectedAsset.decimals) : "-"}
+                    <span className="text-xs text-white/40 ml-1">{selectedAsset?.symbol}</span>
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-white/60">Wallet Balance</p>
+                  <p className="text-lg font-mono text-white">
+                    {selectedAsset ? formatBalance(walletBefore, selectedAsset.decimals) : "-"}
+                    <span className="text-xs text-white/40 ml-1">{selectedAsset?.symbol}</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Transaction Amount */}
+            <div className="py-4 border-y border-white/10">
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-white/60">Amount to Withdraw</p>
+                <p className="text-lg font-mono text-white">
+                  {bigIntAmount ? formatBalance(bigIntAmount, selectedAsset?.decimals ?? 0) : "-"}
+                  <span className="text-xs text-white/40 ml-1">{selectedAsset?.symbol}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* After Transaction */}
+            <div>
+              <p className="text-sm text-white/40 mb-3">Expected Balance After</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs text-white/60">Deposited Balance</p>
+                  <p className={`text-lg font-mono ${insufficientBalance ? 'text-red-400' : 'text-white'}`}>
+                    {selectedAsset ? formatBalance(systemAfter, selectedAsset.decimals) : "-"}
+                    <span className="text-xs text-white/40 ml-1">{selectedAsset?.symbol}</span>
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-white/60">Wallet Balance</p>
+                  <p className="text-lg font-mono text-white">
+                    {selectedAsset ? formatBalance(walletAfter, selectedAsset.decimals) : "-"}
+                    <span className="text-xs text-white/40 ml-1">{selectedAsset?.symbol}</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6 border-t border-white/10">
+        <LargeFullButton
+          loading={loading}
+          onClick={handleWithdraw}
+          disabled={!selectedAsset || !amount || bigIntAmount === 0n || insufficientBalance}
+        >
+          Withdraw
         </LargeFullButton>
       </div>
     </div>
