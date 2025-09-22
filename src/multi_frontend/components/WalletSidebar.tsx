@@ -48,7 +48,6 @@ type WalletSidebarProps = {
 
 type Page = "main" | "deposit" | "withdraw" | "issue" | "redeem";
 
-// Define a shared Asset type that matches both TokenBalance and what the Deposit/Withdraw pages expect
 type Asset = {
   canisterId: string;
   name: string;
@@ -66,21 +65,16 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
   const [multiBalance, setMultiBalance] = useState<bigint>(BigInt(0));
   const [currentPage, setCurrentPage] = useState<Page>("main");
   const [selectedAsset, setSelectedAsset] = useState<TokenBalance | null>(null);
-  const [prices, setPrices] = useState<Record<string, number>>({});
 
-  // Form states - one deposit amount per token
   const [depositAmounts, setDepositAmounts] = useState<Record<string, string>>(
     {},
   );
   const [issueAmount, setIssueAmount] = useState<string>("");
 
-  const { systemInfo } = useSystemInfo();
+  const { systemInfo, multiPrice } = useSystemInfo();
 
-
-  // Track which token is being deposited
   const [depositingToken, setDepositingToken] = useState<string | null>(null);
 
-  // Get actors with authenticated identity
   const getAuthenticatedActor = async <T,>(
     idlFactory: any,
     canisterId: string,
@@ -108,37 +102,6 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
     });
   };
 
-  // Fetch current prices from history canister
-  const fetchCurrentPrices = async () => {
-    try {
-      const historyActor = await getAuthenticatedActor(
-        historyIdl,
-        import.meta.env.VITE_CANISTER_ID_MULTI_HISTORY,
-      );
-
-      // Get latest snapshot
-      const latestSnapshots = await historyActor.getSnapshotsInTimeRange(
-        BigInt(Date.now()) * BigInt(1000000) - BigInt(3600 * 1000000000), // Last hour
-        BigInt(Date.now()) * BigInt(1000000),
-        [1] // Just get the latest one
-      );
-
-      if (latestSnapshots.length > 0) {
-        const snapshot = latestSnapshots[0].snapshot;
-        const newPrices: Record<string, number> = {};
-
-        snapshot.prices.forEach(([token, price]: [any, bigint]) => {
-          newPrices[token.toString()] = Number(price) / 100000000; // Convert to USD
-        });
-
-        setPrices(newPrices);
-      }
-    } catch (error) {
-      console.error('Error fetching prices:', error);
-    }
-  };
-
-  // Fetch all balances
   const fetchBalances = async () => {
     if (!principal) return;
 
@@ -149,7 +112,6 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
         import.meta.env.VITE_CANISTER_ID_MULTI_BACKEND,
       );
 
-      // Get system info to know which tokens we're dealing with
       const systemInfoResult = await backend.getSystemInfo();
       if ("err" in systemInfoResult) {
         logError("Failed to get system info", systemInfoResult.err);
@@ -158,13 +120,11 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
 
       const systemInfo = systemInfoResult.ok;
 
-      // Get MULTI token balance
       const multiBalanceResult = await backend.getMultiTokenBalance(principal);
       if ("ok" in multiBalanceResult) {
         setMultiBalance(multiBalanceResult.ok);
       }
 
-      // Fetch balances for each backing token
       const balances: TokenBalance[] = [];
 
       for (const backing of systemInfo.backingTokens) {
@@ -179,13 +139,11 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
           decimals: 8,
         };
 
-        // Get wallet balance
         const walletBalance = await tokenActor.icrc1_balance_of({
           owner: principal,
           subaccount: [],
         });
 
-        // Get system balance (virtual balance)
         const systemBalanceResult = await backend.getVirtualBalance(
           principal,
           backing.tokenInfo.canisterId,
@@ -211,17 +169,12 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  // Refresh balances and prices when sidebar opens or principal changes
   useEffect(() => {
     if (isOpen && principal) {
-      Promise.all([
-        fetchBalances(),
-        fetchCurrentPrices()
-      ]);
+      fetchBalances();
     }
   }, [isOpen, principal]);
 
-  // Handle deposit for a specific token
   const handleDeposit = async (asset: Asset, amount: string) => {
     if (!amount || !principal) return;
 
@@ -237,7 +190,6 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
         tokenCanisterId,
       );
 
-      // Parse and validate the amount
       const parsedAmount = formatStringToBigInt(amount, asset.decimals);
       if (parsedAmount === null || parsedAmount <= 0n) {
         throw new Error("Invalid amount");
@@ -251,14 +203,13 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
         parsedAmount,
       });
 
-      // First approve the backend to spend tokens
       const backendPrincipal = Principal.fromText(
         import.meta.env.VITE_CANISTER_ID_MULTI_BACKEND,
       );
 
       const approveResult = await tokenActor.icrc2_approve({
         spender: { owner: backendPrincipal, subaccount: [] },
-        amount: depositAmount + BigInt(10000), // Add a small buffer for fees
+        amount: depositAmount + BigInt(10000),
         fee: [],
         memo: [],
         from_subaccount: [],
@@ -274,7 +225,6 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
 
       console.log("Approval successful, now depositing...");
 
-      // Then deposit
       const tokenPrincipal = Principal.fromText(tokenCanisterId);
       const depositResult = await backend.deposit({
         token: tokenPrincipal,
@@ -282,7 +232,6 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
       });
 
       if ("ok" in depositResult) {
-        // Clear the input for this token
         setDepositAmounts((prev) => ({ ...prev, [tokenCanisterId]: "" }));
         await fetchBalances();
       } else {
@@ -302,19 +251,17 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  // Handle withdraw for a specific token
   const handleWithdraw = async (asset: Asset, amount: string) => {
     if (!amount || !principal) return;
 
     const tokenCanisterId = asset.canisterId;
-    setDepositingToken(tokenCanisterId); // Reuse this state for withdrawing
+    setDepositingToken(tokenCanisterId);
     try {
       const backend = await getAuthenticatedActor<BackendService>(
         backendIdl,
         import.meta.env.VITE_CANISTER_ID_MULTI_BACKEND,
       );
 
-      // Parse and validate the amount
       const parsedAmount = formatStringToBigInt(amount, asset.decimals);
       if (parsedAmount === null || parsedAmount <= 0n) {
         throw new Error("Invalid amount");
@@ -325,7 +272,6 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
         token: tokenCanisterId,
       });
 
-      // Call withdraw on the backend
       const tokenPrincipal = Principal.fromText(tokenCanisterId);
       const withdrawResult = await backend.withdraw({
         token: tokenPrincipal,
@@ -352,7 +298,6 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  // Handle issue
   const handleIssue = async (amount: string) => {
     if (!amount || !principal) return;
 
@@ -388,7 +333,6 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  // Handle redeem
   const handleRedeem = async (amount: string) => {
     if (!amount || !principal) return;
 
@@ -423,7 +367,6 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  // Close sidebar on Escape key
   useEffect(() => {
     if (!isOpen) return;
 
@@ -458,7 +401,7 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
             assets={tokenBalances}
             onDeposit={async (asset: Asset, amount: string) => {
               await handleDeposit(asset, amount);
-              await fetchBalances(); // Make sure balances are updated
+              await fetchBalances();
             }}
           />
         )}
@@ -507,7 +450,7 @@ const WalletSidebar: React.FC<WalletSidebarProps> = ({ isOpen, onClose }) => {
             tokenBalances={tokenBalances}
             setSelectedAsset={setSelectedAsset}
             principal={principal}
-            prices={prices}
+            multiPrice={multiPrice}
           />
         )}
       </div>
@@ -554,7 +497,6 @@ function TopButton({
   );
 }
 
-
 function MainPage({
   onClose,
   multiBalance,
@@ -563,7 +505,7 @@ function MainPage({
   tokenBalances,
   setSelectedAsset,
   principal,
-  prices,
+  multiPrice,
 }: {
   onClose: () => void;
   multiBalance: bigint;
@@ -572,19 +514,18 @@ function MainPage({
   tokenBalances: TokenBalance[];
   setSelectedAsset: (asset: TokenBalance | null) => void;
   principal: Principal | null;
-  prices: Record<string, number>;
+  multiPrice: number;
 }) {
-  // Calculate total value in USD
   const calculateTotalValue = () => {
     let total = 0;
 
-    // Add value of MULTI tokens
-    const multiPrice = prices[import.meta.env.VITE_CANISTER_ID_MULTI_BACKEND] || 1; // Default to 1 USD if no price
-    total += Number(multiBalance) * multiPrice / 100000000; // Convert from e8s
+    const multiPriceUSD = multiPrice || 1;
+    total += Number(multiBalance) * multiPriceUSD / 100000000;
 
-    // Add value of backing tokens
     tokenBalances.forEach(token => {
-      const price = prices[token.canisterId] || 1; // Default to 1 USD if no price
+      const tokenInfo = getTokenInfo(token.canisterId);
+      const price = tokenInfo?.priceUSD || 1;
+      
       if (token.systemBalance) {
         total += Number(token.systemBalance) * price / (10 ** token.decimals);
       }
@@ -592,6 +533,7 @@ function MainPage({
 
     return total;
   };
+
   return (
     <div className="flex flex-col">
       <Aurora className="w-full h-92 items-center ">
@@ -665,7 +607,6 @@ function MainPage({
         </div>
       </Aurora>
 
-      {/* Scrollable Content */}
       <div className="flex-1 w-full flex pb-4">
         {loading ? (
           <div className="w-full mt-12 text-center my-auto items-center justify-center  text-gray-400 flex">
@@ -673,56 +614,16 @@ function MainPage({
           </div>
         ) : (
           <div className="px-4 space-y-6 w-full">
-            {/* MULTI Balance and Operations at the top */}
-            <div className="rounded-lg space-y-4">
-              {/* Issue MULTI 
-                  <div className="pt-4 border-t border-gray-700">
-                    <p className="text-sm font-medium text-gray-300 mb-2">Issue MULTI Tokens</p>
-                    <div className="flex gap-2">
-                      <IncrementalInput
-                        value={issueAmount}
-                        onChange={(e) => setIssueAmount(e.target.value)}
-                        placeholder="Amount"
-                      />
-                      <button
-                        onClick={handleIssue}
-                        disabled={processing || Number(issueAmount) === 0}
-                        className="px-4 py-2 bg-[#586CE1] hover:bg-[#4056C7] disabled:bg-gray-600 text-white font-medium rounded-lg transition-colors text-sm"
-                      >
-                        Issue
-                      </button>
-                    </div>
-                  </div>
-
-
-                  <div>
-                    <p className="text-sm font-medium text-gray-300 mb-2">Redeem MULTI Tokens</p>
-                    <div className="flex gap-2">
-                      <IncrementalInput
-                        value={redeemAmount}
-                        onChange={(e) => setRedeemAmount(e.target.value)}
-                        placeholder="Amount"
-                      />
-                      <button
-                        onClick={handleRedeem}
-                        disabled={processing || Number(redeemAmount) === 0}
-                        className="px-4 py-2 bg-[#586CE1] hover:bg-[#4056C7] disabled:bg-gray-600 text-white font-medium rounded-lg transition-colors text-sm"
-                      >
-                        Redeem
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Returns backing tokens to your wallet
-                    </p>
-                  </div>
-                  */}
-            </div>
-
-            {/* Token Portfolio */}
+            <div className="rounded-lg space-y-4"></div>
 
             <div className="space-y-4 w-full">
               {tokenBalances.map((token) => {
                 const icon = getTokenIcon(token.symbol);
+                const tokenInfo = getTokenInfo(token.canisterId);
+                const tokenPrice = tokenInfo?.priceUSD || 1;
+                const walletValue = Number(token.walletBalance) * tokenPrice / (10 ** token.decimals);
+                const depositedValue = Number(token.systemBalance) * tokenPrice / (10 ** token.decimals);
+                
                 return (
                   <div
                     key={token.canisterId}
@@ -782,18 +683,23 @@ function MainPage({
                       />
                     </div>
                     <div className=" h-px w-full bg-white/10 mb-2" />
-                    {/* Balances */}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-xs text-gray-400">Wallet Balance</p>
                         <p className="text-lg font-mono text-white">
                           {formatBalance(token.walletBalance, token.decimals)}
                         </p>
+                        <p className="text-xs text-gray-500">
+                          ${walletValue.toFixed(2)}
+                        </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-400">Deposited</p>
                         <p className="text-lg font-mono text-white">
                           {formatBalance(token.systemBalance, token.decimals)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          ${depositedValue.toFixed(2)}
                         </p>
                       </div>
                     </div>
@@ -812,8 +718,8 @@ function MainPage({
     </div>
   );
 }
-export default WalletSidebar;
 
+export default WalletSidebar;
 
 function DepositPage({
   onBack,
@@ -833,10 +739,8 @@ function DepositPage({
   );
   const [amount, setAmount] = useState("");
 
-  // Update selected asset when assets change or preSelectedAsset changes
   useEffect(() => {
     if (selectedAsset) {
-      // Find the updated asset with the same canisterId
       const updatedAsset = assets.find(a => a.canisterId === selectedAsset.canisterId);
       if (updatedAsset) {
         setSelectedAsset(updatedAsset);
@@ -846,7 +750,6 @@ function DepositPage({
     }
   }, [assets, preSelectedAsset]);
 
-  // Clear amount when loading transitions from true to false (transaction complete)
   useEffect(() => {
     if (!loading) {
       setAmount("");
@@ -863,7 +766,6 @@ function DepositPage({
   const systemBefore = selectedAsset?.systemBalance ?? 0n;
   const walletAfter = walletBefore - (bigIntAmount ?? 0n);
   const tooMuch = bigIntAmount !== null && walletAfter < 0n;
-
 
   return (
     <div className="flex flex-col h-full">
@@ -884,7 +786,7 @@ function DepositPage({
               <FontAwesomeIcon icon={faChevronLeft} />
             </button>
             <h2 className="text-base text-white/60">Deposit Assets</h2>
-            <div className="w-6" /> {/* Spacer for alignment */}
+            <div className="w-6" />
           </div>
 
           <div className="mt-8 space-y-6">
@@ -954,7 +856,6 @@ function WithdrawPage({
   );
   const [amount, setAmount] = useState("");
 
-  // Update selected asset when assets change or preSelectedAsset changes
   useEffect(() => {
     if (selectedAsset) {
       const updatedAsset = assets.find(a => a.canisterId === selectedAsset.canisterId);
@@ -966,7 +867,6 @@ function WithdrawPage({
     }
   }, [assets, preSelectedAsset]);
 
-  // Clear amount when loading transitions from true to false (transaction complete)
   useEffect(() => {
     if (!loading) {
       setAmount("");
@@ -1044,11 +944,9 @@ function WithdrawPage({
         </div>
       </Aurora>
 
-      {/* Withdraw Preview */}
       <div className="flex-1 p-6">
         <div className="bg-gray-800/50 backdrop-blur rounded-xl p-6 mb-4">
           <div className="flex flex-col gap-6">
-            {/* Transaction Type Header */}
             <div className="flex items-center justify-between pb-4 border-b border-white/10">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-[#586CE1]/20 flex items-center justify-center">
@@ -1061,7 +959,6 @@ function WithdrawPage({
               </div>
             </div>
 
-            {/* Current Balances */}
             <div>
               <p className="text-sm text-white/40 mb-3">Current Balances</p>
               <div className="grid grid-cols-2 gap-4">
@@ -1082,7 +979,6 @@ function WithdrawPage({
               </div>
             </div>
 
-            {/* Transaction Amount */}
             <div className="py-4 border-y border-white/10">
               <div className="flex justify-between items-center">
                 <p className="text-sm text-white/60">Amount to Withdraw</p>
@@ -1093,7 +989,6 @@ function WithdrawPage({
               </div>
             </div>
 
-            {/* After Transaction */}
             <div>
               <p className="text-sm text-white/40 mb-3">Expected Balance After</p>
               <div className="grid grid-cols-2 gap-4">
@@ -1160,7 +1055,6 @@ function IssuePage({
 }) {
   const [amount, setAmount] = useState("");
 
-  // Clear amount when loading transitions from true to false (transaction complete)
   useEffect(() => {
     if (!loading) {
       setAmount("");
@@ -1173,7 +1067,7 @@ function IssuePage({
   };
 
   const { systemInfo } = useSystemInfo();
-  const issueAmount = formatStringToBigInt(amount, 8); // MULTI token has 8 decimals
+  const issueAmount = formatStringToBigInt(amount, 8);
   const multiRequired = issueAmount ?? 0n;
   const backingRequired = assets.map(asset => {
     const backingToken = systemInfo?.backingTokens.find(token =>
@@ -1229,11 +1123,9 @@ function IssuePage({
         </div>
       </Aurora>
 
-      {/* Issue Preview */}
       <div className="flex-1 p-6">
         <div className="bg-gray-800/50 backdrop-blur rounded-xl p-6 mb-4">
           <div className="flex flex-col gap-6">
-            {/* Transaction Type Header */}
             <div className="flex items-center justify-between pb-4 border-b border-white/10">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-[#586CE1]/20 flex items-center justify-center">
@@ -1246,7 +1138,6 @@ function IssuePage({
               </div>
             </div>
 
-            {/* Issue Amount */}
             <div className="py-4 border-b border-white/10">
               <div className="flex justify-between items-center">
                 <p className="text-sm text-white/60">Amount to Issue</p>
@@ -1257,7 +1148,6 @@ function IssuePage({
               </div>
             </div>
 
-            {/* Required Backing Assets */}
             <div>
               <p className="text-sm text-white/40 mb-3">Required Backing Assets</p>
               <div className="space-y-4">
@@ -1313,7 +1203,6 @@ function RedeemPage({
 }) {
   const [amount, setAmount] = useState("");
 
-  // Clear amount when loading transitions from true to false (transaction complete)
   useEffect(() => {
     if (!loading) {
       setAmount("");
@@ -1326,7 +1215,7 @@ function RedeemPage({
   };
 
   const { systemInfo } = useSystemInfo();
-  const redeemAmount = formatStringToBigInt(amount, 8); // MULTI token has 8 decimals
+  const redeemAmount = formatStringToBigInt(amount, 8);
   const multiRequired = redeemAmount ?? 0n;
   const multiAfterRedeem = multiBalance - multiRequired;
 
@@ -1384,11 +1273,9 @@ function RedeemPage({
         </div>
       </Aurora>
 
-      {/* Redeem Preview */}
       <div className="flex-1 p-6">
         <div className="bg-gray-800/50 backdrop-blur rounded-xl p-6 mb-4">
           <div className="flex flex-col gap-6">
-            {/* Transaction Type Header */}
             <div className="flex items-center justify-between pb-4 border-b border-white/10">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-[#586CE1]/20 flex items-center justify-center">
@@ -1401,7 +1288,6 @@ function RedeemPage({
               </div>
             </div>
 
-            {/* MULTI Balance Changes */}
             <div className="py-4 border-b border-white/10">
               <div className="flex flex-col gap-2">
                 <div className="flex justify-between items-center">
@@ -1428,7 +1314,6 @@ function RedeemPage({
               </div>
             </div>
 
-            {/* Assets to Receive */}
             <div>
               <p className="text-sm text-white/40 mb-3">Assets to Receive</p>
               <div className="space-y-4">
@@ -1480,16 +1365,13 @@ function RedeemPage({
 }
 
 function TransactionPreview({ selectedAsset, bigIntAmount }: { selectedAsset: Asset | null; bigIntAmount: bigint | null; }) {
-
   const walletBefore = selectedAsset?.walletBalance ?? 0n;
   const walletAfter = walletBefore - (bigIntAmount ?? 0n);
-
 
   return (
     <div className="flex-1 p-6">
       <div className="bg-gray-800/50 backdrop-blur rounded-xl p-6 mb-4">
         <div className="flex flex-col gap-6">
-          {/* Transaction Type Header */}
           <div className="flex items-center justify-between pb-4 border-b border-white/10">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-[#586CE1]/20 flex items-center justify-center">
@@ -1502,7 +1384,6 @@ function TransactionPreview({ selectedAsset, bigIntAmount }: { selectedAsset: As
             </div>
           </div>
 
-          {/* Before Transaction */}
           <div>
             <p className="text-sm text-white/40 mb-3">Current Balances</p>
             <div className="grid grid-cols-2 gap-4">
@@ -1523,7 +1404,6 @@ function TransactionPreview({ selectedAsset, bigIntAmount }: { selectedAsset: As
             </div>
           </div>
 
-          {/* Transaction Amount */}
           <div className="py-4 border-y border-white/10">
             <div className="flex justify-between items-center">
               <p className="text-sm text-white/60">Amount to Deposit</p>
@@ -1534,7 +1414,6 @@ function TransactionPreview({ selectedAsset, bigIntAmount }: { selectedAsset: As
             </div>
           </div>
 
-          {/* After Transaction */}
           <div>
             <p className="text-sm text-white/40 mb-3">Expected Balance After</p>
             <div className="grid grid-cols-2 gap-4">
@@ -1558,10 +1437,8 @@ function TransactionPreview({ selectedAsset, bigIntAmount }: { selectedAsset: As
       </div>
     </div>
   );
-
 }
 
-// Format balance for display
 function formatBalance(balance: bigint, decimals: number): string {
   const divisor = BigInt(10 ** decimals);
   const whole = balance / divisor;
@@ -1572,7 +1449,6 @@ function formatBalance(balance: bigint, decimals: number): string {
   }
 
   const decimalStr = remainder.toString().padStart(decimals, "0");
-  // Remove trailing zeros
   const trimmedDecimal = decimalStr.replace(/0+$/, "");
 
   return trimmedDecimal.length > 0
@@ -1583,23 +1459,17 @@ function formatBalance(balance: bigint, decimals: number): string {
 function formatStringToBigInt(value: string | null, decimals: number | null): bigint {
   if (!value || !decimals) return BigInt(0);
 
-  // Remove all non-numeric characters except decimal point
   const cleanValue = value.replace(/[^\d.]/g, '');
 
-  // Split into whole and decimal parts
   let [whole = '0', decimal = ''] = cleanValue.split('.');
 
-  // Remove leading zeros from whole part
   whole = whole.replace(/^0+/, '') || '0';
 
-  // Pad or truncate decimal part to exact decimal places
   const paddedDecimal = decimal.padEnd(decimals, '0').slice(0, decimals);
 
-  // Combine whole and decimal parts as pure integers
   const combinedValue = `${whole}${paddedDecimal}`;
 
   try {
-    // Convert to BigInt, handling empty string case
     return BigInt(combinedValue);
   } catch {
     return BigInt(0);
