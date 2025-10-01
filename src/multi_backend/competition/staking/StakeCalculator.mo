@@ -4,6 +4,7 @@ import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Debug "mo:base/Debug";
 import Types "../../types/Types";
+import BackingTypes "../../types/BackingTypes";
 import RatioOperations "../../financial/RatioOperations";
 import AmountOperations "../../financial/AmountOperations";
 import PriceOperations "../../financial/PriceOperations";
@@ -97,5 +98,75 @@ module {
 
     // Return with the base token from the price
     { token = competitionPrice.baseToken; value = tokenQuantity.value };
+  };
+
+  /**
+   * Calculates the system stake amount for any stake token.
+   * Formula: S = lambda * min(total_player_stake, theta * M_start * r)
+   *
+   * @param totalPlayerStake The sum of all player stakes for this token
+   * @param multiplier The system stake multiplier (lambda) for this token
+   * @param baseRate The base stake rate (r) for this token
+   * @param volumeLimit The calculated volume limit (theta * M_start)
+   * @param tokenType The stake token type
+   * @returns The system stake amount for this token
+   */
+  public func calculateSystemStake(
+    totalPlayerStake : Nat,
+    multiplier : Types.Ratio,
+    baseRate : Types.Ratio,
+    volumeLimit : Nat,
+    tokenType : Types.Token,
+  ) : Types.Amount {
+    let maxStakeAtBaseRate = RatioOperations.applyToAmount(
+      { token = tokenType; value = volumeLimit },
+      baseRate,
+    ).value;
+
+    let effectiveStake = Nat.min(totalPlayerStake, maxStakeAtBaseRate);
+
+    let effectiveStakeAmount = { token = tokenType; value = effectiveStake };
+    let systemStakeAmount = RatioOperations.applyToAmount(effectiveStakeAmount, multiplier);
+
+    { token = tokenType; value = systemStakeAmount.value };
+  };
+
+  /**
+   * Calculates phantom positions for backing tokens based on system stake.
+   * Phantom positions represent hypothetical trades: q_k = s_k / r
+   *
+   * @param systemStake The total system stake (typically multi token)
+   * @param stakeRate The current stake rate for the token
+   * @param backingPairs The current backing pairs representing token distribution
+   * @returns Array of phantom positions for each backing token
+   */
+  public func calculatePhantomPositions(
+    systemStake : Types.Amount,
+    stakeRate : Types.Ratio,
+    backingPairs : [BackingTypes.BackingPair],
+  ) : [(Types.Token, Types.Amount)] {
+    let totalBackingUnits = Array.foldLeft<BackingTypes.BackingPair, Nat>(
+      backingPairs,
+      0,
+      func(acc, pair) { acc + pair.backingUnit },
+    );
+
+    if (totalBackingUnits == 0) {
+      return [];
+    };
+
+    Array.map<BackingTypes.BackingPair, (Types.Token, Types.Amount)>(
+      backingPairs,
+      func(pair) {
+        let proportion = RatioOperations.fromNats(pair.backingUnit, totalBackingUnits);
+        let tokenStake = RatioOperations.applyToAmount(systemStake, proportion);
+        let phantomQuantity = RatioOperations.applyToAmount(
+          tokenStake,
+          RatioOperations.inverse(stakeRate),
+        );
+
+        (pair.token, { token = pair.token; value = phantomQuantity.value });
+      },
+    );
   };
 };

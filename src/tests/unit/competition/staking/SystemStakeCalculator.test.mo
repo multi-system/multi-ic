@@ -5,7 +5,7 @@ import { test; suite } "mo:test";
 
 import Types "../../../../multi_backend/types/Types";
 import BackingTypes "../../../../multi_backend/types/BackingTypes";
-import SystemStakeCalculator "../../../../multi_backend/competition/staking/SystemStakeCalculator";
+import StakeCalculator "../../../../multi_backend/competition/staking/StakeCalculator";
 import RatioOperations "../../../../multi_backend/financial/RatioOperations";
 import TokenUtils "../../../../multi_backend/financial/TokenUtils";
 
@@ -31,9 +31,9 @@ let TWENTY_PERCENT : Nat = 200_000_000; // 20%
 let FIFTY_PERCENT : Nat = 500_000_000; // 50%
 let ONE_HUNDRED_PERCENT : Nat = 1_000_000_000; // 100%
 
-// Test suite for SystemStakeCalculator
+// Test suite for StakeCalculator
 suite(
-  "Extended SystemStakeCalculator Tests",
+  "Extended StakeCalculator Tests",
   func() {
     // Test calculateSystemStake with different multiplier values
     test(
@@ -47,7 +47,7 @@ suite(
         let tokenType = govToken;
 
         // Execute the calculation
-        let systemStake = SystemStakeCalculator.calculateSystemStake(
+        let systemStake = StakeCalculator.calculateSystemStake(
           totalPlayerStake,
           multiplier,
           baseRate,
@@ -76,7 +76,7 @@ suite(
         let tokenType = govToken;
 
         // Execute the calculation
-        let systemStake = SystemStakeCalculator.calculateSystemStake(
+        let systemStake = StakeCalculator.calculateSystemStake(
           totalPlayerStake,
           multiplier,
           baseRate,
@@ -105,7 +105,7 @@ suite(
         let tokenType = govToken;
 
         // Execute the calculation
-        let systemStake = SystemStakeCalculator.calculateSystemStake(
+        let systemStake = StakeCalculator.calculateSystemStake(
           totalPlayerStake,
           multiplier,
           baseRate,
@@ -137,7 +137,7 @@ suite(
         ];
 
         // Execute the calculation
-        let phantomPositions = SystemStakeCalculator.calculatePhantomPositions(
+        let phantomPositions = StakeCalculator.calculatePhantomPositions(
           systemStake,
           stakeRate,
           backingPairs,
@@ -186,7 +186,7 @@ suite(
         ];
 
         // Execute the calculation
-        let phantomPositions = SystemStakeCalculator.calculatePhantomPositions(
+        let phantomPositions = StakeCalculator.calculatePhantomPositions(
           systemStake,
           stakeRate,
           backingPairs,
@@ -260,7 +260,7 @@ suite(
         ];
 
         // First calculate the system stake
-        let systemStake = SystemStakeCalculator.calculateSystemStake(
+        let systemStake = StakeCalculator.calculateSystemStake(
           totalPlayerStake,
           multiplier,
           baseRate,
@@ -269,7 +269,7 @@ suite(
         );
 
         // Then use that system stake to calculate phantom positions
-        let phantomPositions = SystemStakeCalculator.calculatePhantomPositions(
+        let phantomPositions = StakeCalculator.calculatePhantomPositions(
           systemStake,
           baseRate,
           backingPairs,
@@ -338,7 +338,7 @@ suite(
         let tokenType = govToken;
 
         // Execute the calculation
-        let systemStake = SystemStakeCalculator.calculateSystemStake(
+        let systemStake = StakeCalculator.calculateSystemStake(
           totalPlayerStake,
           multiplier,
           baseRate,

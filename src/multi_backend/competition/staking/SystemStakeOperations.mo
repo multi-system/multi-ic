@@ -6,7 +6,7 @@ import Buffer "mo:base/Buffer";
 import Types "../../types/Types";
 import BackingTypes "../../types/BackingTypes";
 import SystemStakeTypes "../../types/SystemStakeTypes";
-import SystemStakeCalculator "./SystemStakeCalculator";
+import StakeCalculator "./StakeCalculator";
 import CompetitionEntryStore "../CompetitionEntryStore";
 import TokenAccessHelper "../../helper/TokenAccessHelper";
 
@@ -39,7 +39,7 @@ module {
       };
 
       // Calculate system stake for this token
-      let systemStake = SystemStakeCalculator.calculateSystemStake(
+      let systemStake = StakeCalculator.calculateSystemStake(
         totalStake,
         config.systemMultiplier,
         config.baseRate,
@@ -68,7 +68,7 @@ module {
 
     let phantomRate = competitionEntry.getEffectiveRate(phantomBaseToken);
 
-    let phantomPositions = SystemStakeCalculator.calculatePhantomPositions(
+    let phantomPositions = StakeCalculator.calculatePhantomPositions(
       phantomSystemStake,
       phantomRate,
       backingPairs,
