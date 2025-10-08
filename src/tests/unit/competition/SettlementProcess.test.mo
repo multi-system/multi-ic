@@ -121,11 +121,17 @@ suite(
           #ok(());
         };
 
+        // Get user accounts and system account functions
+        let getUserAccounts = CompetitionTestUtils.getUserAccountsFunction();
+        let getSystemAccount = CompetitionTestUtils.getSystemAccountFunction();
+
         // Create competition manager
         let manager = CompetitionManager.CompetitionManager(
           getCirculatingSupply,
           getBackingTokens,
           settlementInitiator,
+          getUserAccounts,
+          getSystemAccount,
         );
 
         // PHASE 1: Prepare the competition

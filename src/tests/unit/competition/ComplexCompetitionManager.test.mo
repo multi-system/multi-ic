@@ -68,11 +68,17 @@ suite(
           #ok(());
         };
 
+        // Get user accounts and system account functions
+        let getUserAccounts = CompetitionTestUtils.getUserAccountsFunction();
+        let getSystemAccount = CompetitionTestUtils.getSystemAccountFunction();
+
         // Create manager
         let manager = CompetitionManager.CompetitionManager(
           getCirculatingSupply,
           getBackingTokens,
           mockSettlement,
+          getUserAccounts,
+          getSystemAccount,
         );
 
         // Manually create a system stake to simulate the result of endStakingRound
@@ -207,11 +213,17 @@ suite(
           #ok(());
         };
 
+        // Get user accounts and system account functions
+        let getUserAccounts = CompetitionTestUtils.getUserAccountsFunction();
+        let getSystemAccount = CompetitionTestUtils.getSystemAccountFunction();
+
         // Create manager
         let manager = CompetitionManager.CompetitionManager(
           getCirculatingSupply,
           getBackingTokens,
           startSettlement,
+          getUserAccounts,
+          getSystemAccount,
         );
 
         // Create submissions with Staked status directly
@@ -253,11 +265,17 @@ suite(
           #ok(());
         };
 
+        // Get user accounts and system account functions
+        let getUserAccounts = CompetitionTestUtils.getUserAccountsFunction();
+        let getSystemAccount = CompetitionTestUtils.getSystemAccountFunction();
+
         // Create manager with our fixed supply function
         let manager = CompetitionManager.CompetitionManager(
           getFixedSupply,
           getBackingTokens,
           startSettlement,
+          getUserAccounts,
+          getSystemAccount,
         );
 
         // Calculate volume limit

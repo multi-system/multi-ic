@@ -39,11 +39,17 @@ suite(
           #ok(());
         };
 
+        // Get user accounts and system account functions
+        let getUserAccounts = CompetitionTestUtils.getUserAccountsFunction();
+        let getSystemAccount = CompetitionTestUtils.getSystemAccountFunction();
+
         // Create the competition manager
         let manager = CompetitionManager.CompetitionManager(
           getCirculatingSupply,
           getBackingTokens,
           startSettlement,
+          getUserAccounts,
+          getSystemAccount,
         );
 
         // Test starting the staking round
@@ -77,11 +83,17 @@ suite(
           #ok(());
         };
 
+        // Get user accounts and system account functions
+        let getUserAccounts = CompetitionTestUtils.getUserAccountsFunction();
+        let getSystemAccount = CompetitionTestUtils.getSystemAccountFunction();
+
         // Create the competition manager
         let manager = CompetitionManager.CompetitionManager(
           getCirculatingSupply,
           getBackingTokens,
           startSettlement,
+          getUserAccounts,
+          getSystemAccount,
         );
 
         // Test starting the staking round

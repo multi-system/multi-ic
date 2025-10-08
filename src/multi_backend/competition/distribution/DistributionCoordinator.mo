@@ -39,7 +39,7 @@ module {
       entryStore : CompetitionEntryStore.CompetitionEntryStore,
       distributionIndex : Nat,
       event : CompetitionEntryTypes.DistributionEvent,
-    ) : Result.Result<(), Error.ErrorType> {
+    ) : Result.Result<(), Error.CompetitionError> {
 
       // Get current positions and submissions from the competition
       let positions = entryStore.getPositions();
@@ -50,7 +50,7 @@ module {
 
       switch (priceEventOpt) {
         case null {
-          return #err(#Operation(#NotInitialized));
+          return #err(#OperationFailed("Price event not found"));
         };
         case (?priceEvent) {
           // Create mapping function from positions to accounts
@@ -84,9 +84,6 @@ module {
             getPositionAccount,
             entryStore,
           );
-
-          // Record that this distribution event has been processed
-          entryStore.addDistributionEvent(event);
 
           #ok();
         };

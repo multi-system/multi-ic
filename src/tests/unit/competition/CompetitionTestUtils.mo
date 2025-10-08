@@ -62,6 +62,11 @@ module {
     Principal.fromText("rwlgt-iiaaa-aaaaa-aaaaa-cai");
   };
 
+  public func getSystemPrincipal() : Types.Account {
+    // Use a distinct principal for the system
+    Principal.fromText("rrkah-fqaaa-aaaaa-aaaaq-cai");
+  };
+
   // Helper function for absolute difference between Nats - useful for comparison with tolerance
   public func natAbsDiff(a : Nat, b : Nat) : Nat {
     if (a > b) { a - b } else { b - a };
@@ -255,11 +260,16 @@ module {
 
   // Create a standard competition registry store with default settings
   public func createCompetitionRegistryStore() : CompetitionRegistryStore.CompetitionRegistryStore {
+    let eventRegistry = createTestEventRegistry();
+    createCompetitionRegistryStoreWithRegistry(eventRegistry);
+  };
+
+  // Create a competition registry store with a specific event registry (shared version)
+  public func createCompetitionRegistryStoreWithRegistry(
+    eventRegistry : CompetitionRegistryTypes.EventRegistry
+  ) : CompetitionRegistryStore.CompetitionRegistryStore {
     // Default time values for test
     let defaultTime : Time.Time = 1_000_000_000_000_000;
-
-    // Create event registry with test data
-    let eventRegistry = createTestEventRegistry();
 
     // Create initial state with pre-initialized values
     let state : CompetitionRegistryTypes.CompetitionRegistryState = {
@@ -417,5 +427,48 @@ module {
     let getBackingTokens = getBackingTokensFunction();
 
     (competitionStore, competitionStore.getStakeVault(), getUserPrincipal(), getCirculatingSupply, getBackingTokens, eventRegistry);
+  };
+
+  // Create a registry state for testing
+  public func createCompetitionRegistryState() : CompetitionRegistryTypes.CompetitionRegistryState {
+    let defaultTime : Time.Time = 1_000_000_000_000_000;
+    let eventRegistry = createTestEventRegistry();
+
+    {
+      var hasInitialized = true;
+      var globalConfig = {
+        multiToken = getMultiToken();
+        approvedTokens = [getTestToken1(), getTestToken2(), getTestToken3()];
+        theta = { value = getTWENTY_PERCENT() };
+        stakeTokenConfigs = createDefaultStakeTokenConfigs();
+        competitionCycleDuration = defaultTime;
+        preAnnouncementDuration = defaultTime / 10;
+        rewardDistributionDuration = defaultTime;
+        numberOfDistributionEvents = 10;
+      };
+      var competitions = [];
+      var currentCompetitionId = 1;
+      var startTime = defaultTime;
+      var eventRegistry = eventRegistry;
+    };
+  };
+
+  /**
+   * Get a function that returns the user accounts instance
+   */
+  public func getUserAccountsFunction() : () -> VirtualAccounts.VirtualAccounts {
+    let userAccounts = createUserAccounts();
+    func() : VirtualAccounts.VirtualAccounts {
+      userAccounts;
+    };
+  };
+
+  /**
+   * Get a function that returns the system account
+   */
+  public func getSystemAccountFunction() : () -> Types.Account {
+    func() : Types.Account {
+      getSystemPrincipal();
+    };
   };
 };

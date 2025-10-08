@@ -10,10 +10,12 @@ import Error "../error/Error";
 import CompetitionEntryTypes "../types/CompetitionEntryTypes";
 import CompetitionEntryStore "../competition/CompetitionEntryStore";
 import StakingManager "./staking/StakingManager";
+import DistributionCoordinator "./distribution/DistributionCoordinator";
 import BackingTypes "../types/BackingTypes";
 import SubmissionTypes "../types/SubmissionTypes";
 import FinalizeStakingRound "./staking/FinalizeStakingRound";
 import SystemStakeTypes "../types/SystemStakeTypes";
+import VirtualAccounts "../custodial/VirtualAccounts";
 
 /**
  * CompetitionManager handles operations for individual competitions.
@@ -33,6 +35,8 @@ module {
     getCirculatingSupply : () -> Nat,
     getBackingTokens : () -> [BackingTypes.BackingPair],
     startSettlement : (StakingRoundOutput) -> Result.Result<(), Error.CompetitionError>,
+    getUserAccounts : () -> VirtualAccounts.VirtualAccounts,
+    getSystemAccount : () -> Types.Account,
   ) {
     /**
      * Starts a staking round for a specific competition.
@@ -67,6 +71,20 @@ module {
         entryStore,
         getCirculatingSupply,
         getBackingTokens,
+      );
+    };
+
+    /**
+     * Creates a DistributionCoordinator for the specified competition.
+     * Reuses the cached dependencies for efficiency.
+     */
+    private func createDistributionCoordinator(
+      entryStore : CompetitionEntryStore.CompetitionEntryStore
+    ) : DistributionCoordinator.DistributionCoordinator {
+      DistributionCoordinator.DistributionCoordinator(
+        getUserAccounts(),
+        getSystemAccount(),
+        entryStore.getConfig().stakeTokenConfigs,
       );
     };
 
@@ -163,20 +181,22 @@ module {
         Debug.trap("Critical error: Distribution number mismatch. Expected: " # Nat.toText(expectedNumber) # ", Got: " # Nat.toText(distributionNumber));
       };
 
-      // TODO: Implement actual distribution logic
-      // This is where the whitepaper's "Reward Distribution" phase would be implemented:
-      // 1. Track performance of each position relative to others
-      // 2. Calculate stake redistribution based on performance
-      // 3. Update participant stakes accordingly
-      // 4. Handle system's won/lost stakes (burn Multi tokens, etc.)
-
       Debug.print("Processing distribution #" # Nat.toText(distributionNumber + 1) # " for competition " # Nat.toText(entryStore.getId()));
       Debug.print("Distribution event uses price event #" # Nat.toText(distributionEvent.distributionPrices));
 
-      // For now, we just record that the distribution happened
-      // The actual redistribution logic would go here
+      // Create the coordinator and process the distribution
+      let coordinator = createDistributionCoordinator(entryStore);
 
-      #ok(());
+      switch (coordinator.processDistribution(entryStore, distributionNumber, distributionEvent)) {
+        case (#err(e)) {
+          Debug.print("Error processing distribution: " # debug_show (e));
+          return #err(#OperationFailed("Distribution processing failed"));
+        };
+        case (#ok(_)) {
+          Debug.print("Successfully processed distribution");
+          #ok();
+        };
+      };
     };
 
     /**

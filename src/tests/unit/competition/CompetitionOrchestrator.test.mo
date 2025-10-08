@@ -60,8 +60,11 @@ suite(
       Time.Time, // preAnnouncementDuration
       SettlementTracker // settlement tracker
     ) {
-      // Start with standard test environment from utils
-      let registryStore = CompetitionTestUtils.createCompetitionRegistryStore();
+      // Create a shared event registry FIRST
+      let sharedEventRegistry = CompetitionTestUtils.createTestEventRegistry();
+
+      // Create registry store WITH the shared event registry
+      let registryStore = CompetitionTestUtils.createCompetitionRegistryStoreWithRegistry(sharedEventRegistry);
 
       // Get the global config for reference
       let globalConfig = registryStore.getGlobalConfig();
@@ -84,15 +87,20 @@ suite(
       let getCirculatingSupply = CompetitionTestUtils.createCirculatingSupplyFunction(1_000_000_000); // Example supply
       let getBackingTokens = CompetitionTestUtils.getBackingTokensFunction(); // Example backing tokens
 
-      // Create event manager
-      let testEventRegistry = CompetitionTestUtils.createTestEventRegistry();
-      let eventManager = EventManager.EventManager(testEventRegistry);
+      // Get user accounts and system account functions
+      let getUserAccounts = CompetitionTestUtils.getUserAccountsFunction();
+      let getSystemAccount = CompetitionTestUtils.getSystemAccountFunction();
+
+      // Create event manager with the SAME shared event registry
+      let eventManager = EventManager.EventManager(sharedEventRegistry);
 
       // Create competition manager
       let competitionManager = CompetitionManager.CompetitionManager(
         getCirculatingSupply,
         getBackingTokens,
         startSettlement,
+        getUserAccounts,
+        getSystemAccount,
       );
 
       // Create the orchestrator
